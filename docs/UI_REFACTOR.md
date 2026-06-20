@@ -673,6 +673,11 @@ Audit decision:
 
 The compatibility layer needs a repeatable audit, not a one-time manual check. The audit should run against the router and later become a smoke-test script.
 
+The audit has two equally important outcomes:
+
+- every installed LuCI route must have a working compatibility path
+- every route that has been rebuilt natively must be tracked, validated, and promoted only when it has feature parity for its current scope
+
 Audit inputs:
 
 - Installed LuCI menu files: `/usr/share/luci/menu.d/*.json`.
@@ -695,6 +700,24 @@ Audit checks:
 - Parent first-child routing uses the same target as the selected child, including legacy/native mode.
 - Search results use the same resolved target as the sidebar.
 - Settings route-mode overrides work both directions: explicit `modern` opens native preview when present, explicit `legacy` opens compat.
+
+Native migration checks:
+
+- Maintain a route inventory that marks each LuCI route as `native`, `partial native`, `legacy compat`, or `hidden`.
+- For native routes, verify the React route renders, uses the intended `rpcd`/UCI data source, and has mobile-safe layout.
+- For partial native routes, verify `auto` mode still prefers LuCI compat until missing edit/save/apply flows are complete.
+- For migrated first-party routes, test sidebar navigation, search navigation, direct hash URL load, refresh, and session-expired login recovery.
+- For write-capable native routes, verify pending changes, save/apply, discard, validation errors, and rollback behavior match LuCI expectations.
+- Do not promote a route from partial to native default until the route-specific parity checklist is documented in this file.
+
+LuCI app adapter robustness checks:
+
+- Adapter selection must be deterministic: native adapter first, generic service/UCI/file adapter second, LuCI compat frame last.
+- Unknown current and future `luci-app-*` packages must be considered supported through compat unless ACL/menu metadata says otherwise.
+- Installing a future LuCI app must not require a code change, rebuild, or manual route mapping for basic navigation and compat rendering.
+- Route discovery must tolerate new menu files, changed route nesting, missing optional ACL files, package uninstall/reinstall, and renamed init scripts.
+- Adapter failures must degrade to LuCI compat instead of showing a broken native screen.
+- Cache refresh or service reload must be enough for newly installed LuCI apps to appear in sidebar and search.
 
 Future app handling:
 
