@@ -14,6 +14,7 @@ export default defineConfig({
 	build: {
 		outDir: "../../htdocs/luci-static/i-love-luci-app",
 		emptyOutDir: true,
+		chunkSizeWarningLimit: 600,
 		manifest: true,
 		sourcemap: false,
 		rollupOptions: {

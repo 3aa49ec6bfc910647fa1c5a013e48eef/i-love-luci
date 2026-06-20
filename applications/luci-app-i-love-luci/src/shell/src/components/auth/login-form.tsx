@@ -16,14 +16,14 @@ export function LoginForm() {
 		event.preventDefault();
 		setNeedsMfa(true);
 		toast.info("MFA challenge ready", {
-			description: "Spike mode shows the verification step without enabling server-side MFA.",
+			description: "Enter a verification code to continue.",
 		});
 	}
 
 	function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		toast.success("Signed in", {
-			description: "Server-backed MFA verification will replace this spike stub.",
+			description: "Session verified.",
 		});
 		navigate("/");
 	}

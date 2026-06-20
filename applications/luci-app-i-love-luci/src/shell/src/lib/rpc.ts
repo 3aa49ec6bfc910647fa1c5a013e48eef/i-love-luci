@@ -15,6 +15,73 @@ export type SessionInfo = {
 	};
 };
 
+export type SystemMemory = {
+	total?: number;
+	free?: number;
+	shared?: number;
+	buffered?: number;
+	available?: number;
+	cached?: number;
+};
+
+export type SystemInfo = {
+	uptime?: number;
+	localtime?: number;
+	load?: number[];
+	memory?: SystemMemory;
+	root?: {
+		total?: number;
+		free?: number;
+		used?: number;
+		avail?: number;
+	};
+	tmp?: {
+		total?: number;
+		free?: number;
+		used?: number;
+		avail?: number;
+	};
+};
+
+export type BoardInfo = {
+	hostname?: string;
+	model?: string;
+	system?: string;
+	release?: {
+		distribution?: string;
+		version?: string;
+		description?: string;
+		target?: string;
+	};
+};
+
+export type DeviceStatus = {
+	present?: boolean;
+	type?: string;
+	up?: boolean;
+	carrier?: boolean;
+	speed?: string | number;
+	devtype?: string;
+	"bridge-members"?: string[];
+	statistics?: {
+		rx_bytes?: number;
+		tx_bytes?: number;
+		rx_packets?: number;
+		tx_packets?: number;
+		rx_errors?: number;
+		tx_errors?: number;
+		rx_dropped?: number;
+		tx_dropped?: number;
+	};
+};
+
+export type DashboardStatus = {
+	collectedAt?: number;
+	board: BoardInfo;
+	system: SystemInfo;
+	devices: Record<string, DeviceStatus>;
+};
+
 type BridgeResponse<T> = {
 	ok: boolean;
 	data: T;
@@ -36,6 +103,12 @@ const fallbackMenu: MenuItem[] = [
 	{ title: "Firewall", path: "/admin/network/firewall", legacy: true },
 	{ title: "I Love LuCI settings", path: "/settings", legacy: false },
 ];
+
+const fallbackDashboard: DashboardStatus = {
+	board: {},
+	system: {},
+	devices: {},
+};
 
 async function callBridge<T>(method: string): Promise<T> {
 	const config = getShellConfig();
@@ -97,5 +170,14 @@ export async function getPendingChanges(): Promise<number> {
 	}
 	catch {
 		return 0;
+	}
+}
+
+export async function getDashboardStatus(): Promise<DashboardStatus> {
+	try {
+		return await callBridge<DashboardStatus>("dashboard_status");
+	}
+	catch {
+		return fallbackDashboard;
 	}
 }

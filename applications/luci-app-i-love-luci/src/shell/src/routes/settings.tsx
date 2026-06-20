@@ -13,7 +13,7 @@ export function SettingsPage() {
 		<div className="mx-auto grid max-w-4xl gap-5">
 			<div>
 				<h1 className="text-2xl font-semibold">Settings</h1>
-				<p className="text-sm text-muted-foreground">Modern shell configuration and security spike controls.</p>
+				<p className="text-sm text-muted-foreground">Router shell configuration and security options.</p>
 			</div>
 			<Card>
 				<CardHeader>
@@ -24,7 +24,7 @@ export function SettingsPage() {
 						<div>
 							<p className="font-medium">Multi-factor authentication</p>
 							<p className="text-sm text-muted-foreground">
-								TOTP MFA is planned as server-side `rpcd` bridge work. This control documents the flow.
+								TOTP MFA requires server-side support before it can be enabled.
 							</p>
 						</div>
 						<Button variant="outline" onClick={() => setMfaOpen(true)}>
@@ -51,10 +51,10 @@ export function SettingsPage() {
 					</div>
 				</CardContent>
 			</Card>
-			<Dialog open={mfaOpen} title="MFA setup spike" onOpenChange={setMfaOpen}>
+			<Dialog open={mfaOpen} title="MFA setup" onOpenChange={setMfaOpen}>
 				<div className="grid gap-4">
 					<p className="text-sm text-muted-foreground">
-						This is a UI placeholder. Real MFA must generate and verify TOTP secrets on the router.
+						MFA setup is not available in this package yet. TOTP secrets must be generated and verified on the router.
 					</p>
 					<div className="grid gap-2">
 						<label className="text-sm font-medium" htmlFor="mfa-code">
@@ -69,8 +69,8 @@ export function SettingsPage() {
 						<Button
 							onClick={() => {
 								setMfaOpen(false);
-								toast.success("MFA flow stub", {
-									description: "Next step: server-side TOTP bridge and tests.",
+								toast.info("MFA not enabled", {
+									description: "Server-side TOTP support is required first.",
 								});
 							}}
 						>

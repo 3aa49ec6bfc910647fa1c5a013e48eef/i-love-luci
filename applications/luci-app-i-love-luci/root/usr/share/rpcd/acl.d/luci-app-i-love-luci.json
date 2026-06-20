@@ -6,6 +6,7 @@
 				"luci.iloveluci": [
 					"session_info",
 					"menu_tree",
+					"dashboard_status",
 					"changes_list",
 					"auth_mfa_status"
 				]

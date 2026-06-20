@@ -3,8 +3,10 @@
 'use strict';
 
 import { cursor } from 'uci';
+import { connect } from 'ubus';
 
 const uci = cursor();
+const ubus = connect();
 
 function respond(data) {
 	return {
@@ -40,6 +42,17 @@ const methods = {
 		}
 	},
 
+	dashboard_status: {
+		call: function() {
+			return respond({
+				collectedAt: time(),
+				board: ubus.call('system', 'board') || {},
+				system: ubus.call('system', 'info') || {},
+				devices: ubus.call('network.device', 'status') || {}
+			});
+		}
+	},
+
 	changes_list: {
 		call: function() {
 			return respond({
@@ -52,7 +65,7 @@ const methods = {
 		call: function() {
 			return respond({
 				applied: false,
-				message: 'Apply bridge is not implemented in the spike yet.'
+				message: 'Apply bridge is not available yet.'
 			});
 		}
 	},
@@ -80,7 +93,7 @@ const methods = {
 		call: function() {
 			return respond({
 				available: false,
-				message: 'MFA setup is documented but not implemented in this spike build.'
+				message: 'MFA setup is not available yet.'
 			});
 		}
 	},
