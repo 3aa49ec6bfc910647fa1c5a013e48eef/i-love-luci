@@ -79,7 +79,6 @@ export function CoreSettingsPage() {
 					<h1 className="text-2xl font-semibold">{meta.title}</h1>
 					<p className="text-sm text-muted-foreground">{meta.description}</p>
 				</div>
-				<Badge className="shrink-0 text-primary">partial modern</Badge>
 			</header>
 
 			{page === "network" ? <NetworkSummary dashboard={dashboard} /> : null}

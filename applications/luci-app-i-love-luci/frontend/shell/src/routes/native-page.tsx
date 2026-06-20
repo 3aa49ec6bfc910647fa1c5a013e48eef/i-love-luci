@@ -30,7 +30,6 @@ import {
 type PageMeta = {
 	title: string;
 	description: string;
-	badge?: string;
 };
 
 type PackageEntry = {
@@ -207,7 +206,6 @@ const pageMeta: Record<string, PageMeta> = {
 	wireless: {
 		title: "Wireless",
 		description: "Wireless device, interface, and scan helper status. This router can validate the empty/no-radio case.",
-		badge: "partial modern",
 	},
 	diagnostics: {
 		title: "Diagnostics",
@@ -216,17 +214,14 @@ const pageMeta: Record<string, PageMeta> = {
 	attendedsysupgrade: {
 		title: "Attended sysupgrade",
 		description: "Firmware compatibility context and helper configuration. Image building and flashing remain guarded.",
-		badge: "guarded",
 	},
 	packages: {
 		title: "Software",
 		description: "Installed package inventory. Package install and removal remain in legacy LuCI for now.",
-		badge: "read-only",
 	},
 	startup: {
 		title: "Startup",
 		description: "Init scripts and current enabled/running state.",
-		badge: "read-only",
 	},
 	crontab: {
 		title: "Scheduled tasks",
@@ -247,12 +242,10 @@ const pageMeta: Record<string, PageMeta> = {
 	flash: {
 		title: "Backup / flash firmware",
 		description: "Storage and flash partition overview. Firmware write actions remain in legacy LuCI.",
-		badge: "guarded",
 	},
 	reboot: {
 		title: "Reboot",
 		description: "Reboot guard surface. The destructive action remains disabled until a confirmation RPC is added.",
-		badge: "guarded",
 	},
 	services: {
 		title: "Services",
@@ -265,7 +258,6 @@ export function NativePage() {
 	const page = params.page ?? "status-routes";
 	const meta = pageMeta[page] ?? { title: pageTitle(page), description: "Modern route surface." };
 	const [data, setData] = useState<NativePageData | null>(null);
-	const loading = !data || data.page !== page;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -283,7 +275,7 @@ export function NativePage() {
 
 	return (
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
-			<PageHeader meta={meta} loading={loading} />
+			<PageHeader meta={meta} />
 
 			{page === "status-routes" && data ? <RoutingSummary data={data} /> : null}
 			{page === "firewall-status" && data ? <NftablesSummary data={data} /> : null}
@@ -349,9 +341,7 @@ export function NativeServicePage() {
 				meta={{
 					title: detail?.title ?? pageTitle(service),
 					description: "Modern service status and configuration summary. Advanced editing remains in legacy LuCI.",
-					badge: "partial modern",
 				}}
-				loading={!detail}
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
 			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
@@ -525,14 +515,13 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 	);
 }
 
-function PageHeader({ meta, loading }: { meta: PageMeta; loading: boolean }) {
+function PageHeader({ meta }: { meta: PageMeta }) {
 	return (
-		<header className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+		<header className="min-w-0">
 			<div className="min-w-0">
 				<h1 className="text-2xl font-semibold">{meta.title}</h1>
 				<p className="text-sm text-muted-foreground">{meta.description}</p>
 			</div>
-			<Badge className="shrink-0 text-primary">{loading ? "loading" : meta.badge ?? "modern"}</Badge>
 		</header>
 	);
 }
