@@ -82,7 +82,19 @@ const nativeRoutes = {
 };
 const servicePackages = {
 	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'], logPattern: 'adblock-fast' },
-	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'], logPattern: 'banip' },
+	banip: {
+		package: 'banip',
+		init: 'banip',
+		title: 'banIP',
+		sections: ['banip'],
+		logPattern: 'banip',
+		files: [
+			{ title: 'Allowlist', path: '/etc/banip/banip.allowlist' },
+			{ title: 'Blocklist', path: '/etc/banip/banip.blocklist' },
+			{ title: 'Custom feeds', path: '/etc/banip/banip.custom.feeds' },
+			{ title: 'Runtime status', path: '/tmp/run/banIP/banIP.runtime.json' }
+		]
+	},
 	commands: { package: 'luci', init: null, title: 'Custom Commands', sections: ['command'] },
 	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'], logPattern: 'dropbear' },
 	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'], logPattern: 'uhttpd' },
@@ -952,6 +964,36 @@ function service_logs(meta) {
 	};
 }
 
+function service_files(meta) {
+	let entries = [];
+
+	for (let file in meta?.files || []) {
+		let path = file.path || '';
+		let info = stat(path);
+		let text = info?.type == 'file' ? safe_read(path) : '';
+		let lines = length(text) ? split(trim(text), '\n') : [];
+		let preview = [];
+
+		for (let line in lines) {
+			if (length(preview) >= 20)
+				break;
+
+			push(preview, line);
+		}
+
+		push(entries, {
+			title: file.title || path,
+			path,
+			exists: info?.type == 'file',
+			size: info?.size || 0,
+			lines: length(lines),
+			preview
+		});
+	}
+
+	return entries;
+}
+
 function service_detail(id) {
 	let meta = servicePackages[id] || null;
 
@@ -963,6 +1005,7 @@ function service_detail(id) {
 			init: null,
 			sections: [],
 			customCommands: [],
+			files: [],
 			logs: {}
 		};
 
@@ -973,6 +1016,7 @@ function service_detail(id) {
 		init: fast_service_state(meta.init),
 		sections: collect_uci_config(meta.package, meta.sections || []),
 		customCommands: id == 'commands' ? custom_command_entries() : [],
+		files: service_files(meta),
 		logs: service_logs(meta)
 	};
 }

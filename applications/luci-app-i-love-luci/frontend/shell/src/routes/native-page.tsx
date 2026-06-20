@@ -24,6 +24,7 @@ import {
 	type NativePageData,
 	type NativeService,
 	type PackageSearchResult,
+	type ServiceFile,
 } from "@/lib/rpc";
 
 type PageMeta = {
@@ -368,8 +369,64 @@ export function NativeServicePage() {
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
 			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
 			{detail ? <ServiceSpecificSummary service={detail} /> : null}
+			<ServiceFileTables files={detail?.files ?? []} />
 			<ConfigTable sections={sections} />
 			<ServiceLogTables logs={detail?.logs ?? {}} />
+		</div>
+	);
+}
+
+function ServiceFileTables({ files }: { files: ServiceFile[] }) {
+	if (!files.length) {
+		return null;
+	}
+
+	return (
+		<div className="grid gap-4">
+			<Panel title="Service files" flush>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[50rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">File</th>
+								<th className="px-3 py-2 font-medium">Path</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+								<th className="px-3 py-2 font-medium">Lines</th>
+								<th className="px-3 py-2 font-medium">Size</th>
+							</tr>
+						</thead>
+						<tbody>
+							{files.map((file) => (
+								<tr className="border-b align-top last:border-0" key={file.path}>
+									<td className="px-3 py-3 font-medium">{file.title}</td>
+									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{file.path}</td>
+									<td className="px-3 py-3">
+										<Badge className={file.exists ? "text-primary" : "text-muted-foreground"}>
+											{file.exists ? "present" : "missing"}
+										</Badge>
+									</td>
+									<td className="px-3 py-3 font-mono text-xs">{file.lines}</td>
+									<td className="px-3 py-3 font-mono text-xs">{formatBytes(file.size)}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</Panel>
+			{files
+				.filter((file) => file.preview.length)
+				.map((file) => (
+					<OutputLinesTable
+						empty="No preview lines."
+						key={file.path}
+						lines={file.preview.map((line, index) => ({
+							stream: file.title,
+							number: index + 1,
+							text: line,
+						}))}
+						title={`${file.title} preview`}
+					/>
+				))}
 		</div>
 	);
 }
@@ -2084,6 +2141,23 @@ function MetricBlock({ label, value }: { label: string; value: ReactNode }) {
 			<div className="mt-1 break-words text-2xl font-semibold">{value}</div>
 		</div>
 	);
+}
+
+function formatBytes(value?: number) {
+	if (!value || value <= 0) {
+		return "0 B";
+	}
+
+	const units = ["B", "KB", "MB", "GB"];
+	let size = value;
+	let unit = 0;
+
+	while (size >= 1024 && unit < units.length - 1) {
+		size /= 1024;
+		unit += 1;
+	}
+
+	return `${size.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 function parsePackageLine(line: string): PackageEntry {

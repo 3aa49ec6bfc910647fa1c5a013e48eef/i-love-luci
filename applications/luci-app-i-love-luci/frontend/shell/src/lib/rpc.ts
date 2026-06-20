@@ -251,6 +251,15 @@ export type CustomCommandResult = {
 	binary: boolean;
 };
 
+export type ServiceFile = {
+	title: string;
+	path: string;
+	exists: boolean;
+	size: number;
+	lines: number;
+	preview: string[];
+};
+
 export type NativeService = {
 	id?: string;
 	name?: string;
@@ -259,6 +268,7 @@ export type NativeService = {
 	init?: ServiceState | null;
 	sections?: ConfigSection[];
 	customCommands?: CustomCommand[];
+	files?: ServiceFile[];
 	logs?: Record<string, string>;
 	enabled?: boolean;
 	running?: boolean;
@@ -516,6 +526,7 @@ export async function getServiceDetail(id: string): Promise<NativeService> {
 			id,
 			title: id,
 			sections: [],
+			files: [],
 			logs: {},
 		};
 	}

@@ -88,7 +88,7 @@ expected_pages = {
 
 expected_services = {
 	"adblock-fast": {"sections": True},
-	"banip": {"sections": True},
+	"banip": {"sections": True, "files": True},
 	"upnpd": {"sections": True},
 	"commands": {"customCommands": True},
 	"uhttpd": {"sections": True},
@@ -175,6 +175,9 @@ for service, rules in expected_services.items():
 
 	if rules.get("sections") and not data.get("sections"):
 		failures.append(f"{service}: expected UCI sections")
+
+	if rules.get("files") and not data.get("files"):
+		failures.append(f"{service}: expected service file summaries")
 
 	if rules.get("customCommands") and "customCommands" not in data:
 		failures.append(f"{service}: expected customCommands field")
