@@ -112,14 +112,34 @@ export type DeviceStatus = {
 export type NetworkInterfaceRoute = {
 	target?: string;
 	mask?: number;
+	nexthop?: string;
+	source?: string;
+};
+
+export type NetworkInterfaceAddress = {
+	address?: string;
+	mask?: number;
+};
+
+export type NetworkInterfacePrefixAssignment = NetworkInterfaceAddress & {
+	"local-address"?: NetworkInterfaceAddress;
 };
 
 export type NetworkInterfaceStatus = {
 	interface?: string;
 	up?: boolean;
+	pending?: boolean;
+	available?: boolean;
+	autostart?: boolean;
+	dynamic?: boolean;
+	uptime?: number;
 	l3_device?: string;
 	device?: string;
 	proto?: string;
+	"dns-server"?: string[];
+	"ipv4-address"?: NetworkInterfaceAddress[];
+	"ipv6-address"?: NetworkInterfaceAddress[];
+	"ipv6-prefix-assignment"?: NetworkInterfacePrefixAssignment[];
 	route?: NetworkInterfaceRoute[];
 };
 

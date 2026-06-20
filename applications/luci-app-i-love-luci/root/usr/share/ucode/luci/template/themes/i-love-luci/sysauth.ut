@@ -48,6 +48,6 @@
 			});
 		}
 	</script>
-	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native11"></script>
+	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native12"></script>
 </body>
 </html>

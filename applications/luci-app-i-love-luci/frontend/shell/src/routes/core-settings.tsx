@@ -11,6 +11,7 @@ import {
 	type DhcpDomain,
 	type DhcpHost,
 	type DhcpLease,
+	type NetworkInterfaceStatus,
 	type ServiceState,
 } from "@/lib/rpc";
 
@@ -284,17 +285,96 @@ function SimpleSectionTable({
 }
 
 function NetworkSummary({ dashboard }: { dashboard: DashboardStatus | null }) {
-	const rows = Object.entries(dashboard?.devices ?? {})
+	const interfaces = [...(dashboard?.interfaces ?? [])].sort(sortNetworkInterfaces);
+	const devices = Object.entries(dashboard?.devices ?? {})
 		.filter(([, device]) => device.present && device.devtype === "ethernet")
 		.sort(([a], [b]) => a.localeCompare(b));
 
-	if (!rows.length) {
+	if (!interfaces.length && !devices.length) {
 		return null;
 	}
 
 	return (
+		<div className="grid gap-5">
+			{interfaces.length ? <InterfaceStatusTable interfaces={interfaces} /> : null}
+			{devices.length ? <DeviceStatusTable devices={devices} /> : null}
+		</div>
+	);
+}
+
+function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStatus[] }) {
+	return (
 		<section className="grid gap-3">
-			<h2 className="text-base font-semibold">Live interfaces</h2>
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="text-base font-semibold">Interfaces</h2>
+				<span className="text-xs text-muted-foreground">{interfaces.length} interfaces</span>
+			</div>
+			<div className="overflow-x-auto rounded-md border bg-card">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Interface</th>
+							<th className="px-3 py-2 font-medium">State</th>
+							<th className="px-3 py-2 font-medium">Protocol</th>
+							<th className="px-3 py-2 font-medium">Device</th>
+							<th className="px-3 py-2 font-medium">Addresses</th>
+							<th className="px-3 py-2 font-medium">Uptime</th>
+						</tr>
+					</thead>
+					<tbody>
+						{interfaces.map((iface) => {
+							const addresses = getInterfaceAddresses(iface);
+							const name = iface.interface ?? iface.device ?? "unknown";
+
+							return (
+								<tr className="border-b align-top last:border-0" key={name}>
+									<td className="px-3 py-3 font-medium">{name}</td>
+									<td className="px-3 py-3">
+										<div className="flex flex-wrap gap-2">
+											<Badge className={iface.up ? "text-primary" : ""}>{iface.up ? "up" : "down"}</Badge>
+											{iface.pending ? <Badge>pending</Badge> : null}
+											{iface.dynamic ? <Badge>dynamic</Badge> : null}
+											{iface.available === false ? <Badge>unavailable</Badge> : null}
+										</div>
+									</td>
+									<td className="px-3 py-3 text-muted-foreground">{iface.proto ?? "unknown"}</td>
+									<td className="px-3 py-3">
+										<div className="grid gap-1">
+											<span>{iface.l3_device ?? iface.device ?? "none"}</span>
+											{iface.device && iface.device !== iface.l3_device ? (
+												<span className="text-xs text-muted-foreground">base {iface.device}</span>
+											) : null}
+										</div>
+									</td>
+									<td className="px-3 py-3">
+										{addresses.length ? (
+											<div className="grid gap-1 font-mono text-xs">
+												{addresses.map((address) => (
+													<span key={`${name}.${address}`}>{address}</span>
+												))}
+											</div>
+										) : (
+											<span className="text-muted-foreground">none</span>
+										)}
+									</td>
+									<td className="px-3 py-3 text-muted-foreground">{formatUptime(iface.uptime)}</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	);
+}
+
+function DeviceStatusTable({ devices }: { devices: Array<[string, DashboardStatus["devices"][string]]> }) {
+	return (
+		<section className="grid gap-3">
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="text-base font-semibold">Live devices</h2>
+				<span className="text-xs text-muted-foreground">{devices.length} devices</span>
+			</div>
 			<div className="overflow-x-auto rounded-md border bg-card">
 				<table className="w-full min-w-[42rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
@@ -307,7 +387,7 @@ function NetworkSummary({ dashboard }: { dashboard: DashboardStatus | null }) {
 						</tr>
 					</thead>
 					<tbody>
-						{rows.map(([name, device]) => (
+						{devices.map(([name, device]) => (
 							<tr className="border-b last:border-0" key={name}>
 								<td className="px-3 py-3 font-medium">{name}</td>
 								<td className="px-3 py-3">
@@ -370,6 +450,24 @@ function formatBytes(value?: number) {
 	return `${scaled >= 10 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`;
 }
 
+function getInterfaceAddresses(iface: NetworkInterfaceStatus) {
+	const ipv4 = (iface["ipv4-address"] ?? []).map((address) => formatCidr(address.address, address.mask));
+	const ipv6 = (iface["ipv6-address"] ?? []).map((address) => formatCidr(address.address, address.mask));
+	const prefixes = (iface["ipv6-prefix-assignment"] ?? []).map((prefix) =>
+		formatCidr(prefix["local-address"]?.address ?? prefix.address, prefix["local-address"]?.mask ?? prefix.mask),
+	);
+
+	return [...ipv4, ...ipv6, ...prefixes].filter((address): address is string => Boolean(address));
+}
+
+function formatCidr(address?: string, mask?: number) {
+	if (!address) {
+		return null;
+	}
+
+	return typeof mask === "number" ? `${address}/${mask}` : address;
+}
+
 function formatDuration(seconds?: number) {
 	if (!seconds) {
 		return "expired";
@@ -388,4 +486,31 @@ function formatDuration(seconds?: number) {
 	}
 
 	return `${minutes}m`;
+}
+
+function formatUptime(seconds?: number) {
+	if (typeof seconds !== "number") {
+		return "unknown";
+	}
+
+	if (seconds < 60) {
+		return `${Math.max(0, Math.floor(seconds))}s`;
+	}
+
+	return formatDuration(seconds);
+}
+
+function sortNetworkInterfaces(a: NetworkInterfaceStatus, b: NetworkInterfaceStatus) {
+	const aName = a.interface ?? "";
+	const bName = b.interface ?? "";
+
+	if (aName === "loopback") {
+		return 1;
+	}
+
+	if (bName === "loopback") {
+		return -1;
+	}
+
+	return aName.localeCompare(bName);
 }
