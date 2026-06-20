@@ -14,11 +14,11 @@ OpenWrt 25.12/apk:
 
 ```sh
 cat >/etc/apk/repositories.d/i-love-luci.list <<'EOF'
-https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/rockchip-armv8
+https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/rockchip-armv8/packages.adb
 EOF
 
-apk update
-apk add luci-app-i-love-luci
+apk update --allow-untrusted
+apk add --allow-untrusted luci-app-i-love-luci
 ```
 
 OpenWrt 24.10/opkg:
@@ -38,7 +38,7 @@ Then open:
 http://router-address/cgi-bin/luci/admin/i-love-luci
 ```
 
-Feed signing is not configured yet. If your router enforces signed third-party feeds, install the matching GitHub Release asset manually with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
+Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. If you do not want to add the feed, install the matching GitHub Release asset manually with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
 
 ## Screenshots
 
