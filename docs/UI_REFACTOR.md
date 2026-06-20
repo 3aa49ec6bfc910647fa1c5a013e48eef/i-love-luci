@@ -594,7 +594,7 @@ Future-proof target:
 - Serve the React/Vite bundle directly through `uhttpd`.
 - Keep `rpcd`/`ubus` as the privileged backend boundary.
 - Own the login/session flow instead of overriding LuCI login templates.
-- Move LuCI route discovery and iframe rendering into an optional `luci-compat` adapter.
+- Move LuCI route discovery, iframe rendering, and legacy auth handoff into an optional `i-love-luci-luci-compat` adapter.
 - Native I Love LuCI screens should continue working when LuCI is not installed; legacy LuCI screens should appear only when the adapter detects LuCI.
 
 Near-term hardening:
@@ -603,6 +603,61 @@ Near-term hardening:
 - Avoid persisting versioned asset URLs in config; keep cache keys template-owned.
 - Keep CI/build matrix for OpenWrt 24.10/opkg, 25.12+/apk, and snapshot when practical.
 - Prefer typed `rpcd` endpoints and UCI-backed settings over scraping LuCI pages.
+
+## LuCI Compatibility Layer
+
+Standalone I Love LuCI must not break the OpenWrt LuCI app ecosystem. The practical design is not a hard fork that expects every LuCI app to be rewritten immediately. It should be a layered runtime:
+
+- `i-love-luci-core`: standalone React/Vite shell, own auth/session, static assets served by `uhttpd`, typed `rpcd` bridge, and native first-party screens. No `luci-base` dependency.
+- `i-love-luci-luci-compat`: optional compatibility package that depends on `luci-base`, discovers installed LuCI menu/ACL/view metadata, and runs unconverted LuCI apps through a framed or proxied legacy surface.
+- `i-love-luci-adapters`: optional native adapters for high-value LuCI apps. These translate known UCI schemas, service actions, logs, and package-specific files into native React screens.
+
+Compatibility rule:
+
+- Existing LuCI apps from OpenWrt feeds should remain installable through normal package tooling.
+- If a LuCI app depends on `luci-base`, the compatibility package should satisfy the runtime path by keeping LuCI installed.
+- I Love LuCI should detect the app, add it to navigation/search, and choose the best renderer in this order: native adapter, generic UCI/service adapter, legacy compat frame.
+- No route should disappear just because a native adapter does not exist yet.
+- Do not rewrite individual third-party LuCI apps as one-off React pages unless the same adapter pattern can apply to comparable apps.
+
+Translation layer scope:
+
+- Menu translation: parse `/usr/share/luci/menu.d/*.json` into I Love LuCI navigation, preserving order, nesting, first-child behavior, ACL visibility, and route titles.
+- ACL/session bridge: map existing LuCI/rpcd permissions into I Love LuCI route availability so users do not see unusable actions.
+- UCI schema adapter: render safe generic summaries/editors for packages that expose standard UCI sections.
+- Service adapter: expose status, start, stop, restart, enable, disable, and relevant logs for packages with init scripts.
+- File adapter: expose whitelisted package files such as banIP allow/block/custom feed lists.
+- Legacy frame fallback: render arbitrary LuCI JS views unchanged when there is no adapter.
+
+Limit:
+
+- Fully automatic conversion of arbitrary LuCI JavaScript views into native React is not realistic. LuCI apps can contain custom client code, RPC calls, form logic, and side effects that cannot be inferred safely.
+- The safe target is universal compatibility first, then progressive native replacement through explicit adapters.
+
+Package model:
+
+- Publish `i-love-luci-core` for users who want the standalone native app only.
+- Publish `i-love-luci-luci-compat` for users who want all existing LuCI apps to continue working.
+- Keep current `luci-app-i-love-luci` as the transition package until the standalone split is ready.
+
+Router compatibility audit on `172.16.172.1`:
+
+| LuCI app/package | Current route handling | Required I Love LuCI treatment |
+| --- | --- | --- |
+| `luci-app-banip` / `banip` | Generic native service summary with lifecycle actions; child routes map to the same service surface. | Keep full LuCI app available through compat frame. Add native allowlist/blocklist/feed/log adapters only as part of a reusable service/file/log adapter framework. |
+| `luci-app-adblock-fast` / `adblock-fast` | Generic native service summary with lifecycle actions and UCI sections. | Same as banIP. Do not create a bespoke rewrite; use generic UCI/service/file adapters or fall back to LuCI compat. |
+| `luci-app-upnp` / `upnpd` | Generic native service summary with lifecycle actions and UCI sections. | Same treatment: adapter first, compat fallback always. |
+| `luci-app-uhttpd` / `uhttpd` | Generic native service summary with lifecycle actions and UCI sections. | Treat as a LuCI app despite being system-adjacent. Native adapter can exist, but LuCI compat remains fallback. |
+| `luci-app-commands` | Generic native UCI summary; no command execution/config UI replacement yet. | Preserve LuCI app through compat. Native command runner/editor should be a reusable command adapter, not a bespoke page. |
+| `luci-app-attendedsysupgrade` | Guarded native firmware context only. | Keep LuCI app or official upgrade tool path available until native flow handles image requests, package retention, progress, rollback, and flash confirmation. |
+| `luci-app-package-manager` | Native installed package inventory only. | Keep LuCI app available until native package search/install/remove/update has equivalent safeguards and package-manager-specific behavior. |
+| `luci-app-firewall` and LuCI core modules | Generic native UCI summaries for network/firewall/system. | Keep compat fallback for advanced forms. Promote native pages only when validation, pending changes, and apply semantics match LuCI behavior. |
+
+Audit decision:
+
+- banIP and AdBlock Fast are both third-party/service-style LuCI apps, so they must be handled through the same compatibility and adapter rules.
+- Bespoke rewrites are acceptable only for first-party I Love LuCI shell/dashboard/auth features or for adapter primitives that benefit multiple LuCI apps.
+- For every installed LuCI app, route availability is more important than native styling. If native parity is not proven, fallback to LuCI compat.
 
 ## Login Conversion
 
