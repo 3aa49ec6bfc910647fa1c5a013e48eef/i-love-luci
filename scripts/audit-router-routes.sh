@@ -112,6 +112,7 @@ known_native_pages = {
 	"leds",
 	"logs",
 	"packages",
+	"password",
 	"processes",
 	"reboot",
 	"repokeys",

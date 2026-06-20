@@ -31,7 +31,7 @@ set user $env(OPENWRT_USER)
 set pass $env(OPENWRT_PASSWORD)
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host "cat <<'REMOTE' >/tmp/i-love-luci-native-audit.sh
 #!/bin/sh
-pages='status-routes firewall-status logs processes connections wireless diagnostics attendedsysupgrade packages startup crontab sshkeys repokeys leds flash services reboot'
+pages='status-routes firewall-status logs processes connections wireless diagnostics attendedsysupgrade packages startup crontab sshkeys password repokeys leds flash services reboot'
 services='adblock-fast banip upnpd commands uhttpd dropbear'
 echo '---ILOVELUCI-MENU---'
 ubus call luci.iloveluci menu_tree
@@ -79,6 +79,7 @@ expected_pages = {
 	"startup": {"services": True},
 	"crontab": {"text": True},
 	"sshkeys": {"text": True},
+	"password": {},
 	"repokeys": {"commands": ["Repository public keys"]},
 	"leds": {"commands": ["LED sysfs state"]},
 	"flash": {"commands": ["Mounted filesystems", "Flash partitions"]},

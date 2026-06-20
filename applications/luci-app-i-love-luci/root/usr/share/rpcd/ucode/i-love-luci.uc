@@ -48,8 +48,8 @@ const nativeRoutes = {
 	'/admin/network/firewall/custom': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/system': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/admin': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/admin/password': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin': { status: 'supported', nativePath: '/native/password' },
+	'/admin/system/admin/password': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
 	'/admin/system/admin/sshkeys': { status: 'supported', nativePath: '/native/sshkeys' },
 	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
@@ -1088,6 +1088,61 @@ function save_ssh_keys(text) {
 	};
 }
 
+function set_router_password(username, password, confirm) {
+	username = trim('' + (username || 'root'));
+	password = '' + (password || '');
+	confirm = '' + (confirm || '');
+
+	if (!length(username))
+		username = 'root';
+
+	if (username != 'root')
+		return {
+			saved: false,
+			message: 'Only the root password can be changed from this screen.'
+		};
+
+	if (!length(password))
+		return {
+			saved: false,
+			message: 'Password is required.'
+		};
+
+	if (password != confirm)
+		return {
+			saved: false,
+			message: 'Password confirmation does not match.'
+		};
+
+	if (length(password) < 6)
+		return {
+			saved: false,
+			message: 'Password must be at least 6 characters.'
+		};
+
+	let result = null;
+
+	try {
+		result = ubus.call('luci', 'setPassword', {
+			username,
+			password
+		});
+	}
+	catch (e) {
+		return {
+			saved: false,
+			message: 'Password change failed.'
+		};
+	}
+
+	const saved = result?.result == true;
+
+	return {
+		saved,
+		message: saved ? 'Router password changed.' : 'Password change failed.'
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -1480,6 +1535,17 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_ssh_keys(request.args.text || ''));
+		}
+	},
+
+	password_set: {
+		args: {
+			username: 'root',
+			password: '',
+			confirm: ''
+		},
+		call: function(request) {
+			return respond(set_router_password(request.args.username || 'root', request.args.password || '', request.args.confirm || ''));
 		}
 	},
 

@@ -16,6 +16,7 @@ import {
 	saveCrontab,
 	saveSshKeys,
 	searchPackages,
+	setRouterPassword,
 	type CommandBlock,
 	type ConfigSection,
 	type CustomCommand,
@@ -231,6 +232,10 @@ const pageMeta: Record<string, PageMeta> = {
 		title: "SSH keys",
 		description: "Edit Dropbear authorized keys without leaving the modern shell.",
 	},
+	password: {
+		title: "Router password",
+		description: "Change the root password used for router administration.",
+	},
 	repokeys: {
 		title: "Repository keys",
 		description: "Installed package repository public keys.",
@@ -304,6 +309,7 @@ export function NativePage() {
 					title="Authorized keys"
 				/>
 			) : null}
+			{page === "password" ? <PasswordPanel /> : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel data={data} /> : null}
 			{page === "flash" && data ? <FlashSummary data={data} /> : null}
@@ -2853,6 +2859,112 @@ function TextFileEditor({
 			<p className="mt-2 text-xs text-muted-foreground">{helperText}</p>
 		</Panel>
 	);
+}
+
+function PasswordPanel() {
+	const [password, setPassword] = useState("");
+	const [confirm, setConfirm] = useState("");
+	const [saving, setSaving] = useState(false);
+	const dirty = password.length > 0 || confirm.length > 0;
+	const mismatch = confirm.length > 0 && password !== confirm;
+	const strength = passwordStrength(password);
+	const canSave = password.length >= 6 && confirm.length > 0 && !mismatch && !saving;
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+
+		if (mismatch) {
+			toast.error("Password confirmation does not match.");
+			return;
+		}
+
+		setSaving(true);
+		const result = await setRouterPassword("root", password, confirm);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+		setPassword("");
+		setConfirm("");
+	}
+
+	return (
+		<Panel title="Root password">
+			<form className="grid max-w-xl gap-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-2">
+					<label className="text-sm font-medium" htmlFor="router-password">
+						New password
+					</label>
+					<Input
+						autoComplete="new-password"
+						id="router-password"
+						onChange={(event) => setPassword(event.target.value)}
+						type="password"
+						value={password}
+					/>
+					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+						<span>Password strength</span>
+						<Badge className={strength.className}>{strength.label}</Badge>
+					</div>
+				</div>
+				<div className="grid gap-2">
+					<label className="text-sm font-medium" htmlFor="router-password-confirm">
+						Confirm password
+					</label>
+					<Input
+						autoComplete="new-password"
+						id="router-password-confirm"
+						onChange={(event) => setConfirm(event.target.value)}
+						type="password"
+						value={confirm}
+					/>
+					{mismatch ? <p className="text-xs text-destructive">Password confirmation does not match.</p> : null}
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button
+						disabled={!dirty || saving}
+						onClick={() => {
+							setPassword("");
+							setConfirm("");
+						}}
+						type="button"
+						variant="outline"
+					>
+						Cancel
+					</Button>
+					<Button disabled={!canSave} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</Panel>
+	);
+}
+
+function passwordStrength(value: string) {
+	if (!value) {
+		return { label: "empty", className: "" };
+	}
+
+	let score = 0;
+	if (value.length >= 8) score += 1;
+	if (/[a-z]/.test(value) && /[A-Z]/.test(value)) score += 1;
+	if (/[0-9]/.test(value)) score += 1;
+	if (/[^A-Za-z0-9]/.test(value)) score += 1;
+
+	if (score >= 4) {
+		return { label: "strong", className: "text-primary" };
+	}
+
+	if (score >= 2) {
+		return { label: "medium", className: "text-foreground" };
+	}
+
+	return { label: "weak", className: "text-destructive" };
 }
 
 function RebootPanel({ data }: { data: NativePageData | null }) {

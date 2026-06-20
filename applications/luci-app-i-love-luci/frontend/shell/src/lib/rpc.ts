@@ -608,3 +608,19 @@ export async function saveSshKeys(text: string): Promise<{ saved: boolean; messa
 		};
 	}
 }
+
+export async function setRouterPassword(
+	username: string,
+	password: string,
+	confirm: string,
+): Promise<{ saved: boolean; message: string }> {
+	try {
+		return await callBridge<{ saved: boolean; message: string }>("password_set", { username, password, confirm });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Password change failed.",
+		};
+	}
+}

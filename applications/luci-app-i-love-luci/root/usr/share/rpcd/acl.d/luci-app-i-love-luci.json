@@ -29,6 +29,7 @@
 					"crontab_save",
 					"custom_command_run",
 					"diagnostics_run",
+					"password_set",
 					"service_action",
 					"ssh_keys_save",
 					"startup_action",

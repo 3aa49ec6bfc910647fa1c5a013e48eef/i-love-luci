@@ -122,8 +122,8 @@ To match default Overview fully, add:
 | Route | Title | Legacy action | Core data points | Proposed modern replacement | Priority |
 | --- | --- | --- | --- | --- | --- |
 | `/admin/system/system` | System | view `system/system` | UCI `system`, UCI `luci`, timezones, `luci.getUnixtime`, `luci.setLocaltime`, `rc list/init sysntpd` | Settings page with tabs for identity, time, language/theme, NTP | P1 |
-| `/admin/system/admin` | Administration | firstchild | no page of its own | parent route to password | P1 |
-| `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Native password form with strength/confirmation and success toast | P1 |
+| `/admin/system/admin` | Administration | firstchild | no page of its own | Parent route resolves to native router password form | Done |
+| `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Implemented native password form with strength/confirmation and success/error toast | Done |
 | `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native table/form for SSH listeners and interface binding | P2 |
 | `/admin/system/admin/sshkeys` | SSH-Keys | view `system/sshkeys` | `/etc/dropbear/authorized_keys` read/write | Key list with add/import/delete and fingerprint display | P2 |
 | `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native uHTTPd listener/TLS settings after config schema exists | P3 |
@@ -140,9 +140,8 @@ To match default Overview fully, add:
 System routes mix low-risk UCI forms and high-risk command flows. Modern migration should start with read/write UCI screens that have obvious rollback through normal LuCI apply:
 
 1. System settings
-2. Router password
-3. Dropbear SSH
-4. Startup/crontab
+2. Dropbear SSH
+3. Startup/crontab
 
 Delay flash, mounts, and uHTTPd until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
 
@@ -382,7 +381,7 @@ Keep full interface edit, wireless, and switch in legacy until per-feature test 
 Deliver:
 
 - system identity/time/theme/language/NTP
-- router password
+- router password completed through a native `luci.setPassword` bridge
 - SSH access and SSH keys
 - startup services and rc.local
 - crontab editor

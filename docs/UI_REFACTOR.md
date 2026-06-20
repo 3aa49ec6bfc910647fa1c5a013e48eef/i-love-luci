@@ -573,7 +573,8 @@ Converted to native React/Vite surfaces:
 - `/admin/network/dhcp` and `/admin/network/dns`: modern read-only DHCP/DNS surface with dnsmasq/odhcpd service state, active DHCP leases, static DHCP hosts, DNS host records, and compact UCI summaries. Full edit/apply workflows remain LuCI compat.
 - `/admin/network/wireless`: guarded wireless configuration/status surface.
 - `/admin/network/diagnostics`: structured route table, resolver view, and guarded ping/traceroute/DNS runner.
-- `/admin/system/system` and `/admin/system/admin`: modern read-only system summaries for hostname/timezone/logging, NTP, Dropbear, uHTTPd, LEDs, and certificate defaults.
+- `/admin/system/system`: modern read-only system summaries for hostname/timezone/logging, NTP, Dropbear, uHTTPd, LEDs, and certificate defaults.
+- `/admin/system/admin` and `/admin/system/admin/password`: native router password form with confirmation, strength feedback, client validation, and a server-side `luci.setPassword` bridge.
 - `/admin/system/admin/dropbear`: Dropbear service status and UCI summary.
 - `/admin/system/admin/sshkeys`: Dropbear authorized keys editor.
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
@@ -596,7 +597,7 @@ Converted to native React/Vite surfaces:
 Validation on `172.16.172.1`:
 
 - All visible LuCI menu routes have either a native route or a LuCI compat route. Service/package LuCI apps with incomplete native parity default to `legacy` effective mode in `auto`, so full LuCI functionality remains available.
-- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `sshkeys`, `repokeys`, `leds`, `flash`, `services`, and `reboot`.
+- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `sshkeys`, `password`, `repokeys`, `leds`, `flash`, `services`, and `reboot`.
 - `crontab_save` saved through the native bridge and reloaded cron on `172.16.172.1`; the test router had no existing root crontab entries.
 - `native_page` returned `sshkeys` successfully. The router currently has no `/etc/dropbear/authorized_keys`, so save was not exercised to avoid creating an empty file during validation.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
@@ -638,6 +639,7 @@ Validation on `172.16.172.1`:
 - Route audit now validates every native-capable route has a shell-native preview path matching a known I Love LuCI route pattern, including partial routes that default to LuCI compat in auto mode. The latest audit on `172.16.172.1` reported `native_preview_routes=60` and passed route, native page, and HTTP route checks.
 - Native page audit now asserts focused service-preview data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so focused native child routes cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
 - Native page audit now fails if the console bridge is enabled but does not expose the ttyd helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
+- Router password now resolves to `#/native/password` and uses the same `luci.setPassword` ubus method as LuCI. The `1.0.0-r4-native39` deploy passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=23`, `partial=37`), native page audit (`native_pages=18`, `service_adapters=6`), HTTP route smoke (`native_shell_checks=42`, `legacy_route_checks=18`), and a safe mismatch RPC check returning `Password confirmation does not match.` without changing the credential.
 
 Remaining legacy or partial gaps:
 
@@ -645,7 +647,7 @@ Remaining legacy or partial gaps:
 - Network interfaces are native read-only. Interface create/edit/delete, device bridge/member editing, reconnect/reload actions, route edits, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - DHCP/DNS is native read-only. Creating/editing static leases, DNS records, DHCP pools, and advanced dnsmasq/odhcpd options remains LuCI compat until a generic form/pending-change adapter is complete.
 - Firewall is native read-only for summary views. Zone/rule/redirect create/edit/delete, custom rule files, nft include handling, validation, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
-- System administration is native read-only for summary views. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
+- System administration is native read-only for summary views except router password and SSH authorized keys. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
 - Attended sysupgrade has a structured native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, flash handoff, and rollback checks still need dedicated RPCs before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory, available-upgrades visibility, and available feed search with client filtering; it is available only when a route is explicitly forced to modern.
