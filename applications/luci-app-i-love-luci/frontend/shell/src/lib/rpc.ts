@@ -139,10 +139,41 @@ export type ConfigSection = {
 	values: Record<string, ConfigValue>;
 };
 
+export type DhcpLease = {
+	expires: number;
+	remaining: number;
+	mac: string;
+	ip: string;
+	hostname: string;
+	clientId: string;
+};
+
+export type DhcpHost = {
+	name: string;
+	ip: string;
+	mac: string;
+};
+
+export type DhcpDomain = {
+	name: string;
+	ip: string;
+};
+
+export type DhcpStatus = {
+	dnsmasq?: ServiceState | null;
+	odhcpd?: ServiceState | null;
+	leaseFile?: string;
+	leaseCount?: number;
+};
+
 export type CoreSettings = {
 	page: string;
 	network: ConfigSection[];
 	dhcp: ConfigSection[];
+	dhcpLeases?: DhcpLease[];
+	dhcpHosts?: DhcpHost[];
+	dhcpDomains?: DhcpDomain[];
+	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
 	system: ConfigSection[];
 };
@@ -345,13 +376,40 @@ export async function getDashboardStatus(): Promise<DashboardStatus> {
 
 export async function getCoreSettings(page: string): Promise<CoreSettings> {
 	try {
-		return await callBridge<CoreSettings>("core_settings", { page });
+		const data = await callBridge<Omit<CoreSettings, "dhcpLeases"> & { dhcpLeases?: Array<DhcpLease | string> }>(
+			"core_settings",
+			{ page },
+		);
+
+		return {
+			...data,
+			dhcpLeases: (data.dhcpLeases ?? []).map((lease) => {
+				if (typeof lease !== "string") {
+					return lease;
+				}
+
+				const [remaining = "0", mac = "", ip = "", hostname = "", clientId = ""] = lease.split("\t");
+
+				return {
+					expires: 0,
+					remaining: Number(remaining) || 0,
+					mac,
+					ip,
+					hostname,
+					clientId,
+				};
+			}),
+		};
 	}
 	catch {
 		return {
 			page,
 			network: [],
 			dhcp: [],
+			dhcpLeases: [],
+			dhcpHosts: [],
+			dhcpDomains: [],
+			dhcpStatus: {},
 			firewall: [],
 			system: [],
 		};

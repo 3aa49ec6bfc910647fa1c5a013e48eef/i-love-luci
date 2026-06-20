@@ -533,7 +533,8 @@ Converted to native React/Vite surfaces:
 - `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
 - `/admin/status/realtime/connections`: active sockets.
 - `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface; on the current router it validates the no-radio/no-`iw` case.
-- `/admin/network/network`, `/admin/network/routes`, `/admin/network/dhcp`, `/admin/network/dns`, `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with live interface status where available.
+- `/admin/network/network`, `/admin/network/routes`, `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with live interface status where available.
+- `/admin/network/dhcp` and `/admin/network/dns`: modern read-only DHCP/DNS surface with dnsmasq/odhcpd service state, active DHCP leases, static DHCP hosts, DNS host records, and compact UCI summaries. Full edit/apply workflows remain LuCI compat.
 - `/admin/network/wireless`: guarded wireless configuration/status surface.
 - `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
 - `/admin/system/system` and `/admin/system/admin`: modern read-only UCI summaries.
@@ -570,10 +571,12 @@ Validation on `172.16.172.1`:
 - Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
 - Menu policy validation confirmed incomplete LuCI app routes such as banIP, AdBlock Fast, UPnP, uHTTPd, custom commands, attended sysupgrade, and package manager default to LuCI compat in auto mode while keeping native preview routes available for explicit `modern` selection.
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
+- `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 
 Remaining legacy or partial gaps:
 
 - Wireless-specific pages are native but partial. The current test router has no active wireless stack and lacks `iw`/`iwinfo`, so radio scanning, channel analysis, and association lists could not be validated.
+- DHCP/DNS is native read-only. Creating/editing static leases, DNS records, DHCP pools, and advanced dnsmasq/odhcpd options remains LuCI compat until a generic form/pending-change adapter is complete.
 - Attended sysupgrade has a native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is inventory-only and available only when a route is explicitly forced to modern.

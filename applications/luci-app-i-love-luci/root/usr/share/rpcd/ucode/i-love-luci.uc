@@ -544,6 +544,77 @@ function fast_service_state(name) {
 	};
 }
 
+function dhcp_leases() {
+	let leases = [];
+	let text = trim(shell_output(`awk '{ r=$1-systime(); if (r < 0) r=0; h=($4=="*" ? "" : $4); c=($5=="*" ? "" : $5); print r "\\t" $2 "\\t" $3 "\\t" h "\\t" c }' /tmp/dhcp.leases 2>/dev/null`));
+
+	if (!length(text))
+		return leases;
+
+	for (let line in split(text, '\n')) {
+		if (length(trim(line)))
+			push(leases, trim(line));
+	}
+
+	sort(leases, function(a, b) {
+		let a_parts = split(a, '\t');
+		let b_parts = split(b, '\t');
+		return a_parts[2] > b_parts[2] ? 1 : -1;
+	});
+
+	return leases;
+}
+
+function dhcp_status() {
+	return {
+		dnsmasq: fast_service_state('dnsmasq'),
+		odhcpd: fast_service_state('odhcpd'),
+		leaseFile: '/tmp/dhcp.leases',
+		leaseCount: length(dhcp_leases())
+	};
+}
+
+function dhcp_static_hosts() {
+	let hosts = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return hosts;
+	}
+
+	uci.foreach('dhcp', 'host', function(section) {
+		push(hosts, {
+			name: section.name || section['.name'] || '',
+			ip: section.ip || '',
+			mac: type(section.mac) == 'array' ? join(', ', section.mac) : (section.mac || '')
+		});
+	});
+
+	return hosts;
+}
+
+function dhcp_domain_records() {
+	let records = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return records;
+	}
+
+	uci.foreach('dhcp', 'domain', function(section) {
+		push(records, {
+			name: section.name || section['.name'] || '',
+			ip: section.ip || ''
+		});
+	});
+
+	return records;
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -941,21 +1012,44 @@ function native_page(page) {
 }
 
 function build_core_settings(page) {
-	let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
-
-	for (let section in collect_uci_config('dropbear', ['dropbear']))
-		push(system, section);
-
-	for (let section in collect_uci_config('uhttpd', ['uhttpd', 'cert', 'cert_defaults']))
-		push(system, section);
-
-	return {
+	let data = {
 		page,
-		network: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
-		dhcp: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'host', 'domain', 'odhcpd']),
-		firewall: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']),
-		system
+		network: [],
+		dhcp: [],
+		dhcpLeases: [],
+		dhcpHosts: [],
+		dhcpDomains: [],
+		dhcpStatus: {},
+		firewall: [],
+		system: []
 	};
+
+	if (page == 'dhcp') {
+		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd']);
+		data.dhcpLeases = dhcp_leases();
+		data.dhcpHosts = dhcp_static_hosts();
+		data.dhcpDomains = dhcp_domain_records();
+		data.dhcpStatus = dhcp_status();
+	}
+	else if (page == 'firewall') {
+		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']);
+	}
+	else if (page == 'system') {
+		let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
+
+		for (let section in collect_uci_config('dropbear', ['dropbear']))
+			push(system, section);
+
+		for (let section in collect_uci_config('uhttpd', ['uhttpd', 'cert', 'cert_defaults']))
+			push(system, section);
+
+		data.system = system;
+	}
+	else {
+		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
+	}
+
+	return data;
 }
 
 function build_menu() {
