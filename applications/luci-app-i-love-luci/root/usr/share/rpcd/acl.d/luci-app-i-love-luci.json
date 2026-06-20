@@ -36,6 +36,7 @@
 					"service_action",
 					"ssh_keys_save",
 					"startup_action",
+					"uhttpd_config_save",
 					"route_mode_set",
 					"auth_mfa_begin_setup",
 					"auth_mfa_verify_setup",
@@ -46,7 +47,8 @@
 				"dropbear",
 				"luci",
 				"i-love-luci",
-				"system"
+				"system",
+				"uhttpd"
 			]
 		}
 	}

@@ -53,7 +53,7 @@ const nativeRoutes = {
 	'/admin/system/admin/password': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
 	'/admin/system/admin/sshkeys': { status: 'supported', nativePath: '/native/sshkeys' },
-	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
+	'/admin/system/admin/uhttpd': { status: 'supported', nativePath: '/native/service/uhttpd' },
 	'/admin/system/admin/repokeys': { status: 'supported', nativePath: '/native/repokeys' },
 	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
 	'/admin/system/attendedsysupgrade/overview': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
@@ -1259,6 +1259,32 @@ function save_led_config(rows) {
 	};
 }
 
+function save_uhttpd_config(config) {
+	config ||= {};
+	uci.load('uhttpd');
+
+	let section = first_uci_section('uhttpd', 'uhttpd') || 'main';
+	let redirect_https = zero_one(config.redirect_https);
+	let current = uci.get('uhttpd', section, 'redirect_https') || '0';
+	let changed = current != redirect_https;
+
+	if (changed) {
+		uci.set('uhttpd', section, 'redirect_https', redirect_https);
+		uci.commit('uhttpd');
+		system('/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1');
+	}
+
+	let sections = collect_uci_config('uhttpd', ['uhttpd']);
+
+	return {
+		saved: true,
+		message: changed ? 'HTTP access saved and reloaded.' : 'HTTP access already up to date.',
+		changed,
+		section: sections?.[0] || null,
+		init: fast_service_state('uhttpd')
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -1734,6 +1760,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_led_config(request.args.rows || []));
+		}
+	},
+
+	uhttpd_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			return respond(save_uhttpd_config(request.args.config || {}));
 		}
 	},
 

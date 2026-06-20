@@ -308,6 +308,18 @@ export type LedConfigResult = {
 	sections: ConfigSection[];
 };
 
+export type UhttpdConfigInput = {
+	redirect_https: string;
+};
+
+export type UhttpdConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	init: ServiceState | null;
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -617,6 +629,21 @@ export async function saveLedConfig(rows: LedConfigRow[]): Promise<LedConfigResu
 			message: "LED configuration save failed.",
 			changed: false,
 			sections: [],
+		};
+	}
+}
+
+export async function saveUhttpdConfig(config: UhttpdConfigInput): Promise<UhttpdConfigResult> {
+	try {
+		return await callBridge<UhttpdConfigResult>("uhttpd_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "HTTP access save failed.",
+			changed: false,
+			section: null,
+			init: null,
 		};
 	}
 }

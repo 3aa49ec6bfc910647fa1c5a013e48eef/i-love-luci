@@ -126,7 +126,7 @@ To match default Overview fully, add:
 | `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Implemented native password form with strength/confirmation and success/error toast | Done |
 | `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native main-instance SSH editor implemented; add/remove instance parity remains | Partial |
 | `/admin/system/admin/sshkeys` | SSH-Keys | view `system/sshkeys` | `/etc/dropbear/authorized_keys` read/write | Key list with add/import/delete and fingerprint display | P2 |
-| `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native uHTTPd listener/TLS settings after config schema exists | P3 |
+| `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native redirect-to-HTTPS editor implemented; listener/TLS summary remains read-only | Done |
 | `/admin/system/admin/repokeys` | Repo Public Keys | view `system/repokeys` | `/etc/apk/keys/*`, `/etc/opkg/keys/*` read/write | Key manager with package-manager tie-in | P3 |
 | `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Implemented native init script actions and `/etc/rc.local` editor | Done |
 | `/admin/system/crontab` | Scheduled Tasks | view `system/crontab` | `/etc/crontabs/root` read/write, cron reload | Cron editor with validation and reload toast | P2 |
@@ -142,7 +142,7 @@ System routes mix low-risk UCI forms and high-risk command flows. Modern migrati
 1. System settings
 2. Dropbear SSH multiple-instance parity
 
-Delay flash, mounts, and uHTTPd until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
+Delay flash and mounts until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
 
 ## Network Section Audit
 
@@ -387,7 +387,7 @@ Deliver:
 - crontab editor
 - reboot dialog
 
-Keep mount points, repo keys, uHTTPd, and flash in legacy until operation safety is designed.
+Keep mount points, repo keys, and flash in legacy until operation safety is designed.
 
 ### Phase 4: High-Risk Operations
 
@@ -396,7 +396,7 @@ Deliver only after explicit safety work:
 - backup/restore
 - firmware validation/upload/sysupgrade
 - mount/unmount/block detect
-- uHTTPd listener/TLS changes
+- uHTTPd redirect-to-HTTPS completed; listener/TLS changes remain read-only
 - firewall status/config native pages
 
 Required safeguards:

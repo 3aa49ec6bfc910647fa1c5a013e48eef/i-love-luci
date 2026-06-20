@@ -12,6 +12,7 @@ import {
 	runCustomCommand,
 	saveDropbearConfig,
 	saveLedConfig,
+	saveUhttpdConfig,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -31,6 +32,7 @@ import {
 	type NativeService,
 	type PackageSearchResult,
 	type ServiceFile,
+	type UhttpdConfigInput,
 } from "@/lib/rpc";
 
 type PageMeta = {
@@ -918,20 +920,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="HTTPS" value={joinConfigValue(main?.values.listen_https) || "none"} />
 					<MetricBlock label="Redirect HTTPS" value={enabledText(configValue(main, "redirect_https"))} />
 				</div>
-				<SimpleValueTable
-					columns={["Setting", "Value"]}
-					empty="No uHTTPd configuration found."
-					rows={[
-						["Document root", configValue(main, "home") || "unknown"],
-						["CGI prefix", configValue(main, "cgi_prefix") || "none"],
-						["Ubus prefix", configValue(main, "ubus_prefix") || "none"],
-						["Max requests", configValue(main, "max_requests") || "unknown"],
-						["Max connections", configValue(main, "max_connections") || "unknown"],
-						["Certificate", configValue(main, "cert") || "none"],
-						["Certificate defaults", `${configValue(cert, "key_type") || "unknown"} / ${configValue(cert, "ec_curve") || configValue(cert, "bits") || "unknown"}`],
-					]}
-					title="Web server configuration"
-				/>
+				<UhttpdAccessPanel cert={cert} config={main} />
 			</div>
 		);
 	}
@@ -1045,6 +1034,81 @@ function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) 
 			</div>
 		</Panel>
 	);
+}
+
+function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; config: ConfigSection | undefined }) {
+	const initial = useMemo(() => uhttpdFormValues(config), [config]);
+	const [values, setValues] = useState(initial);
+	const [savedValues, setSavedValues] = useState(initial);
+	const [section, setSection] = useState(config);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+	const current = section ?? config;
+
+	async function save() {
+		setSaving(true);
+		const result = await saveUhttpdConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = uhttpdFormValues(result.section ?? current);
+		setSection(result.section ?? current);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		toast.success(result.message);
+	}
+
+	return (
+		<div className="grid gap-4">
+			<Panel title="HTTP(S) access">
+				<div className="grid max-w-xl gap-4">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Redirect to HTTPS</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => setValues({ redirect_https: event.target.value })}
+							value={values.redirect_https}
+						>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<div className="flex justify-end gap-2">
+						<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+							Cancel
+						</Button>
+						<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+							Save
+						</Button>
+					</div>
+				</div>
+			</Panel>
+			<SimpleValueTable
+				columns={["Setting", "Value"]}
+				empty="No uHTTPd configuration found."
+				rows={[
+					["Document root", configValue(current, "home") || "unknown"],
+					["CGI prefix", configValue(current, "cgi_prefix") || "none"],
+					["Ubus prefix", configValue(current, "ubus_prefix") || "none"],
+					["Max requests", configValue(current, "max_requests") || "unknown"],
+					["Max connections", configValue(current, "max_connections") || "unknown"],
+					["Certificate", configValue(current, "cert") || "none"],
+					["Certificate defaults", `${configValue(cert, "key_type") || "unknown"} / ${configValue(cert, "ec_curve") || configValue(cert, "bits") || "unknown"}`],
+				]}
+				title="Web server configuration"
+			/>
+		</div>
+	);
+}
+
+function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput {
+	return {
+		redirect_https: enabledText(configValue(config, "redirect_https")) === "enabled" ? "1" : "0",
+	};
 }
 
 function dropbearFormValues(config: ConfigSection | undefined): DropbearConfigInput {
