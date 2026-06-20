@@ -1547,17 +1547,11 @@ function save_firewall_zones(rows) {
 		existing[section['.name']] = true;
 	});
 
+	let validated = [];
+
 	for (let row in rows) {
 		let section = dhcp_clean_value(row?.section || '');
 		let is_existing = length(section) && uci.get('firewall', section) == 'zone';
-
-		if (!is_existing) {
-			section = uci.add('firewall', 'zone');
-			changed = true;
-		}
-
-		keep[section] = true;
-
 		let name = dhcp_clean_value(row?.name || '');
 		let networks = split_dhcp_list(row?.network || '');
 		let devices = split_dhcp_list(row?.device || '');
@@ -1607,6 +1601,29 @@ function save_firewall_zones(rows) {
 				zones: firewall_zone_rows(),
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 			};
+
+		push(validated, {
+			section,
+			is_existing,
+			networks,
+			devices,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'zone');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let networks = item.networks;
+		let devices = item.devices;
+		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('firewall', section, key) || '';
@@ -1694,17 +1711,11 @@ function save_firewall_forwardings(rows) {
 		existing[section['.name']] = true;
 	});
 
+	let validated = [];
+
 	for (let row in rows) {
 		let section = dhcp_clean_value(row?.section || '');
 		let is_existing = length(section) && uci.get('firewall', section) == 'forwarding';
-
-		if (!is_existing) {
-			section = uci.add('firewall', 'forwarding');
-			changed = true;
-		}
-
-		keep[section] = true;
-
 		let src = dhcp_clean_value(row?.src || '');
 		let dest = dhcp_clean_value(row?.dest || '');
 
@@ -1717,7 +1728,24 @@ function save_firewall_forwardings(rows) {
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 			};
 
-		let next = { src, dest };
+		push(validated, {
+			section,
+			is_existing,
+			next: { src, dest }
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'forwarding');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('firewall', section, key) || '';
