@@ -157,6 +157,7 @@ export function NativePage() {
 
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" ? <PackageInventory lines={data?.lines ?? []} /> : null}
+			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
 			{page === "crontab" && data?.page === "crontab" ? (
 				<TextFileEditor
@@ -656,6 +657,52 @@ function PackageInventory({ lines }: { lines: string[] }) {
 	);
 }
 
+function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
+	const firmware = parseKeyValueLines(commandOutput(data.commands, "Current firmware"));
+	const helper = commandOutput(data.commands, "Upgrade helper").trim();
+	const server = data.sections.find((section) => section.type === "server");
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Firmware" value={firmware.DISTRIB_DESCRIPTION ?? data.board.release?.description ?? "unknown"} />
+				<MetricBlock label="Target" value={firmware.DISTRIB_TARGET ?? data.board.release?.target ?? "unknown"} />
+				<MetricBlock label="Upgrade helper" value={helper || "unknown"} />
+			</div>
+			<Panel title="Build server" flush>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[36rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Section</th>
+								<th className="px-3 py-2 font-medium">URL</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td className="px-3 py-3 font-medium">{server?.name ?? "server"}</td>
+								<td className="px-3 py-3 font-mono text-xs">{server?.values.url ?? "none"}</td>
+								<td className="px-3 py-3">
+									<Badge className={helper.includes("not installed") ? "" : "text-primary"}>
+										{helper.includes("not installed") ? "manual / LuCI compat" : "helper available"}
+									</Badge>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</Panel>
+			<Panel title="Guardrails">
+				<p className="text-sm text-muted-foreground">
+					Image requests, package retention, build progress, and flash handoff remain in LuCI compat until the native flow
+					has rollback-safe confirmation and progress RPCs.
+				</p>
+			</Panel>
+		</div>
+	);
+}
+
 function FlashSummary({ data }: { data: NativePageData }) {
 	const filesystems = parseFilesystems(commandOutput(data.commands, "Mounted filesystems"));
 	const partitions = parseFlashPartitions(commandOutput(data.commands, "Flash partitions"));
@@ -782,6 +829,19 @@ function parsePackageLine(line: string): PackageEntry {
 
 function commandOutput(commands: CommandBlock[], title: string) {
 	return commands.find((command) => command.title === title)?.output ?? "";
+}
+
+function parseKeyValueLines(output: string) {
+	const result: Record<string, string> = {};
+
+	for (const line of output.split("\n")) {
+		const match = /^([A-Z0-9_]+)='?(.*?)'?$/.exec(line.trim());
+		if (match) {
+			result[match[1]] = match[2];
+		}
+	}
+
+	return result;
 }
 
 function parseFilesystems(output: string): FilesystemEntry[] {
