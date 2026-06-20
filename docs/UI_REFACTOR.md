@@ -832,12 +832,22 @@ The audit has two equally important outcomes:
 
 - every installed LuCI route must have a working compatibility path
 - every route that has been rebuilt natively must be tracked, validated, and promoted only when it has feature parity for its current scope
+- every LuCI app adapter decision must remain valid after package install, upgrade, remove, reinstall, and menu/cache refresh
 
 Route inventory must become the source of truth for compatibility decisions. It should record each discovered LuCI route, its source package, source menu file, ACL requirements, native migration state, chosen renderer, fallback target, and latest test result. Routes should not be inferred from sidebar rendering alone.
 
 Compatibility evidence must be captured per route, not only per app. Each route entry should show whether compat is configured, whether compat has been exercised successfully on the router, whether a native route exists, whether that native route is production-ready or preview-only, and what happens when the related LuCI app is installed, upgraded, removed, or reinstalled later.
 
 Native migration evidence must also be captured per route. Each native I Love LuCI screen needs a matching LuCI source route or workflow, the data source used by the native route, edit/save/apply parity status, mobile status, and a fallback decision. Native pages should not replace LuCI routes by default until this record exists and the audit proves the compat path still works when needed.
+
+Route inventory minimum fields:
+
+- LuCI route path, display title, parent path, source menu file, source package, and ACL scope.
+- I Love LuCI route path, renderer type, adapter id, native status, configured mode, effective mode, and legacy compat target.
+- Native migration status: not migrated, preview, partial, supported, or intentionally hidden.
+- Parity evidence: read/render coverage, write/save/apply coverage, mobile coverage, direct-route load coverage, search/sidebar coverage, session recovery coverage, and fallback coverage.
+- App lifecycle evidence: install, upgrade, remove, reinstall, menu/cache refresh, route disappearance cleanup, and stale route detection.
+- Last router audit result, last HTTP smoke result, test date, router/OpenWrt version, and package version.
 
 Audit inputs:
 
