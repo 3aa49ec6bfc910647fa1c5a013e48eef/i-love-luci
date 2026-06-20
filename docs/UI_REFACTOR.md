@@ -581,7 +581,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/admin/repokeys`: structured installed package repository public key metadata without raw key dumps.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context, target metadata, upgrade helper status, build server configuration, and guardrail messaging. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
 - `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, available-upgrades table, available package-feed search, client filter, and package family counts. Auto mode defaults to LuCI compat until native package install/remove/update reaches parity.
-- `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
+- `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions, plus `/etc/rc.local` local startup editor.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: guarded read-only firmware, overlay usage, mounted filesystem, and flash partition overview.
 - `/admin/system/leds`: LED trigger configuration and structured current sysfs LED trigger/brightness state.
@@ -640,6 +640,7 @@ Validation on `172.16.172.1`:
 - Native page audit now asserts focused service-preview data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so focused native child routes cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
 - Native page audit now fails if the console bridge is enabled but does not expose the ttyd helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
 - Router password now resolves to `#/native/password` and uses the same `luci.setPassword` ubus method as LuCI. The `1.0.0-r4-native39` deploy passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=23`, `partial=37`), native page audit (`native_pages=18`, `service_adapters=6`), HTTP route smoke (`native_shell_checks=42`, `legacy_route_checks=18`), and a safe mismatch RPC check returning `Password confirmation does not match.` without changing the credential.
+- Startup now includes the LuCI `/etc/rc.local` local startup editor in the native route. The `1.0.0-r4-native40` deploy passed lint, unit tests, production build, route audit, native page audit, and HTTP route smoke; `rc_local_save` was exercised by saving the existing file content and verifying the SHA-256 checksum remained `0f767af53e16d3d39db620fcd8e71fab4a16939b2c0a724b8750aff3c00378e1`.
 
 Remaining legacy or partial gaps:
 
@@ -647,7 +648,7 @@ Remaining legacy or partial gaps:
 - Network interfaces are native read-only. Interface create/edit/delete, device bridge/member editing, reconnect/reload actions, route edits, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - DHCP/DNS is native read-only. Creating/editing static leases, DNS records, DHCP pools, and advanced dnsmasq/odhcpd options remains LuCI compat until a generic form/pending-change adapter is complete.
 - Firewall is native read-only for summary views. Zone/rule/redirect create/edit/delete, custom rule files, nft include handling, validation, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
-- System administration is native read-only for summary views except router password and SSH authorized keys. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
+- System administration is native read-only for summary views except router password, startup init actions, local startup, cron, and SSH authorized keys. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
 - Attended sysupgrade has a structured native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, flash handoff, and rollback checks still need dedicated RPCs before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory, available-upgrades visibility, and available feed search with client filtering; it is available only when a route is explicitly forced to modern.

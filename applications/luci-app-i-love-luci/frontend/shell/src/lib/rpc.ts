@@ -609,6 +609,18 @@ export async function saveSshKeys(text: string): Promise<{ saved: boolean; messa
 	}
 }
 
+export async function saveRcLocal(text: string): Promise<{ saved: boolean; message: string }> {
+	try {
+		return await callBridge<{ saved: boolean; message: string }>("rc_local_save", { text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Local startup save failed.",
+		};
+	}
+}
+
 export async function setRouterPassword(
 	username: string,
 	password: string,

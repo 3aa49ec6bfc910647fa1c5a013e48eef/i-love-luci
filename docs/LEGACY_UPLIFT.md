@@ -128,7 +128,7 @@ To match default Overview fully, add:
 | `/admin/system/admin/sshkeys` | SSH-Keys | view `system/sshkeys` | `/etc/dropbear/authorized_keys` read/write | Key list with add/import/delete and fingerprint display | P2 |
 | `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native uHTTPd listener/TLS settings after config schema exists | P3 |
 | `/admin/system/admin/repokeys` | Repo Public Keys | view `system/repokeys` | `/etc/apk/keys/*`, `/etc/opkg/keys/*` read/write | Key manager with package-manager tie-in | P3 |
-| `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Service manager table and rc.local editor | P2 |
+| `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Implemented native init script actions and `/etc/rc.local` editor | Done |
 | `/admin/system/crontab` | Scheduled Tasks | view `system/crontab` | `/etc/crontabs/root` read/write, cron reload | Cron editor with validation and reload toast | P2 |
 | `/admin/system/mounts` | Mount Points | view `system/mounts` | UCI `fstab`, block devices, mount points, block detect, mount/umount | Storage manager; legacy until block operations are wrapped safely | P3 |
 | `/admin/system/leds` | LED Configuration | view `system/leds` | UCI `system`, `luci.getLEDs`, LED trigger modules | LED trigger table/form | P3 |
@@ -141,7 +141,6 @@ System routes mix low-risk UCI forms and high-risk command flows. Modern migrati
 
 1. System settings
 2. Dropbear SSH
-3. Startup/crontab
 
 Delay flash, mounts, and uHTTPd until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
 
@@ -383,7 +382,7 @@ Deliver:
 - system identity/time/theme/language/NTP
 - router password completed through a native `luci.setPassword` bridge
 - SSH access and SSH keys
-- startup services and rc.local
+- startup services and rc.local completed through native init actions and editor
 - crontab editor
 - reboot dialog
 

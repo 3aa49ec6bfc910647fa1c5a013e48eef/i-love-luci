@@ -10,6 +10,7 @@ const uci = cursor();
 const ubus = connect();
 const menuRoot = '/usr/share/luci/menu.d/*.json';
 const sshAuthorizedKeysPath = '/etc/dropbear/authorized_keys';
+const rcLocalPath = '/etc/rc.local';
 const hiddenNavigation = {
 	'/admin': true,
 	'/admin/menu': true,
@@ -1088,6 +1089,24 @@ function save_ssh_keys(text) {
 	};
 }
 
+function save_rc_local(text) {
+	text = '' + (text || '');
+
+	if (length(text) > 65535)
+		return {
+			saved: false,
+			message: 'Local startup file is too large.'
+		};
+
+	writefile(rcLocalPath, text);
+	system(`chmod 0644 ${rcLocalPath} >/dev/null 2>&1`);
+
+	return {
+		saved: true,
+		message: 'Local startup saved.'
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -1217,6 +1236,7 @@ function native_page(page) {
 	}
 	else if (page == 'startup') {
 		data.services = startup_entries();
+		data.text = safe_read(rcLocalPath);
 	}
 	else if (page == 'crontab') {
 		data.text = safe_read('/etc/crontabs/root');
@@ -1535,6 +1555,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_ssh_keys(request.args.text || ''));
+		}
+	},
+
+	rc_local_save: {
+		args: {
+			text: ''
+		},
+		call: function(request) {
+			return respond(save_rc_local(request.args.text || ''));
 		}
 	},
 

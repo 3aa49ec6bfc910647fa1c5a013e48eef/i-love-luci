@@ -14,6 +14,7 @@ import {
 	runStartupAction,
 	runDiagnostics,
 	saveCrontab,
+	saveRcLocal,
 	saveSshKeys,
 	searchPackages,
 	setRouterPassword,
@@ -293,6 +294,14 @@ export function NativePage() {
 			{page === "packages" && data ? <PackageInventory data={data} /> : null}
 			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
+			{page === "startup" && data?.page === "startup" ? (
+				<TextFileEditor
+					helperText="Saving writes `/etc/rc.local`. Commands run once after system init reaches local startup."
+					initialText={data.text || ""}
+					onSave={saveRcLocal}
+					title="Local startup"
+				/>
+			) : null}
 			{page === "crontab" && data?.page === "crontab" ? (
 				<TextFileEditor
 					helperText="Saving writes `/etc/crontabs/root` and reloads cron."

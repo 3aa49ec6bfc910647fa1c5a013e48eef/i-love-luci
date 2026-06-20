@@ -76,7 +76,7 @@ expected_pages = {
 	"diagnostics": {"commands": ["Routing table", "DNS servers"]},
 	"attendedsysupgrade": {"commands": ["Current firmware", "Upgrade helper"]},
 	"packages": {"lines": True, "commands": ["Available upgrades"]},
-	"startup": {"services": True},
+	"startup": {"services": True, "text": True},
 	"crontab": {"text": True},
 	"sshkeys": {"text": True},
 	"password": {},
