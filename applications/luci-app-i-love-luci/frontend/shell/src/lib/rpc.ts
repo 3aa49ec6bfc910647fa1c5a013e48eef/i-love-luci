@@ -486,6 +486,7 @@ export type UhttpdCertificateFileResult = {
 	kind?: "cert" | "key";
 	path?: string;
 	size?: number;
+	encoding?: "text" | "base64";
 	section: ConfigSection | null;
 	sections?: ConfigSection[];
 	files?: UhttpdCertificateFileStatus[];
@@ -1316,9 +1317,9 @@ export async function saveUhttpdConfigs(rows: UhttpdConfigInput[]): Promise<Uhtt
 	}
 }
 
-export async function saveUhttpdCertificateFile(kind: "cert" | "key", filename: string, text: string): Promise<UhttpdCertificateFileResult> {
+export async function saveUhttpdCertificateFile(kind: "cert" | "key", filename: string, text: string, encoding: "text" | "base64" = "text"): Promise<UhttpdCertificateFileResult> {
 	try {
-		return await callBridge<UhttpdCertificateFileResult>("uhttpd_certificate_file_save", { kind, filename, text });
+		return await callBridge<UhttpdCertificateFileResult>("uhttpd_certificate_file_save", { kind, filename, text, encoding });
 	}
 	catch {
 		return {

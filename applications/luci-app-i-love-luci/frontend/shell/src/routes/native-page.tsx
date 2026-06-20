@@ -2170,8 +2170,8 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 	const [values, setValues] = useState(initial);
 	const [savedValues, setSavedValues] = useState(initial);
 	const [certificateFiles, setCertificateFiles] = useState<UhttpdCertificateFileStatus[]>([]);
-	const [certUpload, setCertUpload] = useState<UhttpdUploadState>({ filename: "i-love-luci-uhttpd.crt", text: "" });
-	const [keyUpload, setKeyUpload] = useState<UhttpdUploadState>({ filename: "i-love-luci-uhttpd.key", text: "" });
+	const [certUpload, setCertUpload] = useState<UhttpdUploadState>({ encoding: "text", filename: "i-love-luci-uhttpd.crt", text: "" });
+	const [keyUpload, setKeyUpload] = useState<UhttpdUploadState>({ encoding: "text", filename: "i-love-luci-uhttpd.key", text: "" });
 	const [saving, setSaving] = useState(false);
 	const [uploading, setUploading] = useState<"cert" | "key" | null>(null);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
@@ -2202,7 +2202,7 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 	async function uploadCertificate(kind: "cert" | "key") {
 		const upload = kind === "cert" ? certUpload : keyUpload;
 		setUploading(kind);
-		const result = await saveUhttpdCertificateFile(kind, upload.filename, upload.text);
+		const result = await saveUhttpdCertificateFile(kind, upload.filename, upload.text, upload.encoding);
 		setUploading(null);
 
 		if (!result.saved) {
@@ -2352,6 +2352,7 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 }
 
 type UhttpdUploadState = {
+	encoding: "text" | "base64";
 	filename: string;
 	text: string;
 };
@@ -2376,9 +2377,17 @@ function UhttpdUploadBox({
 			return;
 		}
 
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		let binary = "";
+
+		for (let offset = 0; offset < bytes.length; offset += 8192) {
+			binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+		}
+
 		onChange({
+			encoding: "base64",
 			filename: file.name,
-			text: await file.text(),
+			text: btoa(binary),
 		});
 	}
 
@@ -2386,7 +2395,7 @@ function UhttpdUploadBox({
 		<div className="grid gap-3 rounded-md border bg-card p-3">
 			<div>
 				<div className="text-sm font-semibold">{title}</div>
-				<div className="text-xs text-muted-foreground">PEM text is stored under /etc/luci-uploads.</div>
+				<div className="text-xs text-muted-foreground">PEM or DER files are stored under /etc/luci-uploads.</div>
 			</div>
 			<label className="grid gap-2 text-sm">
 				<span className="font-medium">File</span>
@@ -2399,11 +2408,12 @@ function UhttpdUploadBox({
 			<textarea
 				className="min-h-28 rounded-md border bg-card px-3 py-2 font-mono text-xs outline-none focus-visible:border-ring"
 				disabled={disabled}
-				onChange={(event) => onChange({ ...state, text: event.target.value })}
-				placeholder={kind === "cert" ? "-----BEGIN CERTIFICATE-----" : "-----BEGIN PRIVATE KEY-----"}
+				onChange={(event) => onChange({ ...state, encoding: "text", text: event.target.value })}
+				placeholder={state.encoding === "base64" ? "Base64 file content selected" : kind === "cert" ? "-----BEGIN CERTIFICATE-----" : "-----BEGIN PRIVATE KEY-----"}
 				spellCheck={false}
 				value={state.text}
 			/>
+			<div className="text-xs text-muted-foreground">{state.encoding === "base64" ? "Selected file will upload as binary-safe base64." : "Pasted text will upload as PEM."}</div>
 			<Button disabled={disabled || !state.text.trim()} onClick={onUpload} type="button" variant="outline">
 				Upload {kind === "cert" ? "certificate" : "private key"}
 			</Button>

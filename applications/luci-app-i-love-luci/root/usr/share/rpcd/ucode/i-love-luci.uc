@@ -528,6 +528,36 @@ function base64_encode(data) {
 	return output;
 }
 
+function base64_decode(data) {
+	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	data = replace('' + (data || ''), /[^A-Za-z0-9+/=]/g, '');
+	let output = '';
+	let buffer = 0;
+	let bits = 0;
+
+	for (let offset = 0; offset < length(data); offset++) {
+		let char = substr(data, offset, 1);
+
+		if (char == '=')
+			break;
+
+		let value = index(alphabet, char);
+
+		if (value < 0)
+			continue;
+
+		buffer = (buffer << 6) | value;
+		bits += 6;
+
+		if (bits >= 8) {
+			bits -= 8;
+			output += chr((buffer >> bits) & 255);
+		}
+	}
+
+	return output;
+}
+
 function safe_read(path) {
 	try {
 		return readfile(path) || '';
@@ -4956,9 +4986,10 @@ function safe_uhttpd_upload_path(filename, kind) {
 	return '/etc/luci-uploads/' + filename;
 }
 
-function save_uhttpd_certificate_file(kind, filename, text) {
+function save_uhttpd_certificate_file(kind, filename, text, encoding) {
 	kind = kind == 'key' ? 'key' : 'cert';
-	text = '' + (text || '');
+	encoding = encoding == 'base64' ? 'base64' : 'text';
+	text = encoding == 'base64' ? base64_decode(text) : ('' + (text || ''));
 
 	if (!length(trim(text)))
 		return uhttpd_cert_result(false, 'Certificate file content is empty.', false, null);
@@ -4966,10 +4997,10 @@ function save_uhttpd_certificate_file(kind, filename, text) {
 	if (length(text) > 131072)
 		return uhttpd_cert_result(false, 'Certificate file is too large.', false, null);
 
-	if (kind == 'cert' && !match(text, /-----BEGIN [A-Z ]*CERTIFICATE-----/))
+	if (encoding != 'base64' && kind == 'cert' && !match(text, /-----BEGIN [A-Z ]*CERTIFICATE-----/))
 		return uhttpd_cert_result(false, 'Certificate upload currently expects PEM text.', false, null);
 
-	if (kind == 'key' && !match(text, /-----BEGIN [A-Z ]*PRIVATE KEY-----/))
+	if (encoding != 'base64' && kind == 'key' && !match(text, /-----BEGIN [A-Z ]*PRIVATE KEY-----/))
 		return uhttpd_cert_result(false, 'Private key upload currently expects PEM text.', false, null);
 
 	let path = safe_uhttpd_upload_path(filename, kind);
@@ -4985,6 +5016,7 @@ function save_uhttpd_certificate_file(kind, filename, text) {
 	return uhttpd_cert_result(true, changed ? 'Certificate file uploaded.' : 'Certificate file already up to date.', changed, {
 		kind,
 		path,
+		encoding,
 		size: length(text)
 	});
 }
@@ -6685,11 +6717,12 @@ const methods = {
 		args: {
 			kind: 'cert',
 			filename: '',
-			text: ''
+			text: '',
+			encoding: 'text'
 		},
 		call: function(request) {
 			try {
-				return respond(save_uhttpd_certificate_file(request.args.kind || 'cert', request.args.filename || '', request.args.text || ''));
+				return respond(save_uhttpd_certificate_file(request.args.kind || 'cert', request.args.filename || '', request.args.text || '', request.args.encoding || 'text'));
 			}
 			catch (e) {
 				return respond(uhttpd_cert_result(false, 'Certificate file save failed: ' + e, false, null));
