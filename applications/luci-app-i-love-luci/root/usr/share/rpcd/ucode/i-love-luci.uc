@@ -733,6 +733,7 @@ function save_dhcp_static_hosts(rows) {
 	uci.load('dhcp');
 
 	let changed = false;
+	let config_changed = false;
 	let keep = {};
 	let existing = {};
 
@@ -4342,9 +4343,12 @@ function save_led_config(rows) {
 	let changed = false;
 	let keep = {};
 	let existing = {};
+	let existing_order = [];
+	let next_order = [];
 
 	uci.foreach('system', 'led', function(section) {
 		existing[section['.name']] = true;
+		push(existing_order, section['.name']);
 	});
 
 	for (let row in rows) {
@@ -4354,9 +4358,11 @@ function save_led_config(rows) {
 		if (!is_existing) {
 			section = uci.add('system', 'led');
 			changed = true;
+			config_changed = true;
 		}
 
 		keep[section] = true;
+		push(next_order, section);
 
 		let next = {
 			name: clean_uci_value(row?.name || section),
@@ -4380,6 +4386,7 @@ function save_led_config(rows) {
 
 			if (current != value) {
 				changed = true;
+				config_changed = true;
 				set_uci_option('system', section, key, value);
 			}
 		}
@@ -4389,11 +4396,43 @@ function save_led_config(rows) {
 		if (!keep[section]) {
 			uci.delete('system', section);
 			changed = true;
+			config_changed = true;
 		}
 	}
 
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
 	if (changed) {
-		uci.commit('system');
+		if (config_changed)
+			uci.commit('system');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder system.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit system >/dev/null 2>&1 || true');
+		}
+
 		system('/etc/init.d/led reload >/dev/null 2>&1 || /etc/init.d/led restart >/dev/null 2>&1');
 	}
 

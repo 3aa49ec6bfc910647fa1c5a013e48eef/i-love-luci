@@ -1,4 +1,4 @@
-import { Download, ExternalLink, Play, Plus, Power, Search, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, ExternalLink, Play, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -3286,6 +3286,22 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 		setRows((current) => current.filter((row) => row.section !== section));
 	}
 
+	function moveRow(section: string, direction: -1 | 1) {
+		setRows((current) => {
+			const index = current.findIndex((row) => row.section === section);
+			const nextIndex = index + direction;
+
+			if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+				return current;
+			}
+
+			const next = [...current];
+			const [row] = next.splice(index, 1);
+			next.splice(nextIndex, 0, row);
+			return next;
+		});
+	}
+
 	async function save() {
 		setSaving(true);
 		const result = await saveLedConfig(rows);
@@ -3325,12 +3341,13 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Mode</th>
 							<th className="px-3 py-2 font-medium">Interval</th>
+							<th className="px-3 py-2 text-right font-medium">Order</th>
 							<th className="px-3 py-2 text-right font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
 						{rows.length ? (
-							rows.map((row) => (
+							rows.map((row, index) => (
 								<tr className="border-b align-top last:border-0" key={row.section}>
 									<td className="px-3 py-2">
 										<Input onChange={(event) => update(row.section, "name", event.target.value)} value={row.name} />
@@ -3362,6 +3379,30 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 										<Input inputMode="numeric" onChange={(event) => update(row.section, "interval", event.target.value)} value={row.interval} />
 									</td>
 									<td className="px-3 py-2 text-right">
+										<div className="inline-flex gap-1">
+											<Button
+												aria-label={`Move ${row.name} up`}
+												disabled={index === 0}
+												onClick={() => moveRow(row.section, -1)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<ArrowUp className="size-4" />
+											</Button>
+											<Button
+												aria-label={`Move ${row.name} down`}
+												disabled={index === rows.length - 1}
+												onClick={() => moveRow(row.section, 1)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<ArrowDown className="size-4" />
+											</Button>
+										</div>
+									</td>
+									<td className="px-3 py-2 text-right">
 										<Button aria-label={`Remove ${row.name}`} onClick={() => removeRow(row.section)} size="icon" type="button" variant="ghost">
 											<Trash2 className="size-4" />
 										</Button>
@@ -3370,7 +3411,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={8}>
 									No LED actions configured.
 								</td>
 							</tr>
