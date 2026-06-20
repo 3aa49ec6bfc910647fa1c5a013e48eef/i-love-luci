@@ -1970,6 +1970,204 @@ function save_firewall_rules(rows) {
 	};
 }
 
+function firewall_redirect_rows() {
+	let redirects = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return redirects;
+	}
+
+	uci.foreach('firewall', 'redirect', function(section) {
+		push(redirects, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			enabled: section.enabled == '0' ? '0' : '1',
+			src: section.src || '',
+			src_dport: section.src_dport || '',
+			dest: section.dest || '',
+			dest_ip: section.dest_ip || '',
+			dest_port: section.dest_port || '',
+			proto: join('\n', dhcp_normalize_list(section.proto)),
+			family: section.family || '',
+			target: section.target || 'DNAT'
+		});
+	});
+
+	return redirects;
+}
+
+function firewall_redirect_target_value(value) {
+	value = dhcp_clean_value(value || 'DNAT');
+
+	if (value == 'DNAT' || value == 'dnat')
+		return 'DNAT';
+
+	if (value == 'SNAT' || value == 'snat')
+		return 'SNAT';
+
+	return '';
+}
+
+function save_firewall_redirects(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('firewall', 'redirect', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'redirect';
+		let proto = split_dhcp_list(row?.proto || '');
+		let family = firewall_family_value(row?.family || '');
+		let target = firewall_redirect_target_value(row?.target || 'DNAT');
+		let next = {
+			name: dhcp_clean_value(row?.name || ''),
+			enabled: dhcp_zero_one(row?.enabled),
+			src: dhcp_clean_value(row?.src || ''),
+			src_dport: dhcp_clean_value(row?.src_dport || ''),
+			dest: dhcp_clean_value(row?.dest || ''),
+			dest_ip: dhcp_clean_value(row?.dest_ip || ''),
+			dest_port: dhcp_clean_value(row?.dest_port || ''),
+			family,
+			target
+		};
+
+		if (!length(next.name))
+			return {
+				saved: false,
+				message: 'Firewall redirect name is required.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (!length(target))
+			return {
+				saved: false,
+				message: 'Firewall redirect target must be DNAT or SNAT.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (family == null)
+			return {
+				saved: false,
+				message: 'Firewall redirect family must be any, ipv4, ipv6, or blank.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		for (let key, value in next) {
+			if ((key == 'src' || key == 'dest') && value != '' && value != '*' && !valid_firewall_name(value))
+				return {
+					saved: false,
+					message: 'Firewall redirect zone names contain unsupported characters.',
+					changed: false,
+					redirects: firewall_redirect_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+
+			if ((key == 'src_dport' || key == 'dest_ip' || key == 'dest_port') && !valid_firewall_rule_value(value))
+				return {
+					saved: false,
+					message: 'Firewall redirect match fields contain unsupported characters.',
+					changed: false,
+					redirects: firewall_redirect_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+		}
+
+		if (!valid_firewall_rule_list(proto))
+			return {
+				saved: false,
+				message: 'Firewall redirect protocol field contains unsupported characters.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			proto,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'redirect');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let proto = item.proto;
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if (key == 'enabled' && value == '1' && current == '')
+				continue;
+
+			if (key == 'target' && value == 'DNAT' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'enabled' && value == '1') || (key == 'target' && value == 'DNAT') || value == '')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'proto') || [], proto)) {
+			changed = true;
+			if (length(proto))
+				uci.set('firewall', section, 'proto', length(proto) == 1 ? proto[0] : proto);
+			else
+				uci.delete('firewall', section, 'proto');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall redirects saved and firewall reloaded.' : 'Firewall redirects already up to date.',
+		changed,
+		redirects: firewall_redirect_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -3472,6 +3670,26 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(set_router_password(request.args.username || 'root', request.args.password || '', request.args.confirm || ''));
+		}
+	},
+
+	firewall_redirects_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_redirects(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall redirects save failed: ' + e,
+					changed: false,
+					redirects: firewall_redirect_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
 		}
 	},
 

@@ -36,6 +36,7 @@
 					"dnsmasq_config_save",
 					"firewall_defaults_save",
 					"firewall_forwardings_save",
+					"firewall_redirects_save",
 					"firewall_rules_save",
 					"firewall_zones_save",
 					"led_config_save",

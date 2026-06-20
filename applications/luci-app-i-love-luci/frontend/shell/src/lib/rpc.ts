@@ -530,6 +530,28 @@ export type FirewallRulesResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallRedirect = {
+	section: string;
+	name: string;
+	enabled: string;
+	src: string;
+	src_dport: string;
+	dest: string;
+	dest_ip: string;
+	dest_port: string;
+	proto: string;
+	family: string;
+	target: string;
+};
+
+export type FirewallRedirectsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	redirects: FirewallRedirect[];
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -1018,6 +1040,21 @@ export async function saveFirewallRules(rows: FirewallRuleRow[]): Promise<Firewa
 			message: "Firewall rules save failed.",
 			changed: false,
 			rules: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallRedirects(rows: FirewallRedirect[]): Promise<FirewallRedirectsResult> {
+	try {
+		return await callBridge<FirewallRedirectsResult>("firewall_redirects_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall redirects save failed.",
+			changed: false,
+			redirects: [],
 			sections: [],
 		};
 	}

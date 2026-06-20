@@ -11,6 +11,7 @@ import {
 	getDashboardStatus,
 	saveFirewallDefaults,
 	saveFirewallForwardings,
+	saveFirewallRedirects,
 	saveFirewallRules,
 	saveFirewallZones,
 	saveDhcpDomains,
@@ -30,6 +31,7 @@ import {
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
+	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
 	type NetworkInterfaceStatus,
@@ -54,7 +56,7 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 	},
 	firewall: {
 		title: "Firewall",
-		description: "Modern read-only view of zones, forwarding, rules, redirects, and defaults.",
+		description: "Modern firewall view with defaults, zones, forwarding, rules, and redirects.",
 		configKey: "firewall",
 	},
 	system: {
@@ -1060,7 +1062,15 @@ function FirewallSummary({
 				rules={rules}
 			/>
 
-			{redirects.length ? <FirewallRedirectTable redirects={redirects} /> : null}
+			<FirewallRedirectEditor
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
+				redirects={redirects}
+			/>
 		</div>
 	);
 }
@@ -1856,24 +1866,262 @@ function firewallFamilyText(value: unknown) {
 	return text === "ipv4" || text === "ipv6" ? text : "";
 }
 
-function FirewallRedirectTable({ redirects }: { redirects: ConfigSection[] }) {
+function FirewallRedirectEditor({
+	onSaved,
+	redirects,
+}: {
+	onSaved: (sections: ConfigSection[]) => void;
+	redirects: ConfigSection[];
+}) {
+	const [rows, setRows] = useState(() => redirects.map(firewallRedirectValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallRedirect, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				enabled: "1",
+				src: "wan",
+				src_dport: "",
+				dest: "lan",
+				dest_ip: "",
+				dest_port: "",
+				proto: "tcp",
+				family: "",
+				target: "DNAT",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallRedirects(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.redirects.map(normalizeFirewallRedirect);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
 	return (
-		<SimpleSectionTable
-			columns={["Name", "Status", "Source", "External port", "Destination", "Internal", "Protocol"]}
-			empty="No port forwards configured."
-			rows={redirects.map((redirect) => [
-				valueText(redirect.values.name || redirect.name),
-				isEnabledValue(redirect.values.enabled) ? "enabled" : "disabled",
-				valueText(redirect.values.src),
-				valueText(redirect.values.src_dport),
-				valueText(redirect.values.dest),
-				[valueText(redirect.values.dest_ip), valueText(redirect.values.dest_port)].filter((value) => value !== "none").join(":") ||
-					"none",
-				valueText(redirect.values.proto),
-			])}
-			title="Port forwards"
-		/>
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Port forwards</h2>
+					<p className="text-sm text-muted-foreground">Configure common DNAT/SNAT redirect entries.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add redirect
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[92rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">External port</th>
+								<th className="px-3 py-2 font-medium">Destination</th>
+								<th className="px-3 py-2 font-medium">Internal IP</th>
+								<th className="px-3 py-2 font-medium">Internal port</th>
+								<th className="px-3 py-2 font-medium">Protocols</th>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Target</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((redirect, index) => (
+									<tr className="border-b align-top last:border-0" key={`${redirect.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Redirect name"
+												onChange={(event) => updateRow(index, "name", event.target.value)}
+												value={redirect.name}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-enabled-${index}`}
+												onChange={(value) => updateRow(index, "enabled", value)}
+												options={[
+													["1", "Enabled"],
+													["0", "Disabled"],
+												]}
+												value={redirect.enabled}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source zone"
+												onChange={(event) => updateRow(index, "src", event.target.value)}
+												value={redirect.src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="External port"
+												onChange={(event) => updateRow(index, "src_dport", event.target.value)}
+												value={redirect.src_dport}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination zone"
+												onChange={(event) => updateRow(index, "dest", event.target.value)}
+												value={redirect.dest}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Internal IP"
+												onChange={(event) => updateRow(index, "dest_ip", event.target.value)}
+												value={redirect.dest_ip}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Internal port"
+												onChange={(event) => updateRow(index, "dest_port", event.target.value)}
+												value={redirect.dest_port}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Protocols"
+												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "proto", event.target.value)}
+												spellCheck={false}
+												value={redirect.proto}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["", "Any"],
+													["ipv4", "IPv4"],
+													["ipv6", "IPv6"],
+												]}
+												value={redirect.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-target-${index}`}
+												onChange={(value) => updateRow(index, "target", value)}
+												options={[
+													["DNAT", "DNAT"],
+													["SNAT", "SNAT"],
+												]}
+												value={redirect.target}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${redirect.name || "redirect"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+										No port forwards configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
+}
+
+function firewallRedirectValues(section: ConfigSection): FirewallRedirect {
+	return normalizeFirewallRedirect({
+		section: section.name,
+		name: rawValue(section.values.name || section.name),
+		enabled: isEnabledValue(section.values.enabled) ? "1" : "0",
+		src: rawValue(section.values.src),
+		src_dport: rawValue(section.values.src_dport),
+		dest: rawValue(section.values.dest),
+		dest_ip: rawValue(section.values.dest_ip),
+		dest_port: rawValue(section.values.dest_port),
+		proto: rawListValue(section.values.proto).join("\n"),
+		family: firewallFamilyText(section.values.family),
+		target: firewallRedirectTargetText(section.values.target),
+	});
+}
+
+function normalizeFirewallRedirect(redirect: FirewallRedirect): FirewallRedirect {
+	return {
+		section: redirect.section ?? "",
+		name: redirect.name ?? "",
+		enabled: redirect.enabled === "0" ? "0" : "1",
+		src: redirect.src ?? "",
+		src_dport: redirect.src_dport ?? "",
+		dest: redirect.dest ?? "",
+		dest_ip: redirect.dest_ip ?? "",
+		dest_port: redirect.dest_port ?? "",
+		proto: redirect.proto ?? "",
+		family: firewallFamilyText(redirect.family),
+		target: firewallRedirectTargetText(redirect.target),
+	};
+}
+
+function firewallRedirectTargetText(value: unknown) {
+	const text = rawValue(value).toUpperCase();
+	return text === "SNAT" ? "SNAT" : "DNAT";
 }
 
 function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashboard: DashboardStatus | null }) {
