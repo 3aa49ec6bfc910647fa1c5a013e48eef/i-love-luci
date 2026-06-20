@@ -10,6 +10,22 @@ The theme should be clean, minimal, and practical for daily router administratio
 
 The long-term goal is a polished I Love LuCI theme that can be installed as a normal LuCI theme package, selected from LuCI's language/style settings, and safely tested on real routers without touching unrelated system configuration.
 
+## Gallery
+
+These screenshots are generated from sanitized demo screens that mirror the current theme layout and styling. They do not contain real router hostnames, addresses, leases, MACs, or configuration values.
+
+| Desktop overview | Header search |
+| --- | --- |
+| ![Desktop overview with header search, sidebar navigation, and flat status content](docs/assets/desktop-overview.jpg) | ![Desktop search popover showing configuration results](docs/assets/desktop-search.jpg) |
+
+| Theme settings | Login |
+| --- | --- |
+| ![Theme settings page with simplified save, font, and menu options](docs/assets/desktop-theme-settings.jpg) | ![Centered modern login screen](docs/assets/login.jpg) |
+
+| Mobile sidebar | Mobile search |
+| --- | --- |
+| ![Mobile sidebar with active route highlighting](docs/assets/mobile-sidebar.jpg) | ![Mobile search results popover below the header search field](docs/assets/mobile-search.jpg) |
+
 ## Install Without Building
 
 The intended user path is an installable package feed published from CI, not asking users to clone this repo or run the OpenWrt SDK. The public feed is published by GitHub Pages at:
@@ -56,14 +72,6 @@ The CI/CD publishing model is:
 - Signing: publish `Packages.sig` for 24.10/opkg using `usign`; publish the 25.12/apk feed with the SDK apk signing flow and document the public key installation path before asking users to trust the feed. Signing secrets are not configured yet.
 
 This gives users two standard install paths: add a feed and install with package tooling, or download a release asset for one-off manual installation.
-
-## Screenshots
-
-These screenshots are generated from a sanitized demo page using the current theme CSS. They do not contain real router hostnames, addresses, leases, MACs, or configuration values.
-
-![Desktop overview with header search and flat status content](docs/assets/desktop-overview.jpg)
-
-![Mobile header and sidebar navigation](docs/assets/mobile-sidebar.jpg)
 
 ## Design Goals
 
