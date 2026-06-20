@@ -2,6 +2,40 @@
 
 I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a compatibility bridge for existing LuCI pages.
 
+## Sysupgrade Compatibility
+
+`sysupgrade` does not guarantee that manually installed package files survive an OpenWrt release upgrade. Configuration can be preserved when users keep settings, but static package files under `/www`, LuCI templates, menu files, and `rpcd` scripts must be present in the upgraded firmware image or reinstalled from the package feed after the upgrade.
+
+The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` and the generated `ttyd` helper config are included in OpenWrt configuration backups. This protects settings, not the package binaries.
+
+Recommended upgrade paths:
+
+- Build `luci-app-i-love-luci` into the firmware image.
+- Use Attended Sysupgrade or `owut` so installed packages are carried into the generated image where supported.
+- Keep the I Love LuCI package feed configured, then reinstall `luci-app-i-love-luci` after a manual `sysupgrade`.
+
+Current package shape:
+
+- The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
+- The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
+- The legacy bridge only works when LuCI is installed.
+
+Future-proof target:
+
+- Split a standalone `i-love-luci` package from the LuCI-specific compatibility layer.
+- Serve the React app directly through `uhttpd` instead of LuCI dispatcher/templates.
+- Keep `rpcd`/`ubus` as the backend bridge, with first-party auth/session handling.
+- Make LuCI optional: if installed, expose legacy routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
+- Keep release-specific feeds for 24.10/opkg and 25.12+/apk until the package manager transition has settled.
+
+Relevant OpenWrt docs:
+
+- [Sysupgrade using LuCI and CLI](https://openwrt.org/docs/guide-user/installation/generic.sysupgrade)
+- [OpenWrt Upgrade Tool (`owut`)](https://openwrt.org/docs/guide-user/installation/sysupgrade.owut)
+- [Attended Sysupgrade](https://openwrt.org/docs/guide-user/installation/attended.sysupgrade)
+- [Creating OpenWrt packages](https://openwrt.org/docs/guide-developer/packages)
+- [Using the OpenWrt SDK](https://openwrt.org/docs/guide-developer/toolchain/using_the_sdk)
+
 ## Install Without Building
 
 Use the published package feed that matches your OpenWrt release and target.

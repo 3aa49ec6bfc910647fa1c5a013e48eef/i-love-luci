@@ -4,7 +4,7 @@
 
 import { cursor } from 'uci';
 import { connect } from 'ubus';
-import { glob, open, popen, readfile, stat } from 'fs';
+import { glob, open, popen, readfile, stat, writefile } from 'fs';
 
 const uci = cursor();
 const ubus = connect();
@@ -562,6 +562,24 @@ function service_action(id, action) {
 	return run_init_action(meta.init, action);
 }
 
+function save_crontab(text) {
+	text = '' + (text || '');
+
+	if (length(text) > 65535)
+		return {
+			saved: false,
+			message: 'Crontab is too large.'
+		};
+
+	writefile('/etc/crontabs/root', text);
+	system('/etc/init.d/cron reload >/dev/null 2>&1 || /etc/init.d/cron restart >/dev/null 2>&1');
+
+	return {
+		saved: true,
+		message: 'Crontab saved.'
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -870,6 +888,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(run_init_action(request.args.name || '', request.args.action || 'status'));
+		}
+	},
+
+	crontab_save: {
+		args: {
+			text: ''
+		},
+		call: function(request) {
+			return respond(save_crontab(request.args.text || ''));
 		}
 	},
 

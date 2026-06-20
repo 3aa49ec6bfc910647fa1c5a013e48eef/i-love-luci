@@ -542,7 +542,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration.
 - `/admin/system/package-manager`: installed package inventory.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
-- `/admin/system/crontab`: root crontab view.
+- `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: read-only filesystem and flash partition overview.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
 - `/admin/system/commands` and children: modern read-only UCI summary for custom commands.
@@ -557,6 +557,7 @@ Validation on `172.16.172.1`:
 
 - All visible LuCI menu routes now resolve to `modern` mode. The router menu has `0` visible unsupported routes.
 - `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
+- `crontab_save` saved through the native bridge and reloaded cron on `172.16.172.1`; the test router had no existing root crontab entries.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
 - `service_action` and `startup_action` returned current state for `uhttpd` with non-mutating `status`; invalid init names are rejected.
 - Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
@@ -571,6 +572,37 @@ Remaining legacy or partial gaps:
 - Package install/remove/update remains legacy. Current native package screen is inventory-only.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, custom commands, Dropbear, and uHTTPd remain read-only UCI summaries. Service lifecycle is native, but native config forms should be added per service after pending-change/apply flow is complete.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
+
+## Sysupgrade and Standalone Direction
+
+Current package reality:
+
+- `luci-app-i-love-luci` is still a LuCI application package.
+- It uses `luci.mk`, declares `+luci-base`, installs LuCI menu/template files, overrides LuCI `sysauth.ut`, and depends on LuCI session handling.
+- The React shell wraps and progressively replaces LuCI, but it is not yet independent of LuCI.
+
+Sysupgrade impact:
+
+- Config can be kept by OpenWrt when users keep settings, but package-owned files are not guaranteed to survive a release sysupgrade unless the package is included in the new image or reinstalled after upgrade.
+- The package feed reduces the recovery gap because users can reinstall with standard package tooling after upgrade.
+- More robust paths are: include I Love LuCI in a custom image, use Attended Sysupgrade or `owut` where supported, or add a post-upgrade reinstall checklist.
+- The package now installs `/lib/upgrade/keep.d/luci-app-i-love-luci` to preserve `/etc/config/i-love-luci` and `/etc/config/ttyd` in sysupgrade configuration backups.
+
+Future-proof target:
+
+- Create a standalone `i-love-luci` package that uses OpenWrt package infrastructure directly instead of LuCI `luci.mk`.
+- Serve the React/Vite bundle directly through `uhttpd`.
+- Keep `rpcd`/`ubus` as the privileged backend boundary.
+- Own the login/session flow instead of overriding LuCI login templates.
+- Move LuCI route discovery and iframe rendering into an optional `luci-compat` adapter.
+- Native I Love LuCI screens should continue working when LuCI is not installed; legacy LuCI screens should appear only when the adapter detects LuCI.
+
+Near-term hardening:
+
+- Add package-manager conffile metadata for package upgrades if needed; sysupgrade backup coverage now exists for `/etc/config/i-love-luci` and `/etc/config/ttyd`.
+- Avoid persisting versioned asset URLs in config; keep cache keys template-owned.
+- Keep CI/build matrix for OpenWrt 24.10/opkg, 25.12+/apk, and snapshot when practical.
+- Prefer typed `rpcd` endpoints and UCI-backed settings over scraping LuCI pages.
 
 ## Login Conversion
 
@@ -647,5 +679,6 @@ Proceed with a hybrid replacement:
 - Build modern React shell as `luci-app-i-love-luci`.
 - Use iframe bridge for universal legacy compatibility.
 - Rebuild important routes natively over time.
+- Plan a standalone `i-love-luci` package and make LuCI compatibility optional once enough native screens exist.
 
 This is practical, testable, and reversible.

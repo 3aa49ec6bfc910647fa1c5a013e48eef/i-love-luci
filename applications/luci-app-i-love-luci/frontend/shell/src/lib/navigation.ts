@@ -50,9 +50,9 @@ export function nativePathFor(path: string) {
 		"/admin/system/system": "/core/system",
 		"/admin/system/admin": "/core/system",
 		"/admin/system/admin/password": "/core/system",
-		"/admin/system/admin/dropbear": "/core/system",
+		"/admin/system/admin/dropbear": "/native/service/dropbear",
 		"/admin/system/admin/sshkeys": "/core/system",
-		"/admin/system/admin/uhttpd": "/core/system",
+		"/admin/system/admin/uhttpd": "/native/service/uhttpd",
 		"/admin/system/admin/repokeys": "/core/system",
 		"/admin/system/package-manager": "/native/packages",
 		"/admin/system/startup": "/native/startup",
@@ -75,7 +75,7 @@ export function nativePathFor(path: string) {
 		"/admin/services/banip/processing_log": "/native/service/banip",
 		"/admin/services/adblock-fast": "/native/service/adblock-fast",
 		"/admin/services/upnp": "/native/service/upnpd",
-		"/admin/services/uhttpd": "/core/system",
+		"/admin/services/uhttpd": "/native/service/uhttpd",
 		"/settings": "/settings",
 	};
 

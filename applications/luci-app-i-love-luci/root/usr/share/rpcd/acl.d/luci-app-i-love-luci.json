@@ -24,6 +24,7 @@
 				"luci.iloveluci": [
 					"changes_apply",
 					"changes_revert",
+					"crontab_save",
 					"diagnostics_run",
 					"service_action",
 					"startup_action",

@@ -12,6 +12,7 @@ import {
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
+	saveCrontab,
 	type CommandBlock,
 	type ConfigSection,
 	type InitAction,
@@ -72,8 +73,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	crontab: {
 		title: "Scheduled tasks",
-		description: "Root crontab contents. Editing remains in legacy LuCI for now.",
-		badge: "read-only",
+		description: "Edit root scheduled tasks and reload cron from the modern shell.",
 	},
 	flash: {
 		title: "Backup / flash firmware",
@@ -120,7 +120,7 @@ export function NativePage() {
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" ? <LineList title="Installed packages" lines={data?.lines ?? []} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
-			{page === "crontab" ? <TextPanel title="Root crontab" text={data?.text || "No scheduled tasks found."} /> : null}
+			{page === "crontab" && data?.page === "crontab" ? <CrontabEditor initialText={data.text || ""} /> : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
@@ -473,6 +473,53 @@ function LineList({ title, lines }: { title: string; lines: string[] }) {
 					))}
 				</div>
 			</div>
+		</Panel>
+	);
+}
+
+function CrontabEditor({ initialText }: { initialText: string }) {
+	const [text, setText] = useState(initialText);
+	const [savedText, setSavedText] = useState(initialText);
+	const [saving, setSaving] = useState(false);
+	const dirty = text !== savedText;
+
+	async function save() {
+		setSaving(true);
+		const result = await saveCrontab(text);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+		setSavedText(text);
+	}
+
+	return (
+		<Panel
+			title={
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<span>Root crontab</span>
+					<div className="flex gap-2">
+						<Button disabled={!dirty || saving} onClick={() => setText(savedText)} type="button" variant="outline">
+							Cancel
+						</Button>
+						<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+							Save
+						</Button>
+					</div>
+				</div>
+			}
+		>
+			<textarea
+				className="min-h-[24rem] w-full rounded-md border bg-card p-3 font-mono text-xs leading-relaxed outline-none focus-visible:border-ring"
+				onChange={(event) => setText(event.target.value)}
+				spellCheck={false}
+				value={text}
+			/>
+			<p className="mt-2 text-xs text-muted-foreground">Saving writes `/etc/crontabs/root` and reloads cron.</p>
 		</Panel>
 	);
 }

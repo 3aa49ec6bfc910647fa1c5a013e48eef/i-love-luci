@@ -405,3 +405,15 @@ export async function runDiagnostics(tool: string, target: string): Promise<stri
 		return "Diagnostic command failed.";
 	}
 }
+
+export async function saveCrontab(text: string): Promise<{ saved: boolean; message: string }> {
+	try {
+		return await callBridge<{ saved: boolean; message: string }>("crontab_save", { text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Crontab save failed.",
+		};
+	}
+}
