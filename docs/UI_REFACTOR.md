@@ -630,6 +630,7 @@ Validation on `172.16.172.1`:
 - Service file summaries now use line-count and preview commands instead of reading whole files into rpcd memory. Browser smoke on `172.16.172.1` confirmed the AdBlock Fast generated dnsmasq server file reports `471530` lines, renders a preview row, and uses no `<pre>` output.
 - Wireless helper status now reads the correct native `Wireless status` command payload. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native30` bundle confirmed both `iw` and `iwinfo` show `not installed` on the no-radio test router and no `<pre>` output is used.
 - Guarded native pages now suppress duplicate generic command output panels when a structured summary exists. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native31` bundle confirmed `#/native/attendedsysupgrade`, `#/native/flash`, and `#/native/reboot` render without generic output panels or `<pre>` elements; reboot uptime now appears in a structured context table.
+- Native pages no longer render a generic raw command-output fallback. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native32` bundle confirmed `#/native/crontab`, `#/native/sshkeys`, `#/native/startup`, `#/native/status-routes`, and `#/native/firewall-status` render purpose-built controls/tables without generic output headings or `<pre>` elements. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 
 Remaining legacy or partial gaps:
 

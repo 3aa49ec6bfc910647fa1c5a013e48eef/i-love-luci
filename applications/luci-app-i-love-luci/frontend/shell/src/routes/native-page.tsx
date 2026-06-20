@@ -1,4 +1,4 @@
-import { FileText, Play, Power, Search } from "lucide-react";
+import { Play, Power, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -266,20 +266,6 @@ export function NativePage() {
 	const meta = pageMeta[page] ?? { title: pageTitle(page), description: "Modern route surface." };
 	const [data, setData] = useState<NativePageData | null>(null);
 	const loading = !data || data.page !== page;
-	const structuredCommands =
-		page === "status-routes" ||
-		page === "firewall-status" ||
-		page === "logs" ||
-		page === "processes" ||
-		page === "connections" ||
-		page === "wireless" ||
-		page === "diagnostics" ||
-		page === "packages" ||
-		page === "attendedsysupgrade" ||
-		page === "flash" ||
-		page === "reboot" ||
-		page === "repokeys" ||
-		page === "leds";
 
 	useEffect(() => {
 		let cancelled = false;
@@ -332,8 +318,6 @@ export function NativePage() {
 			{page === "repokeys" && data ? <RepoKeySummary data={data} /> : null}
 			{page === "leds" && data ? <LedSummary data={data} /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
-
-			<CommandPanels commands={structuredCommands ? [] : (data?.commands ?? [])} />
 		</div>
 	);
 }
@@ -625,20 +609,6 @@ function DiagnosticResultView({ result }: { result: DiagnosticRunResult }) {
 			lines={parseOutputLines([{ stream: result.tool, text: result.output }])}
 			title="Diagnostic output"
 		/>
-	);
-}
-
-function CommandPanels({ commands }: { commands: CommandBlock[] }) {
-	if (!commands.length) {
-		return null;
-	}
-
-	return (
-		<div className="grid gap-4">
-			{commands.map((command) => (
-				<TextPanel key={command.title} title={command.title} text={command.output || "No output."} />
-			))}
-		</div>
 	);
 }
 
@@ -2873,25 +2843,6 @@ function RebootPanel({ data }: { data: NativePageData | null }) {
 				</div>
 			</Panel>
 		</div>
-	);
-}
-
-function TextPanel({ title, text }: { title: string; text: string }) {
-	return (
-		<Panel
-			title={
-				<span className="flex items-center gap-2">
-					<FileText className="size-4" />
-					{title}
-				</span>
-			}
-		>
-			<OutputLinesTable
-				empty="No output."
-				lines={parseOutputLines([{ stream: "output", text }])}
-				title="Output"
-			/>
-		</Panel>
 	);
 }
 
