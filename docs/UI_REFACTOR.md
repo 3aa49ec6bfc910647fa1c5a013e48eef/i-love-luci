@@ -577,10 +577,10 @@ Converted to native React/Vite surfaces:
 - `/admin/system/commands` and children: modern custom command dashboard can list and execute configured LuCI commands by section id, with UCI summary. Auto mode still defaults to LuCI compat until command add/edit/delete and download/public-link parity are complete.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
 - `/admin/services`: service overview with native lifecycle actions where an init script exists. The root services route is native by default; service-app child routes still default to LuCI compat until adapter parity is proven.
-- `/admin/services/banip` and child routes: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/adblock-fast`: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/upnp`: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/banip` and child routes: service status, lifecycle actions, banIP policy summary, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/adblock-fast`: service status, lifecycle actions, AdBlock Fast settings, feed-source table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/upnp`: service status, lifecycle actions, UPnP permission-rule table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, listener/web-server summary, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 
 Validation on `172.16.172.1`:
 
@@ -608,7 +608,8 @@ Validation on `172.16.172.1`:
 - Diagnostics runner output now renders command-aware result tables. Browser smoke test ran ping from `#/native/diagnostics` with the `1.0.0-r4-native22` bundle and confirmed IPv6 replies render as a `Ping replies` table with transmitted/received/loss metrics and no raw `<pre>` output.
 - Custom command and fallback text output now render as stream/line/text tables instead of raw preformatted command dumps.
 - Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native24` bundle and rendered available upgrades from `apk version -l '<'` as package/installed/available rows without raw package-manager warnings or `<pre>` output.
-- Route audit on `172.16.172.1` with `1.0.0-r4-native24` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
+- Browser smoke tests loaded `#/native/service/adblock-fast`, `#/native/service/banip`, `#/native/service/upnpd`, `#/native/service/dropbear`, and `#/native/service/uhttpd` with the `1.0.0-r4-native25` bundle and confirmed structured service-specific summaries render without raw `<pre>` output. Service running-state detection was corrected to use full `ubus service list` plus init `status` fallback; uHTTPd and AdBlock Fast now show `running` on the router.
+- Route audit on `172.16.172.1` with `1.0.0-r4-native25` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 
 Remaining legacy or partial gaps:
 
@@ -620,7 +621,7 @@ Remaining legacy or partial gaps:
 - Attended sysupgrade has a structured native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, flash handoff, and rollback checks still need dedicated RPCs before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory plus available-upgrades visibility with client filtering and is available only when a route is explicitly forced to modern.
-- Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Native preview pages now include service-specific status summaries, lifecycle controls, and structured UCI-derived tables, but native config edit/apply forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Native text-output debt remains only where output shape is intentionally arbitrary, such as custom commands from user configuration. These now render in a structured line table; future work should add command-specific renderers for commonly configured commands where practical.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 

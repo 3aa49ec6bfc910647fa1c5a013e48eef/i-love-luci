@@ -518,7 +518,7 @@ function fast_service_state(name) {
 
 	let enabled = false;
 	let running = false;
-	let service_list = ubus.call('service', 'list', { name }) || {};
+	let service_list = ubus.call('service', 'list') || {};
 
 	for (let path in glob('/etc/rc.d/S*')) {
 		let parts = split(path, '/');
@@ -536,6 +536,9 @@ function fast_service_state(name) {
 			break;
 		}
 	}
+
+	if (!running)
+		running = system(`/etc/init.d/${name} status >/dev/null 2>&1`) == 0;
 
 	return {
 		name,

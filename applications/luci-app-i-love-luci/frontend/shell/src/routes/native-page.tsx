@@ -366,6 +366,7 @@ export function NativeServicePage() {
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
 			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
+			{detail ? <ServiceSpecificSummary service={detail} /> : null}
 			<ConfigTable sections={sections} />
 			{logs.map(([name, text]) => (
 				<TextPanel key={name} title={pageTitle(name)} text={text} />
@@ -691,6 +692,205 @@ function ServiceStateCard({ service }: { service: NativeService }) {
 						running={state.running}
 					/>
 				) : null}
+			</div>
+		</Panel>
+	);
+}
+
+function ServiceSpecificSummary({ service }: { service: NativeService }) {
+	const sections = service.sections ?? [];
+
+	if (service.id === "adblock-fast") {
+		const config = firstSection(sections, "adblock-fast");
+		const feeds = sections.filter((section) => section.type === "file_url");
+		const enabledFeeds = feeds.filter((section) => section.values.enabled !== "0").length;
+
+		return (
+			<div className="grid gap-4">
+				<div className="grid gap-3 sm:grid-cols-3">
+					<MetricBlock label="Configured feeds" value={feeds.length} />
+					<MetricBlock label="Enabled feeds" value={enabledFeeds} />
+					<MetricBlock label="DNS backend" value={configValue(config, "dns") || "unknown"} />
+				</div>
+				<SimpleValueTable
+					columns={["Setting", "Value"]}
+					empty="No AdBlock Fast settings found."
+					rows={[
+						["Enabled", enabledText(configValue(config, "enabled"))],
+						["Force DNS", enabledText(configValue(config, "force_dns"))],
+						["Parallel downloads", configValue(config, "parallel_downloads") || "unknown"],
+						["Auto update", enabledText(configValue(config, "auto_update_enabled"))],
+						["Allowed domains", joinConfigValue(config?.values.allowed_domain)],
+						["Blocked domains", joinConfigValue(config?.values.blocked_domain)],
+					]}
+					title="AdBlock Fast settings"
+				/>
+				<SimpleValueTable
+					columns={["Feed", "Action", "Enabled", "Size", "URL"]}
+					empty="No feed URLs configured."
+					rows={feeds.map((feed) => [
+						configValue(feed, "name") || feed.name,
+						configValue(feed, "action") || "unknown",
+						enabledText(configValue(feed, "enabled", "1")),
+						configValue(feed, "size") || "unknown",
+						configValue(feed, "url") || "none",
+					])}
+					title="Feed sources"
+				/>
+			</div>
+		);
+	}
+
+	if (service.id === "banip") {
+		const global = firstSection(sections, "banip");
+
+		return (
+			<div className="grid gap-4">
+				<div className="grid gap-3 sm:grid-cols-3">
+					<MetricBlock label="Feeds" value={joinConfigValue(global?.values.ban_feed) || "none"} />
+					<MetricBlock label="Countries" value={joinConfigValue(global?.values.ban_country) || "none"} />
+					<MetricBlock label="Block policy" value={configValue(global, "ban_blockpolicy") || "unknown"} />
+				</div>
+				<SimpleValueTable
+					columns={["Setting", "Value"]}
+					empty="No banIP configuration found."
+					rows={[
+						["Enabled", enabledText(configValue(global, "ban_enabled"))],
+						["Autodetect", enabledText(configValue(global, "ban_autodetect"))],
+						["Auto allowlist", enabledText(configValue(global, "ban_autoallowlist"))],
+						["Auto blocklist", enabledText(configValue(global, "ban_autoblocklist"))],
+						["Interfaces", joinConfigValue(global?.values.ban_trigger)],
+						["IPv4", `${enabledText(configValue(global, "ban_protov4"))} / ${configValue(global, "ban_ifv4") || "unknown"}`],
+						["IPv6", `${enabledText(configValue(global, "ban_protov6"))} / ${configValue(global, "ban_ifv6") || "unknown"}`],
+						["Log terms", joinConfigValue(global?.values.ban_logterm)],
+					]}
+					title="banIP policy"
+				/>
+			</div>
+		);
+	}
+
+	if (service.id === "upnpd") {
+		const config = firstSection(sections, "upnpd");
+		const rules = sections.filter((section) => section.type === "perm_rule");
+
+		return (
+			<div className="grid gap-4">
+				<div className="grid gap-3 sm:grid-cols-3">
+					<MetricBlock label="Enabled" value={enabledText(configValue(config, "enabled"))} />
+					<MetricBlock label="Interface" value={configValue(config, "internal_iface") || "unknown"} />
+					<MetricBlock label="Permission rules" value={rules.length} />
+				</div>
+				<SimpleValueTable
+					columns={["Rule", "Action", "External ports", "Internal address", "Internal ports"]}
+					empty="No UPnP permission rules configured."
+					rows={rules.map((rule) => [
+						configValue(rule, "comment") || rule.name,
+						configValue(rule, "action") || "unknown",
+						configValue(rule, "ext_ports") || "none",
+						configValue(rule, "int_addr") || "none",
+						configValue(rule, "int_ports") || "none",
+					])}
+					title="UPnP permission rules"
+				/>
+			</div>
+		);
+	}
+
+	if (service.id === "dropbear") {
+		const config = firstSection(sections, "dropbear");
+
+		return (
+			<SimpleValueTable
+				columns={["Setting", "Value"]}
+				empty="No Dropbear configuration found."
+				rows={[
+					["Enabled", enabledText(configValue(config, "enable"))],
+					["Port", configValue(config, "Port") || "22"],
+					["Password auth", configValue(config, "PasswordAuth") || "unknown"],
+					["Root password auth", configValue(config, "RootPasswordAuth") || "unknown"],
+				]}
+				title="SSH access"
+			/>
+		);
+	}
+
+	if (service.id === "uhttpd") {
+		const main = sections.find((section) => section.type === "uhttpd");
+		const cert = firstSection(sections, "cert");
+
+		return (
+			<div className="grid gap-4">
+				<div className="grid gap-3 sm:grid-cols-3">
+					<MetricBlock label="HTTP" value={joinConfigValue(main?.values.listen_http) || "none"} />
+					<MetricBlock label="HTTPS" value={joinConfigValue(main?.values.listen_https) || "none"} />
+					<MetricBlock label="Redirect HTTPS" value={enabledText(configValue(main, "redirect_https"))} />
+				</div>
+				<SimpleValueTable
+					columns={["Setting", "Value"]}
+					empty="No uHTTPd configuration found."
+					rows={[
+						["Document root", configValue(main, "home") || "unknown"],
+						["CGI prefix", configValue(main, "cgi_prefix") || "none"],
+						["Ubus prefix", configValue(main, "ubus_prefix") || "none"],
+						["Max requests", configValue(main, "max_requests") || "unknown"],
+						["Max connections", configValue(main, "max_connections") || "unknown"],
+						["Certificate", configValue(main, "cert") || "none"],
+						["Certificate defaults", `${configValue(cert, "key_type") || "unknown"} / ${configValue(cert, "ec_curve") || configValue(cert, "bits") || "unknown"}`],
+					]}
+					title="Web server configuration"
+				/>
+			</div>
+		);
+	}
+
+	return null;
+}
+
+function SimpleValueTable({
+	columns,
+	empty,
+	rows,
+	title,
+}: {
+	columns: string[];
+	empty: string;
+	rows: Array<Array<ReactNode>>;
+	title: string;
+}) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[36rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							{columns.map((column) => (
+								<th className="px-3 py-2 font-medium" key={column}>
+									{column}
+								</th>
+							))}
+						</tr>
+					</thead>
+					<tbody>
+						{rows.length ? (
+							rows.map((row, rowIndex) => (
+								<tr className="border-b align-top last:border-0" key={`${title}.${rowIndex}`}>
+									{row.map((cell, cellIndex) => (
+										<td className={cellIndex === 0 ? "px-3 py-3 font-medium" : "px-3 py-3"} key={cellIndex}>
+											{cell || "none"}
+										</td>
+									))}
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={columns.length}>
+									{empty}
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
 			</div>
 		</Panel>
 	);
@@ -2271,6 +2471,36 @@ function parseOutputLines(streams: Array<{ stream: string; text: string }>): Out
 	}
 
 	return lines;
+}
+
+function firstSection(sections: ConfigSection[], type: string) {
+	return sections.find((section) => section.type === type);
+}
+
+function configValue(section: ConfigSection | undefined, key: string, fallback = "") {
+	return joinConfigValue(section?.values[key]) || fallback;
+}
+
+function joinConfigValue(value: ConfigSection["values"][string] | undefined) {
+	if (Array.isArray(value)) {
+		return value.map((item) => String(item)).join(", ");
+	}
+
+	if (value == null || value === "") {
+		return "";
+	}
+
+	return String(value);
+}
+
+function enabledText(value: ConfigSection["values"][string] | undefined) {
+	const text = joinConfigValue(value);
+
+	if (!text) {
+		return "default";
+	}
+
+	return text === "1" || text === "true" || text === "on" || text === "yes" ? "enabled" : "disabled";
 }
 
 function tokenAfter(parts: string[], token: string) {
