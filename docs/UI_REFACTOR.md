@@ -532,9 +532,14 @@ Converted to native React/Vite surfaces:
 - `/admin/status/processes`: process list.
 - `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
 - `/admin/status/realtime/connections`: active sockets.
+- `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface; on the current router it validates the no-radio/no-`iw` case.
 - `/admin/network/network`, `/admin/network/routes`, `/admin/network/dhcp`, `/admin/network/dns`, `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with live interface status where available.
+- `/admin/network/wireless`: guarded wireless configuration/status surface.
 - `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
-- `/admin/system/system`, `/admin/system/admin`, SSH, uHTTPd, repo keys, and LED routes: modern read-only UCI summaries.
+- `/admin/system/system`, `/admin/system/admin`, repo keys, and LED routes: modern read-only UCI summaries.
+- `/admin/system/admin/dropbear`: Dropbear service status and UCI summary.
+- `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
+- `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration.
 - `/admin/system/package-manager`: installed package inventory.
 - `/admin/system/startup`: init script enabled/running state.
 - `/admin/system/crontab`: root crontab view.
@@ -546,21 +551,23 @@ Converted to native React/Vite surfaces:
 - `/admin/services/banip` and child routes: service status and UCI summary.
 - `/admin/services/adblock-fast`: service status and UCI summary.
 - `/admin/services/upnp`: service status and UCI summary.
-- `/admin/services/uhttpd`: covered by the core system/uHTTPd view.
+- `/admin/services/uhttpd`: uHTTPd service status and UCI summary.
 
 Validation on `172.16.172.1`:
 
-- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `diagnostics`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
-- `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, and `commands`.
+- All visible LuCI menu routes now resolve to `modern` mode. The router menu has `0` visible unsupported routes.
+- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
+- `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
 - Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
+- Browser smoke tests loaded `#/native/wireless` and `#/native/attendedsysupgrade`.
 
 Remaining legacy or partial gaps:
 
-- Wireless-specific pages (`/admin/network/wireless`, `/admin/status/channel_analysis`, `/admin/status/realtime/wireless`) remain legacy. The current test router has no active wireless stack, so native validation would be weak.
-- Attended sysupgrade remains legacy. It needs careful firmware compatibility checks and rollback UX before native replacement.
+- Wireless-specific pages are native but partial. The current test router has no active wireless stack and lacks `iw`/`iwinfo`, so radio scanning, channel analysis, and association lists could not be validated.
+- Attended sysupgrade is native but guarded/read-only. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
 - Package install/remove/update remains legacy. Current native package screen is inventory-only.
-- Advanced service editors for banIP, AdBlock Fast, UPnP, and custom commands remain read-only UCI summaries. Native write forms should be added per service after pending-change/apply flow is complete.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, custom commands, Dropbear, and uHTTPd remain read-only UCI summaries. Native write forms should be added per service after pending-change/apply flow is complete.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Login Conversion

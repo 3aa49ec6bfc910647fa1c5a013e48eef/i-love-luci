@@ -29,9 +29,12 @@ const nativeRoutes = {
 	'/admin/status/realtime/load': { status: 'supported', nativePath: '/' },
 	'/admin/status/realtime/bandwidth': { status: 'supported', nativePath: '/' },
 	'/admin/status/realtime/connections': { status: 'supported', nativePath: '/native/connections' },
+	'/admin/status/realtime/wireless': { status: 'partial', nativePath: '/native/wireless' },
+	'/admin/status/channel_analysis': { status: 'partial', nativePath: '/native/wireless' },
 	'/admin/network': { status: 'partial', nativePath: '/core/network' },
 	'/admin/network/network': { status: 'partial', nativePath: '/core/network' },
 	'/admin/network/routes': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/wireless': { status: 'partial', nativePath: '/native/wireless' },
 	'/admin/network/diagnostics': { status: 'supported', nativePath: '/native/diagnostics' },
 	'/admin/network/dhcp': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/dns': { status: 'partial', nativePath: '/core/dhcp' },
@@ -46,10 +49,13 @@ const nativeRoutes = {
 	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/password': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
 	'/admin/system/admin/sshkeys': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
 	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
+	'/admin/system/attendedsysupgrade/overview': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
+	'/admin/system/attendedsysupgrade/configuration': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
 	'/admin/system/package-manager': { status: 'supported', nativePath: '/native/packages' },
 	'/admin/system/startup': { status: 'supported', nativePath: '/native/startup' },
 	'/admin/system/crontab': { status: 'supported', nativePath: '/native/crontab' },
@@ -71,12 +77,14 @@ const nativeRoutes = {
 	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip' },
 	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast' },
 	'/admin/services/upnp': { status: 'partial', nativePath: '/native/service/upnpd' },
-	'/admin/services/uhttpd': { status: 'partial', nativePath: '/core/system' }
+	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' }
 };
 const servicePackages = {
 	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'] },
 	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'] },
 	commands: { package: 'luci-commands', init: null, title: 'Custom Commands', sections: ['command'] },
+	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'] },
+	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'] },
 	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'] }
 };
 const routeModes = {
@@ -541,10 +549,24 @@ function native_page(page) {
 			{ title: 'Active sockets', output: shell_output('ss -tunap | head -n 500') }
 		];
 	}
+	else if (page == 'wireless') {
+		data.sections = collect_uci_config('wireless', ['wifi-device', 'wifi-iface']);
+		data.commands = [
+			{ title: 'Wireless devices', output: command_exists('iw') ? shell_output('iw dev') : 'iw is not installed.' },
+			{ title: 'Wireless status', output: command_exists('iwinfo') ? shell_output('iwinfo 2>/dev/null') : 'iwinfo is not installed.' }
+		];
+	}
 	else if (page == 'diagnostics') {
 		data.commands = [
 			{ title: 'Routing table', output: shell_output('/sbin/ip route show') },
 			{ title: 'DNS servers', output: shell_output('cat /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null || cat /etc/resolv.conf') }
+		];
+	}
+	else if (page == 'attendedsysupgrade') {
+		data.sections = collect_uci_config('attendedsysupgrade', ['server']);
+		data.commands = [
+			{ title: 'Current firmware', output: shell_output('cat /etc/openwrt_release') },
+			{ title: 'Upgrade helper', output: command_exists('auc') ? shell_output('auc --help 2>&1 | head -n 80') : 'auc is not installed.' }
 		];
 	}
 	else if (page == 'packages') {

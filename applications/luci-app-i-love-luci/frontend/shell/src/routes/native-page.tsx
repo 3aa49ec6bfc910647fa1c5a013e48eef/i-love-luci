@@ -43,9 +43,19 @@ const pageMeta: Record<string, PageMeta> = {
 		title: "Connections",
 		description: "Current TCP and UDP sockets.",
 	},
+	wireless: {
+		title: "Wireless",
+		description: "Wireless device, interface, and scan helper status. This router can validate the empty/no-radio case.",
+		badge: "partial modern",
+	},
 	diagnostics: {
 		title: "Diagnostics",
 		description: "Run ping, traceroute, and DNS lookup without leaving the modern shell.",
+	},
+	attendedsysupgrade: {
+		title: "Attended sysupgrade",
+		description: "Firmware compatibility context and helper configuration. Image building and flashing remain guarded.",
+		badge: "guarded",
 	},
 	packages: {
 		title: "Software",
@@ -110,6 +120,7 @@ export function NativePage() {
 			{page === "crontab" ? <TextPanel title="Root crontab" text={data?.text || "No scheduled tasks found."} /> : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel /> : null}
+			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
 
 			<CommandPanels commands={data?.commands ?? []} />
 		</div>
