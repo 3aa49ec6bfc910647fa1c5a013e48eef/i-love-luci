@@ -534,7 +534,7 @@ Converted to native React/Vite surfaces:
 - `/admin/status/realtime/connections`: active sockets.
 - `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface; on the current router it validates the no-radio/no-`iw` case.
 - `/admin/network/network` and `/admin/network/routes`: modern read-only UCI summaries plus live interface/device status from `dashboard_status`, including protocol, link state, device mapping, addresses, and uptime.
-- `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with LuCI compat retained for advanced firewall forms.
+- `/admin/network/firewall` and firewall child routes: modern read-only firewall summaries for defaults, zones, forwardings, traffic rules, and redirects, with LuCI compat retained for advanced firewall forms.
 - `/admin/network/dhcp` and `/admin/network/dns`: modern read-only DHCP/DNS surface with dnsmasq/odhcpd service state, active DHCP leases, static DHCP hosts, DNS host records, and compact UCI summaries. Full edit/apply workflows remain LuCI compat.
 - `/admin/network/wireless`: guarded wireless configuration/status surface.
 - `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
@@ -574,12 +574,14 @@ Validation on `172.16.172.1`:
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
 - `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.
+- Browser smoke test loaded `#/core/firewall` on `172.16.172.1` with the `1.0.0-r4-native13` bundle and rendered firewall defaults, 3 zones, 3 zone forwardings, and 9 traffic rules.
 
 Remaining legacy or partial gaps:
 
 - Wireless-specific pages are native but partial. The current test router has no active wireless stack and lacks `iw`/`iwinfo`, so radio scanning, channel analysis, and association lists could not be validated.
 - Network interfaces are native read-only. Interface create/edit/delete, device bridge/member editing, reconnect/reload actions, route edits, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - DHCP/DNS is native read-only. Creating/editing static leases, DNS records, DHCP pools, and advanced dnsmasq/odhcpd options remains LuCI compat until a generic form/pending-change adapter is complete.
+- Firewall is native read-only for summary views. Zone/rule/redirect create/edit/delete, custom rule files, nft include handling, validation, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - Attended sysupgrade has a native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is inventory-only and available only when a route is explicitly forced to modern.

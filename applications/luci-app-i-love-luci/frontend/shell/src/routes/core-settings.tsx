@@ -84,6 +84,7 @@ export function CoreSettingsPage() {
 
 			{page === "network" ? <NetworkSummary dashboard={dashboard} /> : null}
 			{page === "dhcp" && settings ? <DhcpSummary settings={settings} /> : null}
+			{page === "firewall" && settings ? <FirewallSummary settings={settings} /> : null}
 
 			<section className="grid gap-3">
 				<div className="flex items-center justify-between gap-3">
@@ -227,6 +228,131 @@ function DomainRecordTable({ records }: { records: DhcpDomain[] }) {
 			empty="No DNS host records configured."
 			rows={records.map((record) => [record.name, record.ip])}
 			title="DNS host records"
+		/>
+	);
+}
+
+function FirewallSummary({ settings }: { settings: CoreSettings }) {
+	const defaults = settings.firewall.filter((section) => section.type === "defaults");
+	const zones = settings.firewall.filter((section) => section.type === "zone");
+	const forwardings = settings.firewall.filter((section) => section.type === "forwarding");
+	const rules = settings.firewall.filter((section) => section.type === "rule");
+	const redirects = settings.firewall.filter((section) => section.type === "redirect");
+
+	return (
+		<div className="grid gap-5">
+			{defaults.length ? (
+				<SimpleSectionTable
+					columns={["Input", "Output", "Forward", "Syn flood", "Flow offload", "HW offload"]}
+					empty="No firewall defaults configured."
+					rows={defaults.map((section) => [
+						valueText(section.values.input),
+						valueText(section.values.output),
+						valueText(section.values.forward),
+						enabledText(section.values.synflood_protect),
+						enabledText(section.values.flow_offloading),
+						enabledText(section.values.flow_offloading_hw),
+					])}
+					title="Defaults"
+				/>
+			) : null}
+
+			<SimpleSectionTable
+				columns={["Zone", "Networks", "Devices", "Input", "Output", "Forward", "NAT"]}
+				empty="No firewall zones configured."
+				rows={zones.map((section) => [
+					valueText(section.values.name || section.name),
+					valueText(section.values.network),
+					valueText(section.values.device),
+					valueText(section.values.input),
+					valueText(section.values.output),
+					valueText(section.values.forward),
+					enabledText(section.values.masq),
+				])}
+				title="Zones"
+			/>
+
+			<SimpleSectionTable
+				columns={["Source", "Destination"]}
+				empty="No zone forwardings configured."
+				rows={forwardings.map((section) => [valueText(section.values.src), valueText(section.values.dest)])}
+				title="Zone forwardings"
+			/>
+
+			<FirewallRuleTable rules={rules} />
+
+			{redirects.length ? <FirewallRedirectTable redirects={redirects} /> : null}
+		</div>
+	);
+}
+
+function FirewallRuleTable({ rules }: { rules: ConfigSection[] }) {
+	return (
+		<section className="grid gap-3">
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="text-base font-semibold">Traffic rules</h2>
+				<span className="text-xs text-muted-foreground">{rules.length} rules</span>
+			</div>
+			<div className="overflow-x-auto rounded-md border bg-card">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Rule</th>
+							<th className="px-3 py-2 font-medium">Status</th>
+							<th className="px-3 py-2 font-medium">From</th>
+							<th className="px-3 py-2 font-medium">To</th>
+							<th className="px-3 py-2 font-medium">Protocol</th>
+							<th className="px-3 py-2 font-medium">Ports</th>
+							<th className="px-3 py-2 font-medium">Target</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rules.length ? (
+							rules.map((rule) => (
+								<tr className="border-b align-top last:border-0" key={rule.name}>
+									<td className="px-3 py-3 font-medium">{valueText(rule.values.name || rule.name)}</td>
+									<td className="px-3 py-3">
+										<Badge className={isEnabledValue(rule.values.enabled) ? "text-primary" : ""}>
+											{isEnabledValue(rule.values.enabled) ? "enabled" : "disabled"}
+										</Badge>
+									</td>
+									<td className="px-3 py-3">{firewallEndpoint(rule.values.src, rule.values.src_ip)}</td>
+									<td className="px-3 py-3">{firewallEndpoint(rule.values.dest, rule.values.dest_ip)}</td>
+									<td className="px-3 py-3">{valueText(rule.values.proto)}</td>
+									<td className="px-3 py-3">{valueText(rule.values.dest_port || rule.values.src_port || rule.values.icmp_type)}</td>
+									<td className="px-3 py-3">{targetText(rule.values.target, rule.values.family)}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
+									No traffic rules configured.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	);
+}
+
+function FirewallRedirectTable({ redirects }: { redirects: ConfigSection[] }) {
+	return (
+		<SimpleSectionTable
+			columns={["Name", "Status", "Source", "External port", "Destination", "Internal", "Protocol"]}
+			empty="No port forwards configured."
+			rows={redirects.map((redirect) => [
+				valueText(redirect.values.name || redirect.name),
+				isEnabledValue(redirect.values.enabled) ? "enabled" : "disabled",
+				valueText(redirect.values.src),
+				valueText(redirect.values.src_dport),
+				valueText(redirect.values.dest),
+				[valueText(redirect.values.dest_ip), valueText(redirect.values.dest_port)].filter((value) => value !== "none").join(":") ||
+					"none",
+				valueText(redirect.values.proto),
+			])}
+			title="Port forwards"
 		/>
 	);
 }
@@ -436,6 +562,34 @@ function normalizePage(page?: string): CorePage {
 
 function formatValue(value: ConfigSection["values"][string]) {
 	return Array.isArray(value) ? value.join(", ") : String(value);
+}
+
+function valueText(value: ConfigSection["values"][string] | undefined) {
+	if (value == null || value === "") {
+		return "none";
+	}
+
+	return formatValue(value);
+}
+
+function isEnabledValue(value: ConfigSection["values"][string] | undefined) {
+	return value == null || value === "" || value === "1" || value === 1 || value === true;
+}
+
+function enabledText(value: ConfigSection["values"][string] | undefined) {
+	return isEnabledValue(value) ? "enabled" : "disabled";
+}
+
+function firewallEndpoint(zone: ConfigSection["values"][string] | undefined, address: ConfigSection["values"][string] | undefined) {
+	const parts = [valueText(zone), valueText(address)].filter((value) => value !== "none");
+	return parts.length ? parts.join(" / ") : "any";
+}
+
+function targetText(target: ConfigSection["values"][string] | undefined, family: ConfigSection["values"][string] | undefined) {
+	const targetValue = valueText(target);
+	const familyValue = valueText(family);
+
+	return familyValue === "none" || familyValue === "any" ? targetValue : `${targetValue} (${familyValue})`;
 }
 
 function formatBytes(value?: number) {
