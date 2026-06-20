@@ -327,9 +327,12 @@ Route audit must be treated as a release gate, not an optional validation step. 
 
 - all installed LuCI routes are discovered from live router metadata
 - every route has an explicit compat/native decision recorded in the route inventory
+- compat is configured and tested for every installed LuCI app, including all child routes exposed by each app
 - native I Love LuCI routes cover the workflows already migrated from LuCI
+- every migrated native route has an explicit LuCI source route, parity status, test evidence, and fallback decision
 - partial native routes keep LuCI compat as their default until edit/save/apply parity is proven
 - newly installed LuCI apps appear automatically after menu/cache refresh and work through compat without a package-specific code change
+- future LuCI apps installed through standard OpenWrt package tooling are expected to work through the adapter/compat path without a new I Love LuCI release
 
 ## Build Strategy
 
@@ -819,6 +822,8 @@ Required tooling:
 Acceptance gate:
 
 - The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
+- The release is not ready until every installed `luci-app-*` package has confirmed compat coverage and every native replacement route has confirmed I Love LuCI test coverage.
+- Future app handling must be proven with an install/remove/reinstall smoke test for a LuCI app that was not hard-coded into I Love LuCI.
 - Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=42`, `legacy=18`, `menu_files=15`, and `luci_apps=9`.
 
 Final release/test gate:
@@ -827,6 +832,9 @@ Final release/test gate:
 - Publish package/feed artifacts from GitHub.
 - Install the GitHub-published package on `172.16.172.1`, not a local file copy.
 - Run the full route audit against the installed release package.
+- Confirm all LuCI apps have working compat routes unless a native route has documented parity and test evidence.
+- Confirm all routes migrated to native I Love LuCI screens are present in the route inventory and covered by browser smoke tests.
+- Install a fresh LuCI app from the OpenWrt feed, refresh menu/cache state, confirm it appears in sidebar/search, opens through compat, then uninstall it and confirm routes disappear cleanly.
 - Browser-smoke every visible route target at least once:
   - native route renders expected title/content
   - compat route renders framed LuCI content
