@@ -15,6 +15,7 @@ import {
 	runDiagnostics,
 	saveCrontab,
 	saveSshKeys,
+	searchPackages,
 	type CommandBlock,
 	type ConfigSection,
 	type CustomCommand,
@@ -22,6 +23,7 @@ import {
 	type InitAction,
 	type NativePageData,
 	type NativeService,
+	type PackageSearchResult,
 } from "@/lib/rpc";
 
 type PageMeta = {
@@ -997,6 +999,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 				<MetricBlock label="Kernel modules" value={kernelCount} />
 			</div>
 			<PackageUpgradeTable entries={upgrades} />
+			<AvailablePackageSearch />
 			<Panel
 				title={
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1044,6 +1047,102 @@ function PackageInventory({ data }: { data: NativePageData }) {
 				</div>
 			</Panel>
 		</div>
+	);
+}
+
+function AvailablePackageSearch() {
+	const [query, setQuery] = useState("");
+	const [result, setResult] = useState<PackageSearchResult | null>(null);
+	const [loading, setLoading] = useState(false);
+	const rows = useMemo(() => (result?.lines ?? []).map(parsePackageLine), [result?.lines]);
+
+	async function submit(event?: FormEvent<HTMLFormElement>) {
+		event?.preventDefault();
+
+		const needle = query.trim();
+
+		if (!needle) {
+			setResult({
+				query: "",
+				manager: "unknown",
+				lines: [],
+				warnings: [],
+				message: "Enter a package name or description to search.",
+			});
+			return;
+		}
+
+		setLoading(true);
+		const nextResult = await searchPackages(needle);
+		setResult(nextResult);
+		setLoading(false);
+	}
+
+	return (
+		<Panel
+			title={
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<div>Available package search</div>
+						<div className="mt-1 text-xs font-normal text-muted-foreground">
+							Read-only package index search. Install and remove actions stay in LuCI compat until rollback parity is complete.
+						</div>
+					</div>
+					<form className="flex w-full gap-2 sm:w-[26rem]" onSubmit={(event) => void submit(event)}>
+						<div className="relative min-w-0 flex-1">
+							<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								className="pl-9"
+								placeholder="Search package index"
+								value={query}
+								onChange={(event) => setQuery(event.target.value)}
+							/>
+						</div>
+						<Button disabled={loading} type="submit">
+							{loading ? "Searching" : "Search"}
+						</Button>
+					</form>
+				</div>
+			}
+			flush
+		>
+			<div className="border-b px-3 py-2 text-xs text-muted-foreground">
+				{result ? `${result.message} ${result.manager !== "unknown" ? `Manager: ${result.manager}.` : ""}` : "Search the configured package feeds."}
+			</div>
+			{result?.warnings.length ? (
+				<div className="border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+					{result.warnings.slice(0, 2).join(" ")}
+				</div>
+			) : null}
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Package</th>
+							<th className="px-3 py-2 font-medium">Version</th>
+							<th className="px-3 py-2 font-medium">Description</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.length ? (
+							rows.map((pkg) => (
+								<tr className="border-b align-top last:border-0" key={pkg.line}>
+									<td className="px-3 py-3 font-medium">{pkg.name}</td>
+									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
+									<td className="px-3 py-3">{pkg.description || "none"}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+									{result ? "No available packages to show." : "No search run yet."}
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
 	);
 }
 

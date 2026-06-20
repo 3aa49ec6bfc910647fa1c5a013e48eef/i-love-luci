@@ -47,6 +47,8 @@ echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
 echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
+echo '---ILOVELUCI-PACKAGE-SEARCH---'
+ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-RELEASE---'
 cat /etc/openwrt_release 2>/dev/null || true
 rm -f /tmp/i-love-luci-native-audit.sh
@@ -196,6 +198,16 @@ if not changes or not changes.get("ok"):
 	failures.append("changes_list did not return ok")
 elif not isinstance(changes.get("data", {}).get("changes"), list):
 	failures.append("changes_list did not return a changes array")
+
+package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
+if not package_search or not package_search.get("ok"):
+	failures.append("package_search did not return ok")
+else:
+	package_data = package_search.get("data") or {}
+	if not isinstance(package_data.get("lines"), list):
+		failures.append("package_search did not return package lines")
+	elif not package_data.get("lines"):
+		warnings.append("package_search returned no luci-app results")
 
 print("I Love LuCI native page audit")
 print(f"native_pages={len(expected_pages)} service_adapters={len(expected_services)}")

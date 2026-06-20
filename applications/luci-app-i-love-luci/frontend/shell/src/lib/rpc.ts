@@ -211,6 +211,14 @@ export type CommandBlock = {
 	output: string;
 };
 
+export type PackageSearchResult = {
+	query: string;
+	manager: string;
+	lines: string[];
+	warnings: string[];
+	message: string;
+};
+
 export type ServiceState = {
 	name: string;
 	enabled: boolean;
@@ -480,6 +488,21 @@ export async function getNativePage(page: string): Promise<NativePageData> {
 			services: [],
 			lines: [],
 			text: "",
+		};
+	}
+}
+
+export async function searchPackages(query: string): Promise<PackageSearchResult> {
+	try {
+		return await callBridge<PackageSearchResult>("package_search", { query });
+	}
+	catch {
+		return {
+			query,
+			manager: "unknown",
+			lines: [],
+			warnings: [],
+			message: "Package search failed.",
 		};
 	}
 }

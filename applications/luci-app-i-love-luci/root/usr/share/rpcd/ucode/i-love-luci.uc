@@ -835,6 +835,50 @@ function package_upgrades() {
 	return shell_output('opkg list-upgradable 2>&1 | sed -n "1,160p"');
 }
 
+function package_search(query) {
+	query = trim('' + (query || ''));
+
+	if (!length(query))
+		return {
+			query,
+			manager: command_exists('apk') ? 'apk' : 'opkg',
+			lines: [],
+			warnings: [],
+			message: 'Enter a package name or description to search.'
+		};
+
+	if (length(query) > 80)
+		query = substr(query, 0, 80);
+
+	let manager = command_exists('apk') ? 'apk' : 'opkg';
+	let argv = manager == 'apk'
+		? ['apk', 'search', '-v', query]
+		: ['opkg', 'list', `*${query}*`];
+	let output = trim(shell_output(`${join(' ', quote_command_args(argv))} | sed -n "1,220p"`));
+	let lines = [];
+	let warnings = [];
+
+	for (let line in split(output, '\n')) {
+		line = trim(line);
+
+		if (!length(line))
+			continue;
+
+		if (substr(line, 0, 8) == 'WARNING:')
+			push(warnings, line);
+		else
+			push(lines, line);
+	}
+
+	return {
+		query,
+		manager,
+		lines,
+		warnings,
+		message: length(lines) ? 'Package search complete.' : 'No packages matched the search.'
+	};
+}
+
 function uci_change_rows() {
 	let rows = [];
 	let output = trim(shell_output('uci changes 2>/dev/null'));
@@ -1292,6 +1336,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(native_page(request.args.page || 'status-routes'));
+		}
+	},
+
+	package_search: {
+		args: {
+			query: ''
+		},
+		call: function(request) {
+			return respond(package_search(request.args.query || ''));
 		}
 	},
 
