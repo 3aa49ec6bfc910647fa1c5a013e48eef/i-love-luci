@@ -508,7 +508,7 @@ export type UpnpdConfigResult = {
 	changed: boolean;
 	config: ConfigSection | null;
 	rules: UpnpdRule[];
-	activeRules: UpnpdActiveRule[];
+	activeRules?: UpnpdActiveRule[];
 	sections: ConfigSection[];
 };
 

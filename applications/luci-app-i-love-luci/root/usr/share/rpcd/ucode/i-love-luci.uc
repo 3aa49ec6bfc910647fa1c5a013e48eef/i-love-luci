@@ -78,7 +78,7 @@ const nativeRoutes = {
 	'/admin/services/banip/firewall_log': { status: 'partial', nativePath: '/native/service/banip/firewall_log', autoMode: 'legacy' },
 	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip/processing_log', autoMode: 'legacy' },
 	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast', autoMode: 'legacy' },
-	'/admin/services/upnp': { status: 'partial', nativePath: '/native/service/upnpd', autoMode: 'legacy' },
+	'/admin/services/upnp': { status: 'supported', nativePath: '/native/service/upnpd' },
 	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd', autoMode: 'legacy' }
 };
 const servicePackages = {
@@ -5207,11 +5207,14 @@ function save_upnpd_config(config, rows) {
 	}
 
 	let existing = {};
+	let existing_order = [];
 	uci.foreach('upnpd', 'perm_rule', function(section) {
 		existing[section['.name']] = true;
+		push(existing_order, section['.name']);
 	});
 
 	let keep = {};
+	let next_order = [];
 	let validated = [];
 
 	for (let row in rows) {
@@ -5263,12 +5266,14 @@ function save_upnpd_config(config, rows) {
 	}
 
 	let changed = false;
+	let config_changed = false;
 
 	for (let key, value in next_config) {
 		let current = uci.get('upnpd', config_section, key) || '';
 
 		if (current != value) {
 			changed = true;
+			config_changed = true;
 			set_uci_option('upnpd', config_section, key, value);
 		}
 	}
@@ -5279,15 +5284,18 @@ function save_upnpd_config(config, rows) {
 		if (!item.is_existing) {
 			section = uci.add('upnpd', 'perm_rule');
 			changed = true;
+			config_changed = true;
 		}
 
 		keep[section] = true;
+		push(next_order, section);
 
 		for (let key, value in item.next) {
 			let current = uci.get('upnpd', section, key) || '';
 
 			if (current != value) {
 				changed = true;
+				config_changed = true;
 				set_uci_option('upnpd', section, key, value);
 			}
 		}
@@ -5297,11 +5305,43 @@ function save_upnpd_config(config, rows) {
 		if (!keep[section]) {
 			uci.delete('upnpd', section);
 			changed = true;
+			config_changed = true;
 		}
 	}
 
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
 	if (changed) {
-		uci.commit('upnpd');
+		if (config_changed)
+			uci.commit('upnpd');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder upnpd.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit upnpd >/dev/null 2>&1 || true');
+		}
+
 		system('/etc/init.d/miniupnpd reload >/dev/null 2>&1 || /etc/init.d/miniupnpd restart >/dev/null 2>&1 || true');
 	}
 
@@ -5311,7 +5351,6 @@ function save_upnpd_config(config, rows) {
 		changed,
 		config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
 		rules: upnpd_rule_rows(),
-		activeRules: upnpd_active_rules(),
 		sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 	};
 }
@@ -6344,7 +6383,6 @@ const methods = {
 					changed: false,
 					config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
 					rules: upnpd_rule_rows(),
-					activeRules: upnpd_active_rules(),
 					sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 				});
 			}
