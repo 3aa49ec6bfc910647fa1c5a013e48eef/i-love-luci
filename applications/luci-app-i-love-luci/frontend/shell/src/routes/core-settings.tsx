@@ -20,6 +20,7 @@ import {
 	saveDhcpHosts,
 	saveDhcpPools,
 	saveDnsmasqConfig,
+	saveLuciUiSettings,
 	saveNetworkDevices,
 	saveNetworkInterfaces,
 	saveNetworkRules,
@@ -40,6 +41,7 @@ import {
 	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
+	type LuciUiSettingsInput,
 	type NetworkDeviceConfig,
 	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
@@ -2419,10 +2421,24 @@ function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashbo
 	const dropbear = systemSections.filter((section) => section.type === "dropbear");
 	const uhttpd = systemSections.filter((section) => section.type === "uhttpd");
 	const certs = systemSections.filter((section) => section.type === "cert");
+	const luciMain = systemSections.find((section) => section.name === "main" && section.values.mediaurlbase != null);
+	const luciApply = systemSections.find((section) => section.name === "apply");
+	const luciThemes = systemSections.find((section) => section.name === "themes");
+	const luciLanguages = systemSections.find((section) => section.name === "languages");
 
 	return (
 		<div className="grid gap-5">
 			<SystemSettingsEditor dashboard={dashboard} onSaved={setSystemSections} sections={systemSections} />
+
+			{luciMain && luciApply && luciThemes ? (
+				<LuciUiSettingsEditor
+					apply={luciApply}
+					languages={luciLanguages}
+					main={luciMain}
+					onSaved={setSystemSections}
+					themes={luciThemes}
+				/>
+			) : null}
 
 			<SimpleSectionTable
 				columns={["Hostname", "Timezone", "Local time", "Uptime", "Log size", "Console log", "Cron log"]}
@@ -2496,6 +2512,130 @@ function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashbo
 			{certs.length ? <CertDefaultsEditor certs={certs} onSaved={setSystemSections} /> : null}
 		</div>
 	);
+}
+
+function LuciUiSettingsEditor({
+	apply,
+	languages,
+	main,
+	onSaved,
+	themes,
+}: {
+	apply: ConfigSection;
+	languages?: ConfigSection;
+	main: ConfigSection;
+	onSaved: (sections: ConfigSection[]) => void;
+	themes: ConfigSection;
+}) {
+	const themeOptions = useMemo(() => luciThemeOptions(themes), [themes]);
+	const languageOptions = useMemo(() => luciLanguageOptions(languages), [languages]);
+	const [values, setValues] = useState(() => luciUiSettingsValues(main, apply, themeOptions));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof LuciUiSettingsInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveLuciUiSettings(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+		onSaved(result.sections);
+		setSavedValues(values);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-1">
+				<h2 className="text-base font-semibold">LuCI interface</h2>
+				<p className="text-sm text-muted-foreground">Edit language, theme, session, and apply rollback timing.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Field label="Language" target="luci-language">
+						<SelectField id="luci-language" onChange={(value) => updateField("lang", value)} options={languageOptions} value={values.lang} />
+					</Field>
+					<Field label="Theme" target="luci-theme">
+						<SelectField
+							id="luci-theme"
+							onChange={(value) => updateField("mediaurlbase", value)}
+							options={themeOptions}
+							value={values.mediaurlbase}
+						/>
+					</Field>
+					<Field label="Session timeout" target="luci-session-timeout">
+						<Input
+							id="luci-session-timeout"
+							inputMode="numeric"
+							onChange={(event) => updateField("sessiontime", event.target.value)}
+							value={values.sessiontime}
+						/>
+					</Field>
+					<Field label="Rollback timeout" target="luci-rollback">
+						<Input id="luci-rollback" inputMode="numeric" onChange={(event) => updateField("rollback", event.target.value)} value={values.rollback} />
+					</Field>
+					<Field label="Apply holdoff" target="luci-holdoff">
+						<Input id="luci-holdoff" inputMode="numeric" onChange={(event) => updateField("holdoff", event.target.value)} value={values.holdoff} />
+					</Field>
+					<Field label="Apply timeout" target="luci-timeout">
+						<Input id="luci-timeout" inputMode="numeric" onChange={(event) => updateField("timeout", event.target.value)} value={values.timeout} />
+					</Field>
+					<Field label="Display delay" target="luci-display">
+						<Input id="luci-display" inputMode="decimal" onChange={(event) => updateField("display", event.target.value)} value={values.display} />
+					</Field>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function luciUiSettingsValues(main: ConfigSection, apply: ConfigSection, themeOptions: [string, string][]): LuciUiSettingsInput {
+	const mediaurlbase = rawValue(main.values.mediaurlbase || themeOptions[0]?.[0] || "");
+
+	return {
+		lang: rawValue(main.values.lang || "auto"),
+		mediaurlbase,
+		sessiontime: rawValue(main.values.sessiontime || "3600"),
+		rollback: rawValue(apply.values.rollback || "90"),
+		holdoff: rawValue(apply.values.holdoff || "4"),
+		timeout: rawValue(apply.values.timeout || "5"),
+		display: rawValue(apply.values.display || "1.5"),
+	};
+}
+
+function luciThemeOptions(themes: ConfigSection): [string, string][] {
+	return Object.entries(themes.values)
+		.map(([name, value]) => [rawValue(value), name] as [string, string])
+		.filter(([value]) => Boolean(value));
+}
+
+function luciLanguageOptions(languages?: ConfigSection): [string, string][] {
+	const entries = languages
+		? Object.entries(languages.values).map(([name, value]) => [name, rawValue(value) || name] as [string, string])
+		: [];
+
+	return [["auto", "Auto"], ...entries.filter(([value]) => value !== "auto")];
 }
 
 function CertDefaultsEditor({ certs, onSaved }: { certs: ConfigSection[]; onSaved: (sections: ConfigSection[]) => void }) {

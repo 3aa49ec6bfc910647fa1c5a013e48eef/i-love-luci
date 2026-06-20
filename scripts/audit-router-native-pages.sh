@@ -102,7 +102,7 @@ expected_core_pages = {
 	"network": {"sections": "network", "arrays": ["networkRoutes", "networkRules"], "required_types": ["interface", "device"]},
 	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
 	"firewall": {"sections": "firewall", "arrays": ["firewallFiles"], "required_options": ["input", "output", "forward"], "required_types": ["defaults", "zone", "forwarding", "rule"]},
-	"system": {"sections": "system", "required_types": ["system", "timeserver", "led", "dropbear", "uhttpd", "cert"]},
+	"system": {"sections": "system", "required_types": ["system", "timeserver", "led", "dropbear", "uhttpd", "cert"], "required_names": ["main", "apply", "themes"]},
 }
 
 expected_services = {
@@ -194,6 +194,13 @@ for page, rules in expected_core_pages.items():
 		for section_type in required_types:
 			if section_type not in types:
 				failures.append(f"{page}: core_settings expected UCI section type {section_type!r}")
+
+	required_names = set(rules.get("required_names", []))
+	if sections_key and required_names:
+		names = {section.get("name") for section in data.get(sections_key) or []}
+		for section_name in required_names:
+			if section_name not in names:
+				failures.append(f"{page}: core_settings expected UCI section name {section_name!r}")
 
 	for key in rules.get("arrays", []):
 		if not isinstance(data.get(key), list):

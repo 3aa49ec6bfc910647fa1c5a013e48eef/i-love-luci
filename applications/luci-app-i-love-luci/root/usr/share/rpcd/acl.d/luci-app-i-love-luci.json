@@ -48,6 +48,7 @@
 					"firewall_rules_save",
 					"firewall_zones_save",
 					"led_config_save",
+					"luci_ui_settings_save",
 					"network_devices_save",
 					"network_interfaces_save",
 					"network_rules_save",

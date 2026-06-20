@@ -3748,8 +3748,67 @@ function valid_signed_numeric_value(value) {
 	return value == '' || match(value, /^-?[0-9]+$/);
 }
 
+function valid_decimal_value(value) {
+	value = '' + (value || '');
+	return value == '' || match(value, /^-?[0-9]+(\.[0-9]+)?$/);
+}
+
+function collect_luci_config_sections() {
+	function luci_get(path, fallback) {
+		let value = trim(shell_output(`uci -q get ${path}`));
+		return length(value) ? value : fallback;
+	}
+
+	return [
+	{
+		name: 'main',
+		type: luci_get('luci.main', 'core'),
+		values: {
+			lang: luci_get('luci.main.lang', 'auto'),
+			mediaurlbase: luci_get('luci.main.mediaurlbase', ''),
+			resourcebase: luci_get('luci.main.resourcebase', ''),
+			ubuspath: luci_get('luci.main.ubuspath', ''),
+			sessiontime: luci_get('luci.sauth.sessiontime', '')
+		}
+	},
+	{
+		name: 'apply',
+		type: luci_get('luci.apply', 'internal'),
+		values: {
+			rollback: luci_get('luci.apply.rollback', ''),
+			holdoff: luci_get('luci.apply.holdoff', ''),
+			timeout: luci_get('luci.apply.timeout', ''),
+			display: luci_get('luci.apply.display', '')
+		}
+	},
+	{
+		name: 'themes',
+		type: luci_get('luci.themes', 'internal'),
+		values: {
+			Bootstrap: luci_get('luci.themes.Bootstrap', ''),
+			BootstrapDark: luci_get('luci.themes.BootstrapDark', ''),
+			BootstrapLight: luci_get('luci.themes.BootstrapLight', ''),
+			OpenWrt: luci_get('luci.themes.OpenWrt', ''),
+			Material: luci_get('luci.themes.Material', ''),
+			OpenWrt2020: luci_get('luci.themes.OpenWrt2020', ''),
+			ILoveLuCI: luci_get('luci.themes.ILoveLuCI', '')
+		}
+	},
+	{
+		name: 'languages',
+		type: luci_get('luci.languages', 'internal'),
+		values: {
+			auto: 'Auto'
+		}
+	}
+	];
+}
+
 function collect_system_settings_sections() {
 	let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
+
+	for (let section in collect_luci_config_sections())
+		push(system, section);
 
 	for (let section in collect_uci_config('dropbear', ['dropbear']))
 		push(system, section);
@@ -3758,6 +3817,100 @@ function collect_system_settings_sections() {
 		push(system, section);
 
 	return system;
+}
+
+function save_luci_ui_settings(config) {
+	config ||= {};
+	uci.load('luci');
+
+	let main = uci.get('luci', 'main') ? 'main' : uci.add('luci', 'core');
+	let sauth = uci.get('luci', 'sauth') ? 'sauth' : uci.add('luci', 'internal');
+	let apply = uci.get('luci', 'apply') ? 'apply' : uci.add('luci', 'internal');
+	let lang = clean_uci_value(config.lang || 'auto');
+	let mediaurlbase = clean_uci_value(config.mediaurlbase || '');
+	let sessiontime = clean_uci_value(config.sessiontime || '');
+	let rollback = clean_uci_value(config.rollback || '');
+	let holdoff = clean_uci_value(config.holdoff || '');
+	let timeout = clean_uci_value(config.timeout || '');
+	let display = clean_uci_value(config.display || '');
+	let valid_theme = false;
+
+	if (replace(lang, /[^A-Za-z0-9_-]/g, '') != lang)
+		return {
+			saved: false,
+			message: 'Language contains unsupported characters.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	if (!valid_numeric_value(sessiontime) || !valid_numeric_value(rollback) || !valid_numeric_value(holdoff) || !valid_numeric_value(timeout) || !valid_decimal_value(display))
+		return {
+			saved: false,
+			message: 'Session and apply timing values must be numeric.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	for (let section in collect_luci_config_sections()) {
+		if (section.name != 'themes')
+			continue;
+
+		for (let key, value in section.values)
+			if (value == mediaurlbase)
+				valid_theme = true;
+	}
+
+	if (!valid_theme)
+		return {
+			saved: false,
+			message: 'Selected theme path is not registered in LuCI.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	let changed = false;
+	let main_next = {
+		lang,
+		mediaurlbase
+	};
+	let sauth_next = { sessiontime };
+	let apply_next = {
+		rollback,
+		holdoff,
+		timeout,
+		display
+	};
+
+	for (let key, value in main_next) {
+		if ((uci.get('luci', main, key) || '') != value) {
+			changed = true;
+			set_uci_option('luci', main, key, value);
+		}
+	}
+
+	for (let key, value in sauth_next) {
+		if ((uci.get('luci', sauth, key) || '') != value) {
+			changed = true;
+			set_uci_option('luci', sauth, key, value);
+		}
+	}
+
+	for (let key, value in apply_next) {
+		if ((uci.get('luci', apply, key) || '') != value) {
+			changed = true;
+			set_uci_option('luci', apply, key, value);
+		}
+	}
+
+	if (changed)
+		uci.commit('luci');
+
+	return {
+		saved: true,
+		message: changed ? 'LuCI UI settings saved.' : 'LuCI UI settings already up to date.',
+		changed,
+		sections: collect_system_settings_sections()
+	};
 }
 
 function save_system_settings(config) {
@@ -5376,6 +5529,25 @@ const methods = {
 				return respond({
 					saved: false,
 					message: 'System settings save failed: ' + e,
+					changed: false,
+					sections: collect_system_settings_sections()
+				});
+			}
+		}
+	},
+
+	luci_ui_settings_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_luci_ui_settings(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'LuCI UI settings save failed: ' + e,
 					changed: false,
 					sections: collect_system_settings_sections()
 				});

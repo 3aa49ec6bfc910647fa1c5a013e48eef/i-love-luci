@@ -571,6 +571,23 @@ export type SystemSettingsResult = {
 	sections: ConfigSection[];
 };
 
+export type LuciUiSettingsInput = {
+	lang: string;
+	mediaurlbase: string;
+	sessiontime: string;
+	rollback: string;
+	holdoff: string;
+	timeout: string;
+	display: string;
+};
+
+export type LuciUiSettingsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	sections: ConfigSection[];
+};
+
 export type DhcpHostsResult = {
 	saved: boolean;
 	message: string;
@@ -1231,6 +1248,20 @@ export async function saveSystemSettings(config: SystemSettingsInput): Promise<S
 		return {
 			saved: false,
 			message: "System settings save failed.",
+			changed: false,
+			sections: [],
+		};
+	}
+}
+
+export async function saveLuciUiSettings(config: LuciUiSettingsInput): Promise<LuciUiSettingsResult> {
+	try {
+		return await callBridge<LuciUiSettingsResult>("luci_ui_settings_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "LuCI UI settings save failed.",
 			changed: false,
 			sections: [],
 		};
