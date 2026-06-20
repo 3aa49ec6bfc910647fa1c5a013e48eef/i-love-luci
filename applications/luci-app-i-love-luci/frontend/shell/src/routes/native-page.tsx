@@ -53,6 +53,62 @@ type FlashPartitionEntry = {
 	name: string;
 };
 
+type RouteEntry = {
+	target: string;
+	via: string;
+	device: string;
+	table: string;
+	source: string;
+	scope: string;
+	metric: string;
+};
+
+type RuleEntry = {
+	priority: string;
+	rule: string;
+};
+
+type NeighborEntry = {
+	address: string;
+	device: string;
+	mac: string;
+	state: string;
+};
+
+type NftChain = {
+	name: string;
+	hook: string;
+	policy: string;
+	rules: number;
+};
+
+type NftRule = {
+	chain: string;
+	action: string;
+	packets: string;
+	bytes: string;
+	comment: string;
+	expression: string;
+};
+
+type ProcessEntry = {
+	pid: string;
+	user: string;
+	vsz: string;
+	state: string;
+	command: string;
+};
+
+type SocketEntry = {
+	protocol: string;
+	state: string;
+	receiveQueue: string;
+	sendQueue: string;
+	local: string;
+	peer: string;
+	process: string;
+};
+
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
@@ -136,6 +192,8 @@ export function NativePage() {
 	const meta = pageMeta[page] ?? { title: pageTitle(page), description: "Modern route surface." };
 	const [data, setData] = useState<NativePageData | null>(null);
 	const loading = !data || data.page !== page;
+	const structuredCommands =
+		page === "status-routes" || page === "firewall-status" || page === "processes" || page === "connections";
 
 	useEffect(() => {
 		let cancelled = false;
@@ -155,6 +213,10 @@ export function NativePage() {
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
 			<PageHeader meta={meta} loading={loading} />
 
+			{page === "status-routes" && data ? <RoutingSummary data={data} /> : null}
+			{page === "firewall-status" && data ? <NftablesSummary data={data} /> : null}
+			{page === "processes" && data ? <ProcessSummary data={data} /> : null}
+			{page === "connections" && data ? <ConnectionSummary data={data} /> : null}
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" ? <PackageInventory lines={data?.lines ?? []} /> : null}
 			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
@@ -180,7 +242,7 @@ export function NativePage() {
 			{page === "flash" && data ? <FlashSummary data={data} /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
 
-			<CommandPanels commands={data?.commands ?? []} />
+			<CommandPanels commands={structuredCommands ? [] : (data?.commands ?? [])} />
 		</div>
 	);
 }
@@ -657,6 +719,351 @@ function PackageInventory({ lines }: { lines: string[] }) {
 	);
 }
 
+function RoutingSummary({ data }: { data: NativePageData }) {
+	const ipv4Routes = parseRoutes(commandOutput(data.commands, "IPv4 routes"));
+	const ipv6Routes = parseRoutes(commandOutput(data.commands, "IPv6 routes"));
+	const ipv4Rules = parseRules(commandOutput(data.commands, "IPv4 rules"));
+	const ipv6Rules = parseRules(commandOutput(data.commands, "IPv6 rules"));
+	const ipv4Neighbors = parseNeighbors(commandOutput(data.commands, "IPv4 neighbours"));
+	const ipv6Neighbors = parseNeighbors(commandOutput(data.commands, "IPv6 neighbours"));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Routes" value={ipv4Routes.length + ipv6Routes.length} />
+				<MetricBlock label="Policy rules" value={ipv4Rules.length + ipv6Rules.length} />
+				<MetricBlock label="Neighbours" value={ipv4Neighbors.length + ipv6Neighbors.length} />
+			</div>
+			<RouteTable entries={ipv4Routes} title="IPv4 routes" />
+			<RouteTable entries={ipv6Routes} title="IPv6 routes" />
+			<RuleTable entries={ipv4Rules} title="IPv4 rules" />
+			<RuleTable entries={ipv6Rules} title="IPv6 rules" />
+			<NeighborTable entries={ipv4Neighbors} title="IPv4 neighbours" />
+			<NeighborTable entries={ipv6Neighbors} title="IPv6 neighbours" />
+		</div>
+	);
+}
+
+function NftablesSummary({ data }: { data: NativePageData }) {
+	const ruleset = commandOutput(data.commands, "nftables ruleset");
+	const chains = parseNftChains(ruleset);
+	const rules = parseNftRules(ruleset);
+	const policyCounts = countBy(chains.map((chain) => chain.policy).filter(Boolean));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Chains" value={chains.length} />
+				<MetricBlock label="Rules" value={rules.length} />
+				<MetricBlock label="Drop policies" value={policyCounts.drop ?? 0} />
+			</div>
+			<NftChainTable entries={chains} />
+			<NftRuleTable entries={rules} />
+		</div>
+	);
+}
+
+function ProcessSummary({ data }: { data: NativePageData }) {
+	const processes = parseProcesses(commandOutput(data.commands, "Processes"));
+	const stateCounts = countBy(processes.map((process) => process.state.charAt(0)).filter(Boolean));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Processes" value={processes.length} />
+				<MetricBlock label="Sleeping" value={stateCounts.S ?? 0} />
+				<MetricBlock label="Running" value={stateCounts.R ?? 0} />
+			</div>
+			<ProcessTable entries={processes} />
+		</div>
+	);
+}
+
+function ConnectionSummary({ data }: { data: NativePageData }) {
+	const sockets = parseSockets(commandOutput(data.commands, "Active sockets"));
+	const protocolCounts = countBy(sockets.map((socket) => socket.protocol).filter(Boolean));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Sockets" value={sockets.length} />
+				<MetricBlock label="TCP" value={protocolCounts.tcp ?? 0} />
+				<MetricBlock label="UDP" value={protocolCounts.udp ?? 0} />
+			</div>
+			<SocketTable entries={sockets} />
+		</div>
+	);
+}
+
+function RouteTable({ entries, title }: { entries: RouteEntry[]; title: string }) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[56rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Target</th>
+							<th className="px-3 py-2 font-medium">Via</th>
+							<th className="px-3 py-2 font-medium">Device</th>
+							<th className="px-3 py-2 font-medium">Table</th>
+							<th className="px-3 py-2 font-medium">Source</th>
+							<th className="px-3 py-2 font-medium">Scope</th>
+							<th className="px-3 py-2 font-medium">Metric</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry, index) => (
+								<tr className="border-b last:border-0" key={`${title}.${index}.${entry.target}.${entry.device}`}>
+									<td className="px-3 py-3 font-mono text-xs">{entry.target}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.via}</td>
+									<td className="px-3 py-3">{entry.device}</td>
+									<td className="px-3 py-3">{entry.table}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.source}</td>
+									<td className="px-3 py-3">{entry.scope}</td>
+									<td className="px-3 py-3">{entry.metric}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
+									No entries found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function RuleTable({ entries, title }: { entries: RuleEntry[]; title: string }) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[38rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Priority</th>
+							<th className="px-3 py-2 font-medium">Rule</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={`${title}.${entry.priority}.${entry.rule}`}>
+									<td className="px-3 py-3 font-medium">{entry.priority}</td>
+									<td className="px-3 py-3">{entry.rule}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={2}>
+									No rules found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function NeighborTable({ entries, title }: { entries: NeighborEntry[]; title: string }) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[44rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Address</th>
+							<th className="px-3 py-2 font-medium">Device</th>
+							<th className="px-3 py-2 font-medium">MAC</th>
+							<th className="px-3 py-2 font-medium">State</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry, index) => (
+								<tr className="border-b last:border-0" key={`${title}.${index}.${entry.address}.${entry.device}`}>
+									<td className="px-3 py-3 font-mono text-xs">{entry.address}</td>
+									<td className="px-3 py-3">{entry.device}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.mac}</td>
+									<td className="px-3 py-3">
+										<Badge className={entry.state === "REACHABLE" ? "text-primary" : ""}>{entry.state}</Badge>
+									</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+									No neighbours found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function NftChainTable({ entries }: { entries: NftChain[] }) {
+	return (
+		<Panel title="Chains" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[42rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Chain</th>
+							<th className="px-3 py-2 font-medium">Hook</th>
+							<th className="px-3 py-2 font-medium">Policy</th>
+							<th className="px-3 py-2 font-medium">Rules</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.map((entry) => (
+							<tr className="border-b last:border-0" key={entry.name}>
+								<td className="px-3 py-3 font-medium">{entry.name}</td>
+								<td className="px-3 py-3">{entry.hook || "none"}</td>
+								<td className="px-3 py-3">{entry.policy || "none"}</td>
+								<td className="px-3 py-3">{entry.rules}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function NftRuleTable({ entries }: { entries: NftRule[] }) {
+	return (
+		<Panel title="Rules" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[64rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Chain</th>
+							<th className="px-3 py-2 font-medium">Action</th>
+							<th className="px-3 py-2 font-medium">Packets</th>
+							<th className="px-3 py-2 font-medium">Bytes</th>
+							<th className="px-3 py-2 font-medium">Comment</th>
+							<th className="px-3 py-2 font-medium">Expression</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry, index) => (
+								<tr className="border-b align-top last:border-0" key={`${entry.chain}.${index}.${entry.expression}`}>
+									<td className="px-3 py-3 font-medium">{entry.chain}</td>
+									<td className="px-3 py-3">{entry.action}</td>
+									<td className="px-3 py-3">{entry.packets}</td>
+									<td className="px-3 py-3">{entry.bytes}</td>
+									<td className="px-3 py-3">{entry.comment || "none"}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.expression}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+									No nftables rules found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function ProcessTable({ entries }: { entries: ProcessEntry[] }) {
+	return (
+		<Panel title="Processes" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[54rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">PID</th>
+							<th className="px-3 py-2 font-medium">User</th>
+							<th className="px-3 py-2 font-medium">VSZ</th>
+							<th className="px-3 py-2 font-medium">State</th>
+							<th className="px-3 py-2 font-medium">Command</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b align-top last:border-0" key={`${entry.pid}.${entry.command}`}>
+									<td className="px-3 py-3 font-mono text-xs">{entry.pid}</td>
+									<td className="px-3 py-3">{entry.user}</td>
+									<td className="px-3 py-3">{entry.vsz}</td>
+									<td className="px-3 py-3">
+										<Badge className={entry.state.startsWith("R") ? "text-primary" : ""}>{entry.state}</Badge>
+									</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.command}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+									No processes found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function SocketTable({ entries }: { entries: SocketEntry[] }) {
+	return (
+		<Panel title="Active sockets" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[64rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Protocol</th>
+							<th className="px-3 py-2 font-medium">State</th>
+							<th className="px-3 py-2 font-medium">Recv-Q</th>
+							<th className="px-3 py-2 font-medium">Send-Q</th>
+							<th className="px-3 py-2 font-medium">Local</th>
+							<th className="px-3 py-2 font-medium">Peer</th>
+							<th className="px-3 py-2 font-medium">Process</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry, index) => (
+								<tr className="border-b align-top last:border-0" key={`${index}.${entry.local}.${entry.peer}`}>
+									<td className="px-3 py-3">{entry.protocol}</td>
+									<td className="px-3 py-3">{entry.state}</td>
+									<td className="px-3 py-3">{entry.receiveQueue}</td>
+									<td className="px-3 py-3">{entry.sendQueue}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.local}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.peer}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.process}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
+									No active sockets found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
 function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 	const firmware = parseKeyValueLines(commandOutput(data.commands, "Current firmware"));
 	const helper = commandOutput(data.commands, "Upgrade helper").trim();
@@ -829,6 +1236,197 @@ function parsePackageLine(line: string): PackageEntry {
 
 function commandOutput(commands: CommandBlock[], title: string) {
 	return commands.find((command) => command.title === title)?.output ?? "";
+}
+
+function parseRoutes(output: string): RouteEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const parts = line.split(/\s+/);
+			return {
+				target: parts[0] ?? "unknown",
+				via: tokenAfter(parts, "via"),
+				device: tokenAfter(parts, "dev"),
+				table: tokenAfter(parts, "table") || "main",
+				source: tokenAfter(parts, "src"),
+				scope: tokenAfter(parts, "scope"),
+				metric: tokenAfter(parts, "metric"),
+			};
+		});
+}
+
+function parseRules(output: string): RuleEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const [priority = "", ...rest] = line.split(/\s+/);
+			return {
+				priority: priority.replace(":", ""),
+				rule: rest.join(" "),
+			};
+		});
+}
+
+function parseNeighbors(output: string): NeighborEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const parts = line.split(/\s+/);
+			return {
+				address: parts[0] ?? "unknown",
+				device: tokenAfter(parts, "dev"),
+				mac: tokenAfter(parts, "lladdr"),
+				state: parts[parts.length - 1] ?? "unknown",
+			};
+		});
+}
+
+function parseNftChains(output: string): NftChain[] {
+	const chains: NftChain[] = [];
+	let current: NftChain | null = null;
+
+	for (const line of output.split("\n")) {
+		const trimmed = line.trim();
+		const chain = /^chain\s+([A-Za-z0-9_.-]+)\s+\{/.exec(trimmed);
+
+		if (chain) {
+			current = { name: chain[1], hook: "", policy: "", rules: 0 };
+			chains.push(current);
+			continue;
+		}
+
+		if (!current) {
+			continue;
+		}
+
+		if (trimmed === "}") {
+			current = null;
+			continue;
+		}
+
+		const hook = /hook\s+([A-Za-z0-9_.-]+)/.exec(trimmed);
+		const policy = /policy\s+([A-Za-z0-9_.-]+)/.exec(trimmed);
+
+		if (hook) {
+			current.hook = hook[1];
+		}
+
+		if (policy) {
+			current.policy = policy[1].replace(";", "");
+		}
+
+		if (trimmed && !trimmed.startsWith("type ")) {
+			current.rules += 1;
+		}
+	}
+
+	return chains;
+}
+
+function parseNftRules(output: string): NftRule[] {
+	const rules: NftRule[] = [];
+	let chain = "";
+
+	for (const line of output.split("\n")) {
+		const trimmed = line.trim();
+		const chainMatch = /^chain\s+([A-Za-z0-9_.-]+)\s+\{/.exec(trimmed);
+
+		if (chainMatch) {
+			chain = chainMatch[1];
+			continue;
+		}
+
+		if (trimmed === "}") {
+			chain = "";
+			continue;
+		}
+
+		if (!chain || !trimmed || trimmed.startsWith("type ")) {
+			continue;
+		}
+
+		const counter = /counter packets\s+(\d+)\s+bytes\s+(\d+)/.exec(trimmed);
+		const comment = /comment\s+"([^"]+)"/.exec(trimmed);
+		const action = nftAction(trimmed);
+
+		rules.push({
+			chain,
+			action,
+			packets: counter?.[1] ?? "0",
+			bytes: counter?.[2] ?? "0",
+			comment: comment?.[1] ?? "",
+			expression: trimmed.replace(/\s+comment\s+"[^"]+"/, ""),
+		});
+	}
+
+	return rules;
+}
+
+function parseProcesses(output: string): ProcessEntry[] {
+	return output
+		.split("\n")
+		.slice(1)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const parts = line.split(/\s+/);
+			return {
+				pid: parts[0] ?? "unknown",
+				user: parts[1] ?? "unknown",
+				vsz: parts[2] ?? "unknown",
+				state: parts[3] ?? "unknown",
+				command: parts.slice(4).join(" ") || "unknown",
+			};
+		});
+}
+
+function parseSockets(output: string): SocketEntry[] {
+	return output
+		.split("\n")
+		.slice(1)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const parts = line.split(/\s+/);
+			return {
+				protocol: parts[0] ?? "unknown",
+				state: parts[1] ?? "unknown",
+				receiveQueue: parts[2] ?? "0",
+				sendQueue: parts[3] ?? "0",
+				local: parts[4] ?? "unknown",
+				peer: parts[5] ?? "unknown",
+				process: parts.slice(6).join(" ") || "none",
+			};
+		});
+}
+
+function tokenAfter(parts: string[], token: string) {
+	const index = parts.indexOf(token);
+	return index >= 0 ? (parts[index + 1] ?? "none") : "none";
+}
+
+function nftAction(line: string) {
+	for (const action of ["accept", "drop", "reject", "masquerade", "return"]) {
+		if (new RegExp(`\\b${action}\\b`).test(line)) {
+			return action;
+		}
+	}
+
+	const jump = /\bjump\s+([A-Za-z0-9_.-]+)/.exec(line);
+	return jump ? `jump ${jump[1]}` : "rule";
+}
+
+function countBy(values: string[]) {
+	return values.reduce<Record<string, number>>((counts, value) => {
+		counts[value] = (counts[value] ?? 0) + 1;
+		return counts;
+	}, {});
 }
 
 function parseKeyValueLines(output: string) {

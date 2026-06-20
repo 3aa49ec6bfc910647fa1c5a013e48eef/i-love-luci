@@ -23,6 +23,6 @@
 			repositoryUrl: 'https://github.com/3aa49ec6bfc910647fa1c5a013e48eef/i-love-luci'
 		};
 	</script>
-	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native17"></script>
+	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native19"></script>
 </body>
 </html>

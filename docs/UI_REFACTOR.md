@@ -526,12 +526,12 @@ Router test target: `172.16.172.1`, OpenWrt `25.12.4`, `rockchip/armv8`.
 Converted to native React/Vite surfaces:
 
 - `/admin/status` and `/admin/status/overview`: dashboard with bandwidth, CPU, memory, interfaces, and system facts.
-- `/admin/status/routes`: route tables, rules, and neighbour entries.
-- `/admin/status/nftables`: active nftables ruleset summary.
+- `/admin/status/routes`: structured route tables, policy rules, and neighbour entries. Raw `ip route`/`ip rule`/`ip neigh` dumps are no longer rendered.
+- `/admin/status/nftables`: structured active nftables chain/rule summary. Raw `nft list ruleset` dumps are no longer rendered.
 - `/admin/status/logs`, `/admin/status/logs/syslog`, `/admin/status/logs/dmesg`: system and kernel logs.
-- `/admin/status/processes`: process list.
+- `/admin/status/processes`: structured process table with PID, user, memory size, state, and command.
 - `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
-- `/admin/status/realtime/connections`: active sockets.
+- `/admin/status/realtime/connections`: structured active socket table with protocol, state, queues, local/peer endpoints, and process where available.
 - `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface; on the current router it validates the no-radio/no-`iw` case.
 - `/admin/network/network` and `/admin/network/routes`: modern read-only UCI summaries plus live interface/device status from `dashboard_status`, including protocol, link state, device mapping, addresses, and uptime.
 - `/admin/network/firewall` and firewall child routes: modern read-only firewall summaries for defaults, zones, forwardings, traffic rules, and redirects, with LuCI compat retained for advanced firewall forms.
@@ -579,6 +579,7 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native15` bundle and rendered 186 installed packages, 31 LuCI packages, 30 kernel modules, and a parsed package/version/description table.
 - Browser smoke test loaded `#/native/flash` on `172.16.172.1` with the `1.0.0-r4-native16` bundle and rendered firmware version, root usage, overlay free space, mounted filesystem table, and the target's no-MTD-partition state.
 - Browser smoke test loaded `#/native/attendedsysupgrade` on `172.16.172.1` with the `1.0.0-r4-native17` bundle and rendered firmware version, target, `auc` helper state, build server URL, and rollback-safe guardrail messaging.
+- Native route audit found text-only command dumps on routing, nftables firewall status, processes, and connections. Browser smoke tests loaded `#/native/status-routes`, `#/native/firewall-status`, `#/native/processes`, and `#/native/connections` with the `1.0.0-r4-native19` bundle and confirmed all four now render structured tables without the raw command dump panels.
 
 Remaining legacy or partial gaps:
 
@@ -591,6 +592,7 @@ Remaining legacy or partial gaps:
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
+- Native text-output debt remains for inherently textual surfaces and should be reduced next: logs need structured severity/time/source parsing, diagnostics output needs parsed result rows, repository keys need key metadata rows, LED sysfs state needs parsed trigger/brightness rows, and custom command output needs command-specific renderers where practical.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Sysupgrade and Standalone Direction
