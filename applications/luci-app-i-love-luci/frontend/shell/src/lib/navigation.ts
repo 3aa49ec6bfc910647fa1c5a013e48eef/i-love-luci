@@ -20,15 +20,34 @@ export function itemTarget(item: MenuItem) {
 }
 
 export function nativePathFor(path: string) {
-	if (path === "/admin/status/overview") {
-		return "/";
-	}
+	const nativePaths: Record<string, string> = {
+		"/admin/status/overview": "/",
+		"/admin/status": "/",
+		"/admin/network": "/core/network",
+		"/admin/network/network": "/core/network",
+		"/admin/network/routes": "/core/network",
+		"/admin/network/dhcp": "/core/dhcp",
+		"/admin/network/dns": "/core/dhcp",
+		"/admin/network/firewall": "/core/firewall",
+		"/admin/network/firewall/zones": "/core/firewall",
+		"/admin/network/firewall/forwards": "/core/firewall",
+		"/admin/network/firewall/rules": "/core/firewall",
+		"/admin/network/firewall/snats": "/core/firewall",
+		"/admin/network/firewall/ipsets": "/core/firewall",
+		"/admin/network/firewall/custom": "/core/firewall",
+		"/admin/system": "/core/system",
+		"/admin/system/system": "/core/system",
+		"/admin/system/admin": "/core/system",
+		"/admin/system/admin/password": "/core/system",
+		"/admin/system/admin/dropbear": "/core/system",
+		"/admin/system/admin/sshkeys": "/core/system",
+		"/admin/system/admin/uhttpd": "/core/system",
+		"/admin/system/admin/repokeys": "/core/system",
+		"/admin/system/leds": "/core/system",
+		"/settings": "/settings",
+	};
 
-	if (path === "/settings") {
-		return "/settings";
-	}
-
-	return null;
+	return nativePaths[path] ?? null;
 }
 
 export function legacyHref(path: string, legacyBasePath: string) {

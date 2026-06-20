@@ -17,7 +17,29 @@ const hiddenNavigation = {
 	'/admin/i-love-luci': true
 };
 const nativeRoutes = {
-	'/admin/status/overview': 'supported'
+	'/admin/status': { status: 'supported', nativePath: '/' },
+	'/admin/status/overview': { status: 'supported', nativePath: '/' },
+	'/admin/network': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/network': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/routes': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/dhcp': { status: 'partial', nativePath: '/core/dhcp' },
+	'/admin/network/dns': { status: 'partial', nativePath: '/core/dhcp' },
+	'/admin/network/firewall': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/zones': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/forwards': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/rules': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/snats': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/ipsets': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/custom': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/system': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/password': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/sshkeys': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/leds': { status: 'partial', nativePath: '/core/system' }
 };
 const routeModes = {
 	auto: true,
@@ -219,6 +241,8 @@ function load_route_modes() {
 }
 
 function effective_mode(configuredMode, nativeStatus) {
+	let has_native = nativeStatus == 'supported' || nativeStatus == 'partial';
+
 	if (configuredMode == 'hidden')
 		return 'hidden';
 
@@ -226,9 +250,63 @@ function effective_mode(configuredMode, nativeStatus) {
 		return 'legacy';
 
 	if (configuredMode == 'modern')
-		return nativeStatus == 'supported' ? 'modern' : 'legacy';
+		return has_native ? 'modern' : 'legacy';
 
-	return nativeStatus == 'supported' ? 'modern' : 'legacy';
+	return has_native ? 'modern' : 'legacy';
+}
+
+function clone_section(section) {
+	let values = {};
+
+	for (let key, value in section) {
+		if (index(key, '.') == 0)
+			continue;
+
+		values[key] = value;
+	}
+
+	return {
+		name: section['.name'] || '',
+		type: section['.type'] || '',
+		values
+	};
+}
+
+function collect_uci_config(package_name, section_types) {
+	let sections = [];
+
+	try {
+		uci.load(package_name);
+	}
+	catch (e) {
+		return sections;
+	}
+
+	for (let section_type in section_types) {
+		uci.foreach(package_name, section_type, function(section) {
+			push(sections, clone_section(section));
+		});
+	}
+
+	return sections;
+}
+
+function build_core_settings(page) {
+	let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
+
+	for (let section in collect_uci_config('dropbear', ['dropbear']))
+		push(system, section);
+
+	for (let section in collect_uci_config('uhttpd', ['uhttpd', 'cert', 'cert_defaults']))
+		push(system, section);
+
+	return {
+		page,
+		network: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+		dhcp: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'host', 'domain', 'odhcpd']),
+		firewall: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']),
+		system
+	};
 }
 
 function build_menu() {
@@ -252,7 +330,8 @@ function build_menu() {
 	for (let path, spec in raw) {
 		let action = action_type(spec);
 		let parts = split(trim(path, '/'), '/');
-		let nativeStatus = nativeRoutes[path] || 'unsupported';
+		let nativeRoute = nativeRoutes[path] || null;
+		let nativeStatus = nativeRoute?.status || 'unsupported';
 		let configuredMode = modes[path] || 'auto';
 		let mode = effective_mode(configuredMode, nativeStatus);
 		let entry = {
@@ -274,7 +353,7 @@ function build_menu() {
 			nativeStatus,
 			configuredMode,
 			effectiveMode: mode,
-			nativePath: nativeStatus == 'supported' ? '/' : null,
+			nativePath: nativeRoute?.nativePath || null,
 			resolvedPath: path
 		};
 
@@ -380,6 +459,15 @@ const methods = {
 				interfaces: interfaces.interface || [],
 				devices: ubus.call('network.device', 'status') || {}
 			});
+		}
+	},
+
+	core_settings: {
+		args: {
+			page: ''
+		},
+		call: function(request) {
+			return respond(build_core_settings(request.args.page || 'network'));
 		}
 	},
 

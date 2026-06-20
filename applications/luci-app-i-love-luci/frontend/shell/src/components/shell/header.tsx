@@ -28,6 +28,20 @@ export function Header({ onMenuClick }: HeaderProps) {
 		void getConsoleStatus().then(setConsoleStatus);
 	}, []);
 
+	async function openConsole() {
+		const status = consoleStatus ?? (await getConsoleStatus());
+		setConsoleStatus(status);
+
+		const url = buildConsoleUrl(status);
+
+		if (status.available && status.enabled && url) {
+			window.open(url, "_blank", "noopener");
+			return;
+		}
+
+		setConsoleOpen(true);
+	}
+
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-card/95 px-3 backdrop-blur sm:px-5">
 			<Button className="shrink-0 lg:hidden" size="icon" variant="ghost" aria-label="Open navigation" onClick={onMenuClick}>
@@ -53,7 +67,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 					variant="outline"
 					aria-label="Open console"
 					title="Open console"
-					onClick={() => setConsoleOpen(true)}
+					onClick={() => void openConsole()}
 				>
 					<SquareTerminal className="size-4" />
 				</Button>
@@ -89,15 +103,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 				onOpenChange={setConsoleOpen}
 			>
 				{consoleStatus?.available && consoleStatus.enabled && consoleUrl ? (
-					<div className="grid gap-3">
-						<iframe
-							className="h-[min(70vh,42rem)] w-full rounded-md border bg-black"
-							src={consoleUrl}
-							title="Router console"
-						/>
+					<div className="grid gap-4 text-sm">
+						<p className="text-muted-foreground">
+							Console service is available on port {consoleStatus.port}. It opens in a separate tab so ttyd can own
+							its terminal websocket session.
+						</p>
 						<div className="flex justify-end">
-							<Button variant="outline" onClick={() => window.open(consoleUrl, "_blank", "noopener,noreferrer")}>
-								Open in new tab
+							<Button variant="outline" onClick={() => window.open(consoleUrl, "_blank", "noopener")}>
+								Open console
 							</Button>
 						</div>
 					</div>

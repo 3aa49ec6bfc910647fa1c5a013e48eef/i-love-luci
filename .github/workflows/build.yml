@@ -3,8 +3,6 @@ name: Build OpenWrt packages
 on:
   push:
     branches:
-      - dev
-      - uat
       - main
   pull_request:
   workflow_dispatch:
@@ -72,7 +70,7 @@ jobs:
           set -euo pipefail
 
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "release=1" >> "$GITHUB_OUTPUT"
+            echo "release=" >> "$GITHUB_OUTPUT"
             echo "channel=stable" >> "$GITHUB_OUTPUT"
           else
             echo "release=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"

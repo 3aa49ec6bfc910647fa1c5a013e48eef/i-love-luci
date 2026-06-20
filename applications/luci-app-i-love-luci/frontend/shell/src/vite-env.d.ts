@@ -7,6 +7,8 @@ interface Window {
 		resourcePath?: string;
 		sessionId?: string;
 		authUser?: string;
+		version?: string;
+		repositoryUrl?: string;
 	};
 	L?: {
 		env?: {
