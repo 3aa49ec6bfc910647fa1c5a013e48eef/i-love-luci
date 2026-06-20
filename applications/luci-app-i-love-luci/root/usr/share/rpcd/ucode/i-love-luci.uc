@@ -1661,6 +1661,95 @@ function save_firewall_zones(rows) {
 	};
 }
 
+function firewall_forwarding_rows() {
+	let forwardings = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return forwardings;
+	}
+
+	uci.foreach('firewall', 'forwarding', function(section) {
+		push(forwardings, {
+			section: section['.name'] || '',
+			src: section.src || '',
+			dest: section.dest || ''
+		});
+	});
+
+	return forwardings;
+}
+
+function save_firewall_forwardings(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('firewall', 'forwarding', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'forwarding';
+
+		if (!is_existing) {
+			section = uci.add('firewall', 'forwarding');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let src = dhcp_clean_value(row?.src || '');
+		let dest = dhcp_clean_value(row?.dest || '');
+
+		if (!valid_firewall_name(src) || !valid_firewall_name(dest))
+			return {
+				saved: false,
+				message: 'Firewall forwarding source and destination zones are required.',
+				changed: false,
+				forwardings: firewall_forwarding_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		let next = { src, dest };
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				uci.set('firewall', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall forwardings saved and firewall reloaded.' : 'Firewall forwardings already up to date.',
+		changed,
+		forwardings: firewall_forwarding_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2979,6 +3068,26 @@ const methods = {
 					message: 'Firewall zones save failed: ' + e,
 					changed: false,
 					zones: firewall_zone_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_forwardings_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_forwardings(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall forwardings save failed: ' + e,
+					changed: false,
+					forwardings: firewall_forwarding_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}

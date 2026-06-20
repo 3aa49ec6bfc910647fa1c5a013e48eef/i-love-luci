@@ -35,6 +35,7 @@
 					"dropbear_config_save",
 					"dnsmasq_config_save",
 					"firewall_defaults_save",
+					"firewall_forwardings_save",
 					"firewall_zones_save",
 					"led_config_save",
 					"network_rules_save",

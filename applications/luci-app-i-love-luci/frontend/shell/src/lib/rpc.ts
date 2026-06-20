@@ -491,6 +491,20 @@ export type FirewallZonesResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallForwarding = {
+	section: string;
+	src: string;
+	dest: string;
+};
+
+export type FirewallForwardingsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	forwardings: FirewallForwarding[];
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -949,6 +963,21 @@ export async function saveFirewallZones(rows: FirewallZone[]): Promise<FirewallZ
 			message: "Firewall zones save failed.",
 			changed: false,
 			zones: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallForwardings(rows: FirewallForwarding[]): Promise<FirewallForwardingsResult> {
+	try {
+		return await callBridge<FirewallForwardingsResult>("firewall_forwardings_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall forwardings save failed.",
+			changed: false,
+			forwardings: [],
 			sections: [],
 		};
 	}

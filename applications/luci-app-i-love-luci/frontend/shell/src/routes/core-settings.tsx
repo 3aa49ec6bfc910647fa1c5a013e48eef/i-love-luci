@@ -10,6 +10,7 @@ import {
 	getCoreSettings,
 	getDashboardStatus,
 	saveFirewallDefaults,
+	saveFirewallForwardings,
 	saveFirewallZones,
 	saveDhcpDomains,
 	saveDhcpHosts,
@@ -27,6 +28,7 @@ import {
 	type DhcpPool,
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
+	type FirewallForwarding,
 	type FirewallZone,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
@@ -1036,11 +1038,14 @@ function FirewallSummary({
 				zones={zones}
 			/>
 
-			<SimpleSectionTable
-				columns={["Source", "Destination"]}
-				empty="No zone forwardings configured."
-				rows={forwardings.map((section) => [valueText(section.values.src), valueText(section.values.dest)])}
-				title="Zone forwardings"
+			<FirewallForwardingEditor
+				forwardings={forwardings}
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
 			/>
 
 			<FirewallRuleTable rules={rules} />
@@ -1411,6 +1416,156 @@ function normalizeFirewallZone(zone: FirewallZone): FirewallZone {
 		forward: firewallPolicyText(zone.forward),
 		masq: zone.masq === "1" ? "1" : "0",
 		mtu_fix: zone.mtu_fix === "1" ? "1" : "0",
+	};
+}
+
+function FirewallForwardingEditor({
+	forwardings,
+	onSaved,
+}: {
+	forwardings: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => forwardings.map(firewallForwardingValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallForwarding, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				src: "",
+				dest: "",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallForwardings(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.forwardings.map(normalizeFirewallForwarding);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Zone forwardings</h2>
+					<p className="text-sm text-muted-foreground">Configure allowed forwarding paths between firewall zones.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add forwarding
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[34rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">Destination</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((forwarding, index) => (
+									<tr className="border-b align-top last:border-0" key={`${forwarding.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source zone"
+												onChange={(event) => updateRow(index, "src", event.target.value)}
+												value={forwarding.src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination zone"
+												onChange={(event) => updateRow(index, "dest", event.target.value)}
+												value={forwarding.dest}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${forwarding.src || "source"} to ${forwarding.dest || "destination"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+										No zone forwardings configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function firewallForwardingValues(section: ConfigSection): FirewallForwarding {
+	return normalizeFirewallForwarding({
+		section: section.name,
+		src: rawValue(section.values.src),
+		dest: rawValue(section.values.dest),
+	});
+}
+
+function normalizeFirewallForwarding(forwarding: FirewallForwarding): FirewallForwarding {
+	return {
+		section: forwarding.section ?? "",
+		src: forwarding.src ?? "",
+		dest: forwarding.dest ?? "",
 	};
 }
 
