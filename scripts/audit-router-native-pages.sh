@@ -86,7 +86,7 @@ expected_pages = {
 	"wireless": {"commands": ["Wireless devices", "Wireless status"]},
 	"diagnostics": {"commands": ["Routing table", "DNS servers"]},
 	"attendedsysupgrade": {"commands": ["Current firmware", "Upgrade helper"]},
-	"packages": {"lines": True, "commands": ["Available upgrades"]},
+	"packages": {"lines": True, "packageFeeds": True, "commands": ["Available upgrades"]},
 	"startup": {"services": True, "text": True},
 	"crontab": {"text": True},
 	"sshkeys": {"text": True},
@@ -247,6 +247,9 @@ for page, rules in expected_pages.items():
 
 	if rules.get("lines") and not data.get("lines"):
 		failures.append(f"{page}: expected package line data")
+
+	if rules.get("packageFeeds") and not data.get("packageFeeds"):
+		failures.append(f"{page}: expected package feed data")
 
 	if rules.get("text") and "text" not in data:
 		failures.append(f"{page}: expected text field")

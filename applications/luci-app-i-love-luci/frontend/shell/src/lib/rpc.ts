@@ -279,6 +279,23 @@ export type PackageActionResult = {
 	message: string;
 };
 
+export type PackageFeedRow = {
+	id: string;
+	file: string;
+	index: number;
+	type: "repository" | "comment" | "blank";
+	enabled: boolean;
+	value: string;
+	raw?: string;
+};
+
+export type PackageFeedsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	feeds: PackageFeedRow[];
+};
+
 export type AttendedSysupgradeConfigInput = {
 	server_url: string;
 	upgrade_packages: string;
@@ -826,6 +843,7 @@ export type NativePageData = {
 	services: NativeService[];
 	lines: string[];
 	text: string;
+	packageFeeds?: PackageFeedRow[];
 };
 
 type BridgeResponse<T> = {
@@ -1076,6 +1094,20 @@ export async function runPackageAction(action: PackageAction, name = "", simulat
 			command: "",
 			output: "",
 			message: "Package action failed.",
+		};
+	}
+}
+
+export async function savePackageFeeds(rows: PackageFeedRow[]): Promise<PackageFeedsResult> {
+	try {
+		return await callBridge<PackageFeedsResult>("package_feeds_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Package feed configuration save failed.",
+			changed: false,
+			feeds: [],
 		};
 	}
 }

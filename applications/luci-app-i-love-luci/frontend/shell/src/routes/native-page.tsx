@@ -20,6 +20,7 @@ import {
 	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
+	savePackageFeeds,
 	saveUpnpdConfig,
 	saveUhttpdConfig,
 	runServiceAction,
@@ -43,8 +44,9 @@ import {
 	type LedConfigRow,
 	type NativePageData,
 	type NativeService,
-	type PackageSearchResult,
 	type PackageActionResult,
+	type PackageFeedRow,
+	type PackageSearchResult,
 	type ServiceFile,
 	type UpnpdConfigInput,
 	type UpnpdRule,
@@ -2329,6 +2331,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			<PackageUpgradeTable entries={upgrades} />
 			<PackageActionOutput result={actionResult} />
 			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
+			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
 			<Panel
 				title={
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2439,6 +2442,170 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
 		</div>
 	);
+}
+
+function PackageFeedsEditor({ feeds }: { feeds: PackageFeedRow[] }) {
+	const [rows, setRows] = useState(() => feeds.map(normalizePackageFeed));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const files = useMemo(() => Array.from(new Set(rows.map((row) => row.file))).sort(), [rows]);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof PackageFeedRow, value: string | boolean) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+							raw: field === "value" || field === "enabled" ? undefined : row.raw,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		const file = files.find((path) => path.includes("customfeeds")) ?? files[0] ?? "/etc/apk/repositories.d/customfeeds.list";
+
+		setRows((current) => [
+			...current,
+			{
+				id: "",
+				file,
+				index: current.length,
+				type: "repository",
+				enabled: true,
+				value: "",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await savePackageFeeds(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.feeds.map(normalizePackageFeed);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+	}
+
+	return (
+		<Panel
+			title={
+				<div className="flex items-center justify-between gap-3">
+					<span>Package feeds</span>
+					<Button onClick={addRow} size="sm" type="button" variant="outline">
+						<Plus className="size-3.5" />
+						Add feed
+					</Button>
+				</div>
+			}
+			flush
+		>
+			<form onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[56rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">File</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+								<th className="px-3 py-2 font-medium">Repository</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((row, index) =>
+									row.type === "repository" ? (
+										<tr className="border-b align-top last:border-0" key={`${row.file}.${row.index}.${index}`}>
+											<td className="px-3 py-3">
+												<select
+													className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+													onChange={(event) => updateRow(index, "file", event.target.value)}
+													value={row.file}
+												>
+													{files.map((file) => (
+														<option key={file} value={file}>
+															{file}
+														</option>
+													))}
+												</select>
+											</td>
+											<td className="px-3 py-3">
+												<label className="inline-flex items-center gap-2 text-sm">
+													<input
+														checked={row.enabled}
+														className="size-4"
+														onChange={(event) => updateRow(index, "enabled", event.target.checked)}
+														type="checkbox"
+													/>
+													Enabled
+												</label>
+											</td>
+											<td className="px-3 py-3">
+												<Input aria-label="Repository URL" onChange={(event) => updateRow(index, "value", event.target.value)} value={row.value} />
+											</td>
+											<td className="px-3 py-3 text-right">
+												<Button aria-label="Remove feed" onClick={() => removeRow(index)} size="icon" type="button" variant="ghost">
+													<Trash2 className="size-4" />
+												</Button>
+											</td>
+										</tr>
+									) : row.type === "comment" ? (
+										<tr className="border-b bg-muted/20 align-top last:border-0" key={`${row.file}.${row.index}.${index}`}>
+											<td className="px-3 py-3 text-muted-foreground">{row.file}</td>
+											<td className="px-3 py-3 text-muted-foreground">Comment</td>
+											<td className="px-3 py-3 text-muted-foreground">{row.value || "#"}</td>
+											<td className="px-3 py-3" />
+										</tr>
+									) : null,
+								)
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+										No package feeds found.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2 border-t p-3">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save feeds
+					</Button>
+				</div>
+			</form>
+		</Panel>
+	);
+}
+
+function normalizePackageFeed(row: PackageFeedRow): PackageFeedRow {
+	return {
+		id: row.id ?? "",
+		file: row.file ?? "",
+		index: Number(row.index ?? 0),
+		type: row.type === "comment" || row.type === "blank" ? row.type : "repository",
+		enabled: row.enabled !== false,
+		value: row.value ?? "",
+		raw: row.raw,
+	};
 }
 
 function AvailablePackageSearch({

@@ -3188,6 +3188,166 @@ function package_upgrades() {
 	return shell_output('opkg list-upgradable 2>&1 | sed -n "1,160p"');
 }
 
+function package_feed_files() {
+	if (command_exists('apk'))
+		return [
+			'/etc/apk/repositories',
+			'/etc/apk/repositories.d/distfeeds.list',
+			'/etc/apk/repositories.d/customfeeds.list'
+		];
+
+	return [
+		'/etc/opkg.conf',
+		'/etc/opkg/customfeeds.conf',
+		'/etc/opkg/distfeeds.conf'
+	];
+}
+
+function package_feed_file_allowed(path) {
+	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
+
+	for (let allowed in package_feed_files())
+		if (path == allowed)
+			return path;
+
+	return null;
+}
+
+function package_feed_rows() {
+	let rows = [];
+
+	for (let path in package_feed_files()) {
+		let info = stat(path);
+
+		if (info?.type != 'file')
+			continue;
+
+		let text = readfile(path) || '';
+		let index = 0;
+
+		for (let line in split(text, '\n')) {
+			if (index == length(split(text, '\n')) - 1 && line == '')
+				break;
+
+			let trimmed = trim(line);
+			let enabled = true;
+			let value = trimmed;
+			let type = 'repository';
+
+			if (trimmed == '') {
+				type = 'blank';
+				value = '';
+			}
+			else if (substr(trimmed, 0, 1) == '#') {
+				enabled = false;
+				value = trim(substr(trimmed, 1));
+
+				if (!match(value, /^(https?:\/\/|ftp:\/\/|file:\/\/|\/).+/))
+					type = 'comment';
+			}
+			else if (!match(value, /^(https?:\/\/|ftp:\/\/|file:\/\/|\/).+/)) {
+				type = 'comment';
+			}
+
+			push(rows, {
+				id: `${path}:${index}`,
+				file: path,
+				index,
+				type,
+				enabled,
+				value,
+				raw: line
+			});
+
+			index++;
+		}
+	}
+
+	return rows;
+}
+
+function package_feed_line(row) {
+	let type = row?.type || 'repository';
+	let value = replace(trim('' + (row?.value || '')), /[\r\n]/g, '');
+	let raw = '' + (row?.raw || '');
+
+	if (type == 'blank')
+		return '';
+
+	if (type == 'comment') {
+		if (length(raw) && substr(trim(raw), 0, 1) == '#')
+			return raw;
+
+		return length(value) ? `# ${value}` : '#';
+	}
+
+	if (!match(value, /^(https?:\/\/|ftp:\/\/|file:\/\/|\/).+/) || replace(value, /[\r\n\t ]/g, '') != value)
+		return null;
+
+	return row?.enabled ? value : `# ${value}`;
+}
+
+function save_package_feeds(rows) {
+	rows ||= [];
+
+	let grouped = {};
+	let seen = {};
+
+	for (let path in package_feed_files())
+		grouped[path] = [];
+
+	for (let row in rows) {
+		let file = package_feed_file_allowed(row?.file || '');
+
+		if (!file)
+			return {
+				saved: false,
+				message: 'Package feed file is not editable from I Love LuCI.',
+				changed: false,
+				feeds: package_feed_rows()
+			};
+
+		let line = package_feed_line(row);
+
+		if (line === null)
+			return {
+				saved: false,
+				message: 'Package feed URL contains unsupported characters.',
+				changed: false,
+				feeds: package_feed_rows()
+			};
+
+		push(grouped[file], line);
+		seen[file] = true;
+	}
+
+	let changed = false;
+
+	for (let file, lines in grouped) {
+		if (!seen[file] && stat(file)?.type != 'file')
+			continue;
+
+		let next = join('\n', lines);
+
+		if (length(next))
+			next += '\n';
+
+		let current = readfile(file) || '';
+
+		if (current != next) {
+			writefile(file, next);
+			changed = true;
+		}
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Package feed configuration saved.' : 'Package feed configuration already up to date.',
+		changed,
+		feeds: package_feed_rows()
+	};
+}
+
 function attendedsysupgrade_sections() {
 	return collect_uci_config('attendedsysupgrade', ['server', 'client', 'owut']);
 }
@@ -5004,6 +5164,7 @@ function native_page(page) {
 	}
 	else if (page == 'packages') {
 		data.lines = package_list();
+		data.packageFeeds = package_feed_rows();
 		data.commands = [
 			{ title: 'Available upgrades', output: package_upgrades() }
 		];
@@ -5593,6 +5754,25 @@ const methods = {
 					command: '',
 					output: '',
 					message: 'Package action failed: ' + e
+				});
+			}
+		}
+	},
+
+	package_feeds_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_package_feeds(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Package feed configuration save failed: ' + e,
+					changed: false,
+					feeds: package_feed_rows()
 				});
 			}
 		}
