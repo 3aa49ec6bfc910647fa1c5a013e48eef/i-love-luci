@@ -642,7 +642,8 @@ function dhcp_domain_records() {
 
 	uci.foreach('dhcp', 'domain', function(section) {
 		push(records, {
-			name: section.name || section['.name'] || '',
+			section: section['.name'] || '',
+			name: section.name || '',
 			ip: section.ip || ''
 		});
 	});
@@ -791,6 +792,89 @@ function save_dhcp_static_hosts(rows) {
 		message: changed ? 'Static DHCP hosts saved and services reloaded.' : 'Static DHCP hosts already up to date.',
 		changed,
 		hosts: dhcp_static_hosts(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+	};
+}
+
+function valid_domain_record_name(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_.-]/g, '') == value;
+}
+
+function save_dhcp_domain_records(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'domain', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'domain';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'domain');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let name = dhcp_clean_value(row?.name || '');
+		let ip = dhcp_clean_value(row?.ip || '');
+
+		if (!valid_domain_record_name(name))
+			return {
+				saved: false,
+				message: 'DNS host record name must contain only letters, numbers, dots, dashes, and underscores.',
+				changed: false,
+				domains: dhcp_domain_records(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		if (!valid_ipv4(ip))
+			return {
+				saved: false,
+				message: 'DNS host record IP must be an IPv4 address.',
+				changed: false,
+				domains: dhcp_domain_records(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		let current_name = uci.get('dhcp', section, 'name') || '';
+		let current_ip = uci.get('dhcp', section, 'ip') || '';
+
+		if (current_name != name) {
+			changed = true;
+			uci.set('dhcp', section, 'name', name);
+		}
+
+		if (current_ip != ip) {
+			changed = true;
+			uci.set('dhcp', section, 'ip', ip);
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'DNS host records saved and dnsmasq reloaded.' : 'DNS host records already up to date.',
+		changed,
+		domains: dhcp_domain_records(),
 		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 	};
 }
@@ -1967,6 +2051,26 @@ const methods = {
 					message: 'Static DHCP hosts save failed: ' + e,
 					changed: false,
 					hosts: dhcp_static_hosts(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	dhcp_domains_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_domain_records(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DNS host records save failed: ' + e,
+					changed: false,
+					domains: dhcp_domain_records(),
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 				});
 			}

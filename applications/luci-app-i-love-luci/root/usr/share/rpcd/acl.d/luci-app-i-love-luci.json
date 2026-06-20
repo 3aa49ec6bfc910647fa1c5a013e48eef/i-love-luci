@@ -29,6 +29,7 @@
 					"crontab_save",
 					"custom_command_run",
 					"diagnostics_run",
+					"dhcp_domains_save",
 					"dhcp_hosts_save",
 					"dropbear_config_save",
 					"led_config_save",

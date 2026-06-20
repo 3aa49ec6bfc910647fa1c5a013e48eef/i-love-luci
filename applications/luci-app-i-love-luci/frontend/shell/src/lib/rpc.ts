@@ -184,6 +184,7 @@ export type DhcpHost = {
 };
 
 export type DhcpDomain = {
+	section: string;
 	name: string;
 	ip: string;
 };
@@ -345,6 +346,14 @@ export type DhcpHostsResult = {
 	message: string;
 	changed: boolean;
 	hosts: DhcpHost[];
+	sections: ConfigSection[];
+};
+
+export type DhcpDomainsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	domains: DhcpDomain[];
 	sections: ConfigSection[];
 };
 
@@ -700,6 +709,21 @@ export async function saveDhcpHosts(rows: DhcpHost[]): Promise<DhcpHostsResult> 
 			message: "Static DHCP hosts save failed.",
 			changed: false,
 			hosts: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpDomains(rows: DhcpDomain[]): Promise<DhcpDomainsResult> {
+	try {
+		return await callBridge<DhcpDomainsResult>("dhcp_domains_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DNS host records save failed.",
+			changed: false,
+			domains: [],
 			sections: [],
 		};
 	}
