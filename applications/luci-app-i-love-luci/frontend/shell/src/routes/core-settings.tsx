@@ -2288,6 +2288,20 @@ function SystemSettingsEditor({
 							value={values.description}
 						/>
 					</Field>
+					<Field label="Timezone name" target="system-zonename">
+						<Input
+							id="system-zonename"
+							onChange={(event) => updateField("zonename", event.target.value)}
+							value={values.zonename}
+						/>
+					</Field>
+					<Field label="POSIX timezone" target="system-timezone">
+						<Input
+							id="system-timezone"
+							onChange={(event) => updateField("timezone", event.target.value)}
+							value={values.timezone}
+						/>
+					</Field>
 					<Field label="Log buffer size" target="system-log-size">
 						<Input
 							id="system-log-size"
@@ -2434,6 +2448,8 @@ function systemSettingsValues(sections: ConfigSection[], dashboard: DashboardSta
 	return {
 		hostname: rawValue(system?.values.hostname || dashboard?.board.hostname || "OpenWrt"),
 		description: rawValue(system?.values.description),
+		zonename: rawValue(system?.values.zonename),
+		timezone: rawValue(system?.values.timezone),
 		log_size: rawValue(system?.values.log_size),
 		log_proto: rawValue(system?.values.log_proto || "udp"),
 		conloglevel: rawValue(system?.values.conloglevel),

@@ -369,6 +369,8 @@ export type UhttpdConfigResult = {
 export type SystemSettingsInput = {
 	hostname: string;
 	description: string;
+	zonename: string;
+	timezone: string;
 	log_size: string;
 	log_proto: string;
 	conloglevel: string;

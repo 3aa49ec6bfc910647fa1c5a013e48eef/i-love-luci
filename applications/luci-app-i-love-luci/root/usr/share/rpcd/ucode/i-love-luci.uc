@@ -3153,11 +3153,21 @@ function save_system_settings(config) {
 	let next_system = {
 		hostname,
 		description: clean_uci_value(config.description || ''),
+		zonename: clean_uci_value(config.zonename || ''),
+		timezone: clean_uci_value(config.timezone || ''),
 		log_size: clean_uci_value(config.log_size || ''),
 		log_proto: config.log_proto == 'tcp' ? 'tcp' : 'udp',
 		conloglevel: clean_uci_value(config.conloglevel || ''),
 		cronloglevel: clean_uci_value(config.cronloglevel || '')
 	};
+
+	if (replace(next_system.zonename, /[^A-Za-z0-9_./+-]/g, '') != next_system.zonename || replace(next_system.timezone, /[^A-Za-z0-9_.,:<>+-]/g, '') != next_system.timezone)
+		return {
+			saved: false,
+			message: 'Timezone fields contain unsupported characters.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
 
 	if (!valid_numeric_value(next_system.log_size) || !valid_numeric_value(next_system.conloglevel) || !valid_numeric_value(next_system.cronloglevel))
 		return {
