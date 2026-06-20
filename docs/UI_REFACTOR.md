@@ -586,7 +586,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
 - `/admin/services`: service overview with native lifecycle actions where an init script exists. The root services route is native by default; service-app child routes still default to LuCI compat until adapter parity is proven.
 - `/admin/services/banip` and child routes: service status, lifecycle actions, banIP policy summary, allow/block/custom/runtime file summaries, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/adblock-fast`: service status, lifecycle actions, AdBlock Fast settings, feed-source table, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/adblock-fast`: service status, lifecycle actions, AdBlock Fast settings, feed-source table, generated dnsmasq server file summary/preview, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 - `/admin/services/upnp`: service status, lifecycle actions, UPnP permission-rule table, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 - `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, listener/web-server summary, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 
@@ -624,6 +624,7 @@ Validation on `172.16.172.1`:
 - Package manager native preview now includes read-only available package-feed search through `package_search`. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native27` bundle searched for `luci-app`, confirmed `luci-app-banip` rendered in structured rows, and confirmed package-manager warnings are separated from table data.
 - Generic service adapters now include service activity from `logread` where a known init/service pattern exists. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native28` bundle loaded `#/native/service/adblock-fast`, confirmed the activity log renders as a structured log table, and confirmed the old generic output panel is not used for that service log.
 - Service file adapters now expose read-only summaries and previews for whitelisted service files. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native29` bundle loaded `#/native/service/banip`, confirmed allowlist/blocklist/runtime files render as structured tables, and confirmed no `<pre>` output is used.
+- Service file summaries now use line-count and preview commands instead of reading whole files into rpcd memory. Browser smoke on `172.16.172.1` confirmed the AdBlock Fast generated dnsmasq server file reports `471530` lines, renders a preview row, and uses no `<pre>` output.
 
 Remaining legacy or partial gaps:
 

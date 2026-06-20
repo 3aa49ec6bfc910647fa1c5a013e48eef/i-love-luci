@@ -81,7 +81,16 @@ const nativeRoutes = {
 	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd', autoMode: 'legacy' }
 };
 const servicePackages = {
-	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'], logPattern: 'adblock-fast' },
+	'adblock-fast': {
+		package: 'adblock-fast',
+		init: 'adblock-fast',
+		title: 'AdBlock Fast',
+		sections: ['adblock-fast', 'file_url'],
+		logPattern: 'adblock-fast',
+		files: [
+			{ title: 'Generated dnsmasq servers', path: '/tmp/run/adblock-fast/dnsmasq.servers' }
+		]
+	},
 	banip: {
 		package: 'banip',
 		init: 'banip',
@@ -98,7 +107,16 @@ const servicePackages = {
 	commands: { package: 'luci', init: null, title: 'Custom Commands', sections: ['command'] },
 	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'], logPattern: 'dropbear' },
 	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'], logPattern: 'uhttpd' },
-	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'], logPattern: 'miniupnpd|upnpd' }
+	upnpd: {
+		package: 'upnpd',
+		init: 'miniupnpd',
+		title: 'UPnP IGD & PCP',
+		sections: ['upnpd', 'perm_rule'],
+		logPattern: 'miniupnpd|upnpd',
+		files: [
+			{ title: 'Lease file', path: '/var/run/miniupnpd.leases' }
+		]
+	}
 };
 const routeModes = {
 	auto: true,
@@ -970,23 +988,24 @@ function service_files(meta) {
 	for (let file in meta?.files || []) {
 		let path = file.path || '';
 		let info = stat(path);
-		let text = info?.type == 'file' ? safe_read(path) : '';
-		let lines = length(text) ? split(trim(text), '\n') : [];
 		let preview = [];
+		let line_count = 0;
+		let quoted = quote_command_args([path])[0];
 
-		for (let line in lines) {
-			if (length(preview) >= 20)
-				break;
-
-			push(preview, line);
+		if (info?.type == 'file') {
+			line_count = int(trim(shell_output(`wc -l < ${quoted}`)) || 0);
+			preview = split(trim(shell_output(`sed -n '1,20p' ${quoted}`)), '\n');
 		}
+
+		if (length(preview) == 1 && !length(preview[0]))
+			preview = [];
 
 		push(entries, {
 			title: file.title || path,
 			path,
 			exists: info?.type == 'file',
 			size: info?.size || 0,
-			lines: length(lines),
+			lines: line_count,
 			preview
 		});
 	}

@@ -87,7 +87,7 @@ expected_pages = {
 }
 
 expected_services = {
-	"adblock-fast": {"sections": True},
+	"adblock-fast": {"sections": True, "files": True},
 	"banip": {"sections": True, "files": True},
 	"upnpd": {"sections": True},
 	"commands": {"customCommands": True},
