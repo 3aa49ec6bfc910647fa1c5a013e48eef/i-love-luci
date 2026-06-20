@@ -24,7 +24,7 @@
 
 @font-face {
 	font-family: "Galano";
-	src: url("/luci-static/i-love-luci/GalanoGrotesqueW00-Regular.woff2") format("woff2");
+	src: url("/luci-static/i-love-luci-app/GalanoGrotesqueW00-Regular.woff2") format("woff2");
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
@@ -54,6 +54,7 @@
 	[role="button"]:not(:disabled) {
 		cursor: pointer;
 	}
+
 }
 
 @layer components {

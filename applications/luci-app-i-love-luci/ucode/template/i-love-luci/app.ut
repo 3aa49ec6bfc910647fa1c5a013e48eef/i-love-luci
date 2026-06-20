@@ -1,16 +1,26 @@
-{% include('header') %}
-
-<link rel="stylesheet" href="{{ resource }}/../i-love-luci-app/assets/app.css?v={{ luciversion }}" />
-
-<div id="i-love-luci-root"></div>
-
-<script>
-	window.ILoveLuCI = {
-		basePath: '{{ dispatcher.build_url("admin", "i-love-luci") }}',
-		legacyBasePath: '{{ dispatcher.build_url("admin") }}',
-		resourcePath: '{{ resource }}/../i-love-luci-app'
-	};
-</script>
-<script type="module" src="{{ resource }}/../i-love-luci-app/assets/app.js?v={{ luciversion }}"></script>
-
-{% include('footer') %}
+{%
+	http.prepare_content('text/html; charset=UTF-8');
+-%}
+<!doctype html>
+<html lang="{{ dispatcher.lang }}">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+	<link rel="icon" href="/luci-static/i-love-luci-app/logo.svg" sizes="any" />
+	<link rel="stylesheet" href="/luci-static/i-love-luci-app/assets/app.css?v=1.0.0" />
+	<title>I Love LuCI</title>
+</head>
+<body>
+	<div id="i-love-luci-root"></div>
+	<script>
+		window.ILoveLuCI = {
+			basePath: '{{ dispatcher.build_url("admin", "i-love-luci") }}',
+			legacyBasePath: '{{ dispatcher.build_url("admin") }}',
+			resourcePath: '/luci-static/i-love-luci-app',
+			sessionId: '{{ ctx.authsession ?? "" }}',
+			authUser: '{{ ctx.authsession ? "root" : "" }}'
+		};
+	</script>
+	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0"></script>
+</body>
+</html>

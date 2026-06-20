@@ -1,3 +1,5 @@
+import { getShellConfig } from "@/lib/config";
+
 export type MenuItem = {
 	title: string;
 	path: string;
@@ -36,6 +38,12 @@ const fallbackMenu: MenuItem[] = [
 ];
 
 async function callBridge<T>(method: string): Promise<T> {
+	const config = getShellConfig();
+
+	if (!config.sessionId) {
+		throw new Error("Missing LuCI session id");
+	}
+
 	const endpoint = "/ubus/";
 	const response = await fetch(endpoint, {
 		method: "POST",
@@ -45,7 +53,7 @@ async function callBridge<T>(method: string): Promise<T> {
 			jsonrpc: "2.0",
 			id: method,
 			method: "call",
-			params: [null, "luci.iloveluci", method, {}],
+			params: [config.sessionId, "luci.iloveluci", method, {}],
 		}),
 	});
 

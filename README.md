@@ -1,51 +1,21 @@
 # I Love LuCI
 
-I Love LuCI is a LuCI theme forked from `luci-theme-openwrt-2020`, based on upstream LuCI commit `c7b95dc`.
+I Love LuCI is a modern OpenWrt LuCI UI project. It contains:
 
-## Intent
+- `luci-app-i-love-luci`: a React, Vite, Tailwind v4 application shell with shadcn-style local components, Sonner toasts, mobile-first navigation, search, profile menu, and a legacy LuCI iframe bridge.
+- `luci-theme-i-love-luci`: the existing LuCI theme used for classic LuCI pages and as a compatibility fallback.
 
-This project exists to make OpenWrt LuCI feel current without losing what makes LuCI useful: fast pages, predictable navigation, low dependencies, and compatibility with existing OpenWrt packages.
-
-The theme should be clean, minimal, and practical for daily router administration. It should improve discoverability for users who do not already know where every setting lives, while staying efficient for advanced users who move through LuCI quickly.
-
-The long-term goal is a polished I Love LuCI theme that can be installed as a normal LuCI theme package, selected from LuCI's language/style settings, and safely tested on real routers without touching unrelated system configuration.
-
-## Gallery
-
-These screenshots are generated from sanitized demo screens that mirror the current theme layout and styling. They do not contain real router hostnames, addresses, leases, MACs, or configuration values.
-
-| Desktop overview | Header search |
-| --- | --- |
-| ![Desktop overview with header search, sidebar navigation, and flat status content](docs/assets/desktop-overview.jpg) | ![Desktop search popover showing configuration results](docs/assets/desktop-search.jpg) |
-
-| Theme settings | Login |
-| --- | --- |
-| ![Theme settings page with simplified save, font, and menu options](docs/assets/desktop-theme-settings.jpg) | ![Centered modern login screen](docs/assets/login.jpg) |
-
-| Mobile sidebar | Mobile search |
-| --- | --- |
-| ![Mobile sidebar with active route highlighting](docs/assets/mobile-sidebar.jpg) | ![Mobile search results popover below the header search field](docs/assets/mobile-search.jpg) |
+The app is the forward path. The theme remains useful for legacy LuCI routes while native React routes are rebuilt incrementally.
 
 ## Install Without Building
 
-The intended user path is an installable package feed published from CI, not asking users to clone this repo or run the OpenWrt SDK. The public feed is published by GitHub Pages at:
+The intended user path is a package feed published from CI. Add the feed matching your OpenWrt release and target, then install with standard package tooling.
 
-- <https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/>
+Public feed root:
 
-Users should add the feed that matches their OpenWrt release and target, update package metadata, then install the theme with standard tooling.
+<https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/>
 
-For OpenWrt 24.10/opkg:
-
-```sh
-cat >/etc/opkg/customfeeds.d/i-love-luci.conf <<'EOF'
-src/gz i_love_luci https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/24.10.7/rockchip-armv8
-EOF
-
-opkg update
-opkg install luci-theme-i-love-luci
-```
-
-For OpenWrt 25.12/apk:
+OpenWrt 25.12/apk:
 
 ```sh
 cat >/etc/apk/repositories.d/customfeeds.list <<'EOF'
@@ -53,82 +23,114 @@ https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/r
 EOF
 
 apk update
-apk add luci-theme-i-love-luci
+apk add luci-app-i-love-luci luci-theme-i-love-luci
 ```
 
-The feed publishing workflow is in place, but feed signing keys are not configured yet. If your router enforces signed third-party feeds, download the matching GitHub Actions artifact or GitHub Release asset and install the package manually. Use `opkg install` for 24.10 `.ipk` builds and `apk add --allow-untrusted --force-overwrite` for 25.12 `.apk` builds.
+OpenWrt 24.10/opkg:
 
-## Binary Publishing Plan
+```sh
+cat >/etc/opkg/customfeeds.d/i-love-luci.conf <<'EOF'
+src/gz i_love_luci https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/24.10.7/rockchip-armv8
+EOF
 
-The CI/CD publishing model is:
+opkg update
+opkg install luci-app-i-love-luci luci-theme-i-love-luci
+```
 
-- Pull requests: build both OpenWrt targets and upload short-lived GitHub Actions artifacts only.
-- Pushes to `dev` or `uat`: build both targets as test artifacts only. These use `PKG_VERSION=1.0.0` and `PKG_RELEASE=<GitHub run number>`, producing package versions such as `1.0.0-123` for opkg and `1.0.0-r123` for apk. This makes test builds upgradeable without changing the public stable version.
-- Pushes to `main`: build both targets as the stable public package with `PKG_VERSION=1.0.0` and `PKG_RELEASE=1`, then publish feed directories to GitHub Pages.
-- GitHub Pages paths: `/openwrt/24.10.7/rockchip-armv8/` and `/openwrt/25.12.4/rockchip-armv8/`.
-- Merging to `main`: must be done with a pull request. A required CI guard only allows `dev` or `uat` as the source branch for PRs targeting `main`.
-- Version tags such as `v1.0.0`: should also attach immutable `.ipk`, `.apk`, feed index, checksum, and build metadata files to a GitHub Release. This release-asset step is not implemented yet.
-- Prerelease tags such as `v1.1.0-rc.1`: should mark the GitHub Release as prerelease and publish to a separate prerelease feed path so stable users do not receive RC builds by accident. This prerelease path is not implemented yet.
-- Signing: publish `Packages.sig` for 24.10/opkg using `usign`; publish the 25.12/apk feed with the SDK apk signing flow and document the public key installation path before asking users to trust the feed. Signing secrets are not configured yet.
+After install, open:
 
-This gives users two standard install paths: add a feed and install with package tooling, or download a release asset for one-off manual installation.
+```text
+http://router-address/cgi-bin/luci/admin/i-love-luci
+```
 
-## Design Goals
+Feed signing is not configured yet. If your router enforces signed third-party feeds, download the matching GitHub Actions artifact or GitHub Release asset and install manually with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
 
-- Modern minimal shell with stronger spacing, contrast, focus states, responsive behavior, and a global loading overlay to avoid route-change flashes.
-- Better sidebar with active route states, parent items that route to their first child, sticky navigation, mobile outside-click collapse, and compact mode.
-- Header search from the LuCI menu tree, with recent pages and type-ahead results.
-- Header profile menu with initials and logout action.
-- Built-in local variants: Ocean, Forest, Ember, and Contrast.
-- Router-persisted theme settings for color, density, desktop menu position, simplified save behavior, and font.
-- Accessible defaults: readable contrast, visible keyboard focus, skip links, reduced-motion support, and responsive layouts.
-- No heavy frontend framework. Keep theme assets small and compatible with LuCI's existing JS, ucode templates, and package flow.
+## Screenshots
+
+Screenshots are captured from a router running OpenWrt 25.12.4 with sanitized app data. They avoid real hostnames, addresses, MACs, leases, and configuration values.
+
+| Desktop shell | Desktop search |
+| --- | --- |
+| ![I Love LuCI desktop app shell with sidebar, centered search, profile menu, and status cards](docs/assets/app-desktop-overview.png) | ![I Love LuCI desktop search popover showing LuCI route results](docs/assets/app-desktop-search.png) |
+
+| Mobile shell | Mobile sidebar |
+| --- | --- |
+| ![I Love LuCI mobile shell with compact header and responsive status cards](docs/assets/app-mobile-overview.png) | ![I Love LuCI mobile sidebar with route navigation and outside overlay](docs/assets/app-mobile-sidebar.png) |
+
+| Mobile search | Classic theme |
+| --- | --- |
+| ![I Love LuCI mobile search popover below the header search field](docs/assets/app-mobile-search.png) | ![Classic I Love LuCI theme status overview](docs/assets/desktop-overview.jpg) |
+
+## Current Status
+
+The modern app spike is installed and smoke-tested on a FriendlyElec NanoPi R6S running:
+
+- OpenWrt `25.12.4`
+- target `rockchip/armv8`
+- package architecture `aarch64_generic`
+- package manager `apk`
+
+Verified on-router:
+
+- `/cgi-bin/luci/admin/i-love-luci` returns a standalone app document after LuCI auth.
+- App assets load from `/luci-static/i-love-luci-app/`.
+- The root app viewport is configured with `initial-scale=1.0`, `maximum-scale=1.0`, and `user-scalable=no` to avoid mobile input zoom.
+- `rpcd` bridge calls work through `/ubus/` with the LuCI session id.
+- Desktop breakpoint shows sidebar and hides mobile menu button.
+- Mobile breakpoint shows compact header, drawer sidebar, and search popover.
+- Screenshots in `docs/assets/app-*.png` were captured from the live router.
 
 ## Product Direction
 
-I Love LuCI should feel like a focused admin tool, not a marketing site. The interface should prioritize scanning, search, configuration confidence, and quick access to status pages. Visual style should be restrained: clear typography, quiet surfaces, strong active states, and enough contrast to work well on low-quality displays or remote sessions.
+I Love LuCI should feel like a focused admin tool, not a marketing site. It should prioritize scanning, search, configuration confidence, mobile usability, and compatibility with existing LuCI packages.
 
-## Design System Direction
+The architecture is a hybrid shell:
 
-The theme borrows shadcn/ui patterns as a visual language rather than installing shadcn/ui components directly. LuCI themes are static CSS, ucode templates, and LuCI JavaScript; shadcn/ui is a Tailwind-styled React component workflow. For this package, map LuCI markup onto shadcn-style primitives with CSS:
+- Native modern shell for high-value routes.
+- `rpcd`/`ubus` bridge for router data and privileged actions.
+- Legacy iframe bridge for LuCI pages not yet rebuilt.
+- Existing `luci-theme-i-love-luci` for classic pages and fallback styling.
 
-- `#mainmenu` maps to a light `Sidebar` pattern with quiet item rows, muted labels, and clear active state.
-- Header search, the search popover, and the fallback command dialog map to shadcn `Command`.
-- Main LuCI content should stay flat by default. Avoid nested card shells around `.cbi-map`, `.cbi-section`, and individual values; reserve card-like surfaces for modals, login, popovers, and genuinely repeated framed content.
-- Inputs, selects, dropdowns, buttons, tabs, tables, alerts, and page actions should follow shadcn sizing, border, radius, focus, and muted-text patterns.
+The implementation plan lives in [docs/UI_REFACTOR.md](docs/UI_REFACTOR.md).
 
-Do not add Tailwind just to express these styles. Tailwind v4 is the current shadcn/ui documentation path, but it requires a frontend build step and targets modern browsers. I Love LuCI currently keeps a no-build CSS path so packages stay simple and router-friendly. Revisit Tailwind only if the theme grows enough repeated component CSS to justify a generated stylesheet.
+## Modern App Stack
 
-Relevant design references:
+The app shell uses:
 
-- shadcn/ui docs: <https://ui.shadcn.com/docs>
-- shadcn/ui manual installation: <https://ui.shadcn.com/docs/installation/manual>
-- shadcn/ui Tailwind v4 guide: <https://ui.shadcn.com/docs/tailwind-v4>
-- Tailwind CSS v4 upgrade guide: <https://tailwindcss.com/docs/upgrade-guide>
+- React
+- Vite
+- TypeScript
+- Tailwind CSS v4 through `@tailwindcss/vite`
+- shadcn-style local components under `src/components/ui`
+- Sonner toasts
+- lucide-react icons
+- CSSTools `@csstools/postcss-media-minmax` as a postbuild transform for Tailwind v4 media-query range output
 
-Planned areas:
+The app owns its document, CSS, logo, and font assets. It does not embed inside the classic LuCI theme header, which avoids legacy CSS collisions in the core app.
 
-- Search that starts with installed LuCI pages and later expands toward config/schema discovery.
-- Further reduction of legacy LuCI table/card artifacts in deep package views.
-- Mobile behavior that makes router administration possible from a phone without awkward horizontal scrolling.
-- Packaging and deploy helpers for quick install, rollback, and router testing.
+Relevant references:
 
-Theme settings are stored in UCI under `luci.iloveluci`, so style, density, menu bar, simplified save, and font choices follow the router configuration instead of a single browser. Browser `localStorage` is only retained as a migration fallback and for per-browser recent-search history.
-
-## Current UX
-
-- Header: OpenWrt icon on the left, centered search on desktop, pending-change chip near status indicators, profile initials menu on the far right.
-- Search: focus the header search or press `Cmd+K` / `Ctrl+K` / `/`; recent pages show before typing, results replace recent pages while typing.
-- Sidebar: parent entries route to their first child, active leaf routes are highlighted, logout lives in the profile menu instead of the sidebar.
-- Desktop menu position: side menu by default, optional top menu from theme settings. Top menu applies to desktop only.
-- Mobile: header keeps menu, search, pending/profile controls compact; sidebar collapses when tapping outside it.
-- Theme settings: `System > System > I Love LuCI Theme`.
-- Simplified save: enabled by default. Page action rows collapse to Save/Cancel, pending changes appear as a header chip, and saved-but-not-applied changes trigger a top-center toast.
-- Loading: internal route changes and form submits show a global loading overlay while LuCI swaps content.
+- Vite: <https://vite.dev/guide/>
+- Tailwind CSS v4: <https://tailwindcss.com/docs/installation/using-vite>
+- shadcn/ui Vite install: <https://ui.shadcn.com/docs/installation/vite>
+- shadcn/ui Tailwind v4: <https://ui.shadcn.com/docs/tailwind-v4>
+- shadcn/ui Sonner: <https://ui.shadcn.com/docs/components/sonner>
+- Sonner: <https://github.com/emilkowalski/sonner>
+- LuCI JS API: <https://openwrt.github.io/luci/jsapi/index.html>
+- LuCI example app: <https://github.com/openwrt/luci/tree/master/applications/luci-app-example>
 
 ## Layout
 
 ```text
+applications/luci-app-i-love-luci/
+  Makefile
+  htdocs/luci-static/i-love-luci-app/
+  root/usr/share/luci/menu.d/luci-app-i-love-luci.json
+  root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json
+  root/usr/share/rpcd/ucode/i-love-luci.uc
+  src/shell/
+  ucode/template/i-love-luci/app.ut
+
 themes/luci-theme-i-love-luci/
   Makefile
   htdocs/luci-static/i-love-luci/
@@ -137,140 +139,162 @@ themes/luci-theme-i-love-luci/
   ucode/template/themes/i-love-luci/
 ```
 
-## LuCI Theme Standards
-
-This package follows the same package shape as the official LuCI themes in the OpenWrt LuCI feed:
-
-- `Makefile` includes `$(TOPDIR)/rules.mk`, sets `LUCI_TITLE`, `LUCI_DEPENDS:=+luci-base`, `PKG_LICENSE`, and includes `../../luci.mk`.
-- Static assets are installed from `htdocs/` into `/www/`, for example `/www/luci-static/i-love-luci/cascade.css`.
-- ucode templates are installed from `ucode/template/themes/i-love-luci/` into LuCI's template path.
-- `root/etc/uci-defaults/30_luci-theme-i-love-luci` registers `luci.themes.ILoveLuCI` and selects the theme on first install, matching the official OpenWrt theme behavior.
-- The package removes its LuCI theme registration in `postrm`, matching the official theme packages.
-
-Relevant upstream references:
-
-- OpenWrt LuCI feed: <https://github.com/openwrt/luci>
-- Official LuCI feed usage: <https://github.com/openwrt/luci#usage>
-- Official `luci-theme-openwrt` package: <https://github.com/openwrt/luci/tree/openwrt-24.10/themes/luci-theme-openwrt>
-- Official `luci-theme-openwrt-2020` package: <https://github.com/openwrt/luci/tree/openwrt-24.10/themes/luci-theme-openwrt-2020>
-- Official `luci-theme-openwrt-2020` Makefile pattern: <https://raw.githubusercontent.com/openwrt/luci/openwrt-24.10/themes/luci-theme-openwrt-2020/Makefile>
-- Official `luci-theme-openwrt-2020` uci-defaults pattern: <https://raw.githubusercontent.com/openwrt/luci/openwrt-24.10/themes/luci-theme-openwrt-2020/root/etc/uci-defaults/30_luci-theme-openwrt-2020>
-- Official ucode theme template example: <https://raw.githubusercontent.com/openwrt/luci/openwrt-24.10/themes/luci-theme-openwrt/ucode/template/themes/openwrt.org/header.ut>
-- OpenWrt LuCI theme user docs: <https://openwrt.org/docs/guide-user/luci/luci.themes>
-
-## Build In OpenWrt
-
-Use a full OpenWrt buildroot when producing a normal package. The package should live under the LuCI feed's `themes/` directory so `include ../../luci.mk` resolves the same way it does for upstream themes.
+## Build Frontend
 
 ```sh
-cd /path/to/openwrt
-./scripts/feeds update packages luci
-mkdir -p feeds/luci/themes
-cp -R /path/to/i-love-luci/themes/luci-theme-i-love-luci feeds/luci/themes/
-./scripts/feeds update -i luci
-./scripts/feeds install luci-theme-i-love-luci
-make package/feeds/luci/luci-theme-i-love-luci/compile V=s
+cd applications/luci-app-i-love-luci/src/shell
+npm install
+npm run lint
+npm run typecheck
+npm run test
+npm run build
 ```
 
-The package will be emitted under `bin/packages/*/luci/`.
+The production build writes static assets to:
 
-## Build With The OpenWrt SDK
+```text
+applications/luci-app-i-love-luci/htdocs/luci-static/i-love-luci-app/
+```
 
-The router this project is currently tested against is a FriendlyElec NanoPi R6S. Official OpenWrt images exist for the device on both supported release lines:
+Node.js is only used at build time. No Node.js runtime is required on the router.
 
-- target `rockchip/armv8`
-- package architecture `aarch64_generic`
+## Build OpenWrt Packages
 
-The CI build matrix currently targets:
+The CI build script uses official Linux x86_64 OpenWrt SDKs. Run it in GitHub Actions or an amd64 Linux environment.
 
-| OpenWrt series | Current target version | Package format | Feed index |
-| --- | --- | --- | --- |
-| 24.10 old stable | `24.10.7` | `.ipk` | `Packages` / `Packages.gz` |
-| 25.12 stable | `25.12.4` | `.apk` | `packages.adb` |
-
-Build both supported targets with:
+Build both app and theme for OpenWrt 25.12:
 
 ```sh
-OPENWRT_VERSION=24.10.7 OPENWRT_TARGET=rockchip/armv8 PACKAGE_FORMAT=ipk scripts/build-openwrt-package.sh
-OPENWRT_VERSION=25.12.4 OPENWRT_TARGET=rockchip/armv8 PACKAGE_FORMAT=apk scripts/build-openwrt-package.sh
+PACKAGE_SPECS='luci-theme-i-love-luci:themes/luci-theme-i-love-luci luci-app-i-love-luci:applications/luci-app-i-love-luci' \
+OPENWRT_VERSION=25.12.4 \
+OPENWRT_TARGET=rockchip/armv8 \
+PACKAGE_FORMAT=apk \
+scripts/build-openwrt-package.sh
 ```
 
-The script downloads the matching OpenWrt release SDK, fetches the pinned base, package, and LuCI feeds from `feeds.conf.default`, copies this package into the SDK's LuCI feed, runs the SDK build, and writes a minimal package feed containing this theme plus its feed index to `dist/openwrt/<version>/rockchip-armv8/`.
-
-The build script uses the official Linux x86_64 OpenWrt SDK and is intended to run in GitHub Actions or another Linux x86_64 environment. On macOS, use the GitHub Actions workflow or an amd64 Linux container instead of running the SDK directly. Required Ubuntu build dependencies include `python3-distutils`. Builds default to `JOBS=1` to avoid nested GNU make jobserver failures in LuCI dependencies; set `JOBS=<n>` only after confirming the SDK target is stable with parallel builds.
-
-For manual SDK work, the matching SDKs are:
+Build both app and theme for OpenWrt 24.10:
 
 ```sh
-mkdir -p build/sdk
-curl -L \
-  -o build/openwrt-sdk-24.10.7-rockchip-armv8.tar.zst \
-  https://downloads.openwrt.org/releases/24.10.7/targets/rockchip/armv8/openwrt-sdk-24.10.7-rockchip-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst
-
-curl -L \
-  -o build/openwrt-sdk-25.12.4-rockchip-armv8.tar.zst \
-  https://downloads.openwrt.org/releases/25.12.4/targets/rockchip/armv8/openwrt-sdk-25.12.4-rockchip-armv8_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+PACKAGE_SPECS='luci-theme-i-love-luci:themes/luci-theme-i-love-luci luci-app-i-love-luci:applications/luci-app-i-love-luci' \
+OPENWRT_VERSION=24.10.7 \
+OPENWRT_TARGET=rockchip/armv8 \
+PACKAGE_FORMAT=ipk \
+scripts/build-openwrt-package.sh
 ```
 
-SDK builds should use the same feed layout as the full buildroot flow above. If the SDK tries to rebuild LuCI runtime dependencies and fails on missing core headers or packages, use a full OpenWrt buildroot for the release package. That keeps this theme aligned with the upstream LuCI theme packaging path instead of adding local package hacks.
+Output goes to:
 
-## GitHub Actions Build Pipeline
+```text
+dist/openwrt/<version>/rockchip-armv8/
+```
 
-`.github/workflows/build.yml` builds the package for:
+The generated feed contains both packages plus the matching `Packages.gz` or `packages.adb` index.
 
-- OpenWrt `24.10.7` `rockchip/armv8` as an opkg `.ipk` feed artifact.
-- OpenWrt `25.12.4` `rockchip/armv8` as an apk `.apk` feed artifact.
+## CI Publishing
 
-The workflow runs on pushes to `dev` and `main`, pull requests, and manual dispatch. It uploads each generated feed directory as a GitHub Actions artifact. For non-PR runs, it also publishes the feed directories to GitHub Pages.
+`.github/workflows/build.yml` builds package feeds for:
 
-Stable `main` artifacts are named:
+- OpenWrt `24.10.7` `rockchip/armv8` as opkg `.ipk`
+- OpenWrt `25.12.4` `rockchip/armv8` as apk `.apk`
 
-- `i-love-luci-stable-24.10.7-ipk`
-- `i-love-luci-stable-25.12.4-apk`
+Rules:
 
-Test artifacts from `dev`, `uat`, and pull requests are named:
+- Pull requests build artifacts only.
+- `dev` and `uat` build test artifacts only.
+- `main` builds stable artifacts and publishes GitHub Pages feed directories.
+- Pull requests into `main` must come from `dev` or `uat`.
+- Node.js 24 is used for the app frontend build.
 
-- `i-love-luci-test-24.10.7-ipk`
-- `i-love-luci-test-25.12.4-apk`
+Stable package version is `1.0.0-1`. Test builds use `PKG_RELEASE=<GitHub run number>`, producing upgradeable test versions without changing the stable semver base.
 
-Download the latest 25.12.4 test artifact with:
+## Router Test Deploy
+
+Local router credentials are stored in `.env`, which is ignored by Git.
+
+For 25.12/apk package artifacts:
 
 ```sh
-gh run list --branch dev --limit 5
-gh run download <run-id> --pattern 'i-love-luci-test-25.12.4-apk' --dir /tmp/i-love-luci
+scp -O dist/openwrt/25.12.4/rockchip-armv8/luci-*-i-love-luci-*.apk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'apk add --allow-untrusted --force-overwrite /tmp/luci-*-i-love-luci-*.apk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
 ```
 
-See [Binary Publishing Plan](#binary-publishing-plan) for the release/feed publishing strategy.
-
-## Upload To Router
-
-Local router credentials are stored in `.env`, which is ignored by Git and excluded from bundles. Do not commit router passwords or generated package artifacts.
-
-For OpenWrt 24.10/opkg:
+For 24.10/opkg package artifacts:
 
 ```sh
-scp bin/packages/*/luci/luci-theme-i-love-luci_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg install /tmp/luci-theme-i-love-luci_*.ipk && /etc/init.d/uhttpd restart'
+scp -O dist/openwrt/24.10.7/rockchip-armv8/luci-*-i-love-luci_*.ipk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'opkg install /tmp/luci-*-i-love-luci_*.ipk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
 ```
 
-For OpenWrt 25.12/apk:
+Router smoke checks:
 
 ```sh
-scp dist/openwrt/25.12.4/rockchip-armv8/luci-theme-i-love-luci-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted --force-overwrite /tmp/luci-theme-i-love-luci-*.apk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/uhttpd restart'
+curl -I http://router-address/cgi-bin/luci/admin/i-love-luci
+curl -I http://router-address/luci-static/i-love-luci-app/assets/app.js
 ```
 
-Then select **ILoveLuCI** in LuCI under `System > System > Language and Style`. LuCI theme keys cannot contain spaces, so the package registers the selectable theme key as `ILoveLuCI` while the project and package display name remains I Love LuCI.
+Browser smoke checks:
 
-## Current Search Scope
+- Desktop `1280 x 800`: sidebar visible, mobile menu hidden, search centered.
+- Mobile `390 x 844`: mobile menu visible, sidebar opens/closes, search popover fits viewport.
+- Search returns LuCI route results.
+- Profile initials menu opens and includes logout.
+- Legacy route bridge opens existing LuCI pages.
 
-Search indexes the full LuCI menu tree client-side, so it finds installed pages/features. It intentionally excludes the theme settings page from search results. Deep UCI option search needs a backend index endpoint later, because themes do not automatically receive every config schema/value.
+## Secondary uhttpd Testing
 
-Recent pages are stored per browser in `localStorage`; theme options are stored in router UCI config.
+For safer router testing, run a secondary `uhttpd` instance on port `8081` so the main LuCI admin session remains available.
 
-## Non-Goals
+```sh
+uci -q delete uhttpd.iloveluci_test
+uci set uhttpd.iloveluci_test='uhttpd'
+uci add_list uhttpd.iloveluci_test.listen_http='0.0.0.0:8081'
+uci add_list uhttpd.iloveluci_test.listen_http='[::]:8081'
+uci set uhttpd.iloveluci_test.home='/www'
+uci set uhttpd.iloveluci_test.ucode_prefix='/cgi-bin/luci=/usr/share/ucode/luci/uhttpd.uc'
+uci set uhttpd.iloveluci_test.rfc1918_filter='1'
+uci commit uhttpd
+/etc/init.d/uhttpd restart
+```
 
-- Replacing LuCI's core application framework.
-- Changing router configuration defaults.
-- Adding dependencies that make the theme fragile on small OpenWrt devices.
-- Storing deploy credentials in Git history or release bundles.
+Test URL:
+
+```text
+http://router-address:8081/cgi-bin/luci/admin/i-love-luci
+```
+
+Cleanup:
+
+```sh
+uci -q delete uhttpd.iloveluci_test
+uci commit uhttpd
+/etc/init.d/uhttpd restart
+```
+
+## Rollback
+
+Keep classic LuCI reachable while testing. To remove the app and theme:
+
+OpenWrt 25.12/apk:
+
+```sh
+apk del luci-app-i-love-luci luci-theme-i-love-luci
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+/etc/init.d/rpcd reload
+/etc/init.d/uhttpd restart
+```
+
+OpenWrt 24.10/opkg:
+
+```sh
+opkg remove luci-app-i-love-luci luci-theme-i-love-luci
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+/etc/init.d/rpcd reload
+/etc/init.d/uhttpd restart
+```
+
+## Security Notes
+
+- MFA UI is a spike only. Real MFA must be server-side through `rpcd`/`ubus`, with TOTP secrets stored root-only and verified on the router.
+- Passkey/WebAuthn support is possible later, but should be optional and requires HTTPS plus server-side challenge validation.
+- The React app is never the source of security truth.
+- Do not commit router credentials, package signing keys, or screenshots containing real hostnames, MACs, leases, addresses, or secrets.

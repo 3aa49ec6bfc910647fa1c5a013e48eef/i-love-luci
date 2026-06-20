@@ -3,6 +3,7 @@ set -euo pipefail
 
 PACKAGE_NAME="${PACKAGE_NAME:-luci-theme-i-love-luci}"
 PACKAGE_DIR="${PACKAGE_DIR:-themes/${PACKAGE_NAME}}"
+PACKAGE_SPECS="${PACKAGE_SPECS:-${PACKAGE_NAME}:${PACKAGE_DIR}}"
 OPENWRT_VERSION="${OPENWRT_VERSION:-25.12.4}"
 OPENWRT_TARGET="${OPENWRT_TARGET:-rockchip/armv8}"
 PACKAGE_FORMAT="${PACKAGE_FORMAT:-auto}"
@@ -21,7 +22,6 @@ absolute_path() {
 	esac
 }
 
-PACKAGE_DIR="$(absolute_path "${PACKAGE_DIR}")"
 WORK_DIR="$(absolute_path "${WORK_DIR}")"
 OUT_DIR="$(absolute_path "${OUT_DIR}")"
 
@@ -33,43 +33,64 @@ case "$(uname -s)-$(uname -m)" in
 		;;
 esac
 
-if [ ! -d "${PACKAGE_DIR}" ]; then
-	echo "Package directory not found: ${PACKAGE_DIR}" >&2
-	exit 1
-fi
+declare -a package_names package_dirs package_subdirs
 
-if [ -f "${PACKAGE_DIR}/src/shell/package.json" ]; then
-	case "${BUILD_FRONTEND}" in
-		auto|1|true|yes)
-			echo "Building frontend assets for ${PACKAGE_NAME}"
-			(
-				cd "${PACKAGE_DIR}/src/shell"
-				if [ -f package-lock.json ]; then
-					npm ci
-				else
-					npm install
-				fi
-				npm run build
-			)
-			;;
-		0|false|no)
-			echo "Skipping frontend build for ${PACKAGE_NAME}"
-			;;
-		*)
-			echo "BUILD_FRONTEND must be auto, true, false, 1, or 0" >&2
-			exit 1
-			;;
+luci_subdir_for_package() {
+	case "$1" in
+		luci-theme-*) printf '%s\n' "themes" ;;
+		luci-app-*) printf '%s\n' "applications" ;;
+		luci-mod-*) printf '%s\n' "modules" ;;
+		luci-proto-*) printf '%s\n' "protocols" ;;
+		luci-lib-*) printf '%s\n' "libs" ;;
+		*) printf '%s\n' "${LUCI_FEED_SUBDIR:-applications}" ;;
 	esac
-fi
+}
 
-case "${PACKAGE_NAME}" in
-	luci-theme-*) luci_feed_subdir="themes" ;;
-	luci-app-*) luci_feed_subdir="applications" ;;
-	luci-mod-*) luci_feed_subdir="modules" ;;
-	luci-proto-*) luci_feed_subdir="protocols" ;;
-	luci-lib-*) luci_feed_subdir="libs" ;;
-	*) luci_feed_subdir="${LUCI_FEED_SUBDIR:-applications}" ;;
-esac
+for package_spec in ${PACKAGE_SPECS}; do
+	package_name="${package_spec%%:*}"
+	package_dir="${package_spec#*:}"
+
+	if [ "${package_name}" = "${package_spec}" ]; then
+		package_dir="$(luci_subdir_for_package "${package_name}")/${package_name}"
+	fi
+
+	package_dir="$(absolute_path "${package_dir}")"
+
+	if [ ! -d "${package_dir}" ]; then
+		echo "Package directory not found: ${package_dir}" >&2
+		exit 1
+	fi
+
+	package_names+=("${package_name}")
+	package_dirs+=("${package_dir}")
+	package_subdirs+=("$(luci_subdir_for_package "${package_name}")")
+done
+
+for i in "${!package_names[@]}"; do
+	if [ -f "${package_dirs[$i]}/src/shell/package.json" ]; then
+		case "${BUILD_FRONTEND}" in
+			auto|1|true|yes)
+				echo "Building frontend assets for ${package_names[$i]}"
+				(
+					cd "${package_dirs[$i]}/src/shell"
+					if [ -f package-lock.json ]; then
+						npm ci
+					else
+						npm install
+					fi
+					npm run build
+				)
+				;;
+			0|false|no)
+				echo "Skipping frontend build for ${package_names[$i]}"
+				;;
+			*)
+				echo "BUILD_FRONTEND must be auto, true, false, 1, or 0" >&2
+				exit 1
+				;;
+		esac
+	fi
+done
 
 target_slug="${OPENWRT_TARGET//\//-}"
 target_dir="${OPENWRT_TARGET%/*}"
@@ -110,31 +131,40 @@ echo "Fetching base, package, and LuCI feeds"
 	./scripts/feeds update base packages luci
 )
 
-echo "Installing ${PACKAGE_NAME} into SDK LuCI ${luci_feed_subdir} feed"
-rm -rf "${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}"
-mkdir -p "${sdk_dir}/feeds/luci/${luci_feed_subdir}"
-rsync -a --delete "${PACKAGE_DIR}/" "${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}/"
+for i in "${!package_names[@]}"; do
+	echo "Installing ${package_names[$i]} into SDK LuCI ${package_subdirs[$i]} feed"
+	rm -rf "${sdk_dir}/feeds/luci/${package_subdirs[$i]}/${package_names[$i]}"
+	mkdir -p "${sdk_dir}/feeds/luci/${package_subdirs[$i]}"
+	rsync -a --delete "${package_dirs[$i]}/" "${sdk_dir}/feeds/luci/${package_subdirs[$i]}/${package_names[$i]}/"
 
-if [ -n "${PACKAGE_RELEASE}" ]; then
-	echo "Using package release ${PACKAGE_RELEASE}"
-	sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${PACKAGE_RELEASE}/" \
-		"${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}/Makefile"
-fi
+	if [ -n "${PACKAGE_RELEASE}" ]; then
+		echo "Using package release ${PACKAGE_RELEASE} for ${package_names[$i]}"
+		sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${PACKAGE_RELEASE}/" \
+			"${sdk_dir}/feeds/luci/${package_subdirs[$i]}/${package_names[$i]}/Makefile"
+	fi
+done
 
 (
 	cd "${sdk_dir}"
 	./scripts/feeds update -i luci
-	./scripts/feeds install "${PACKAGE_NAME}"
+	for package_name in "${package_names[@]}"; do
+		./scripts/feeds install "${package_name}"
+	done
 	make defconfig
-	make "package/feeds/luci/${PACKAGE_NAME}/compile" -j"${JOBS}" V=s
+	for package_name in "${package_names[@]}"; do
+		make "package/feeds/luci/${package_name}/compile" -j"${JOBS}" V=s
+	done
 )
 
-mapfile -t package_files < <(
-	find "${sdk_dir}/bin/packages" -type f \( -name "${PACKAGE_NAME}_*.ipk" -o -name "${PACKAGE_NAME}-*.apk" \) | sort
-)
+package_files=()
+for package_name in "${package_names[@]}"; do
+	while IFS= read -r package_file; do
+		package_files+=("${package_file}")
+	done < <(find "${sdk_dir}/bin/packages" -type f \( -name "${package_name}_*.ipk" -o -name "${package_name}-*.apk" \) | sort)
+done
 
 if [ "${#package_files[@]}" -eq 0 ]; then
-	echo "No ${PACKAGE_NAME} package artifact found under ${sdk_dir}/bin/packages" >&2
+	echo "No package artifacts found under ${sdk_dir}/bin/packages" >&2
 	exit 1
 fi
 
@@ -167,7 +197,7 @@ mkdir -p "${output_dir}"
 cp -a "${package_files[@]}" "${output_dir}/"
 
 cat > "${output_dir}/build-metadata.txt" <<EOF
-package=${PACKAGE_NAME}
+packages=$(IFS=,; echo "${package_names[*]}")
 openwrt_version=${OPENWRT_VERSION}
 openwrt_target=${OPENWRT_TARGET}
 arch_packages=${arch_packages}

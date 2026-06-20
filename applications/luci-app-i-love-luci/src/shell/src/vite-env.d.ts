@@ -5,5 +5,12 @@ interface Window {
 		basePath?: string;
 		legacyBasePath?: string;
 		resourcePath?: string;
+		sessionId?: string;
+		authUser?: string;
+	};
+	L?: {
+		env?: {
+			sessionid?: string;
+		};
 	};
 }
