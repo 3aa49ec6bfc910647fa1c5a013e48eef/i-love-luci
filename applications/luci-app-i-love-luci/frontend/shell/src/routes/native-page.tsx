@@ -11,6 +11,7 @@ import {
 	getServiceDetail,
 	runCustomCommand,
 	saveDropbearConfig,
+	saveLedConfig,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -25,6 +26,7 @@ import {
 	type CustomCommandResult,
 	type DropbearConfigInput,
 	type InitAction,
+	type LedConfigRow,
 	type NativePageData,
 	type NativeService,
 	type PackageSearchResult,
@@ -1531,9 +1533,122 @@ function LedSummary({ data }: { data: NativePageData }) {
 				<MetricBlock label="Netdev triggers" value={triggers.netdev ?? 0} />
 				<MetricBlock label="On" value={leds.filter((led) => Number(led.brightness) > 0).length} />
 			</div>
+			<LedConfigEditor ledNames={leds.map((led) => led.name)} sections={data.sections ?? []} />
 			<LedSysfsTable entries={leds} />
 		</div>
 	);
+}
+
+function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections: ConfigSection[] }) {
+	const initial = useMemo(() => ledRowsFromSections(sections), [sections]);
+	const [rows, setRows] = useState(initial);
+	const [savedRows, setSavedRows] = useState(initial);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function update(section: string, key: keyof LedConfigRow, value: string) {
+		setRows((current) => current.map((row) => (row.section === section ? { ...row, [key]: value } : row)));
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveLedConfig(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = ledRowsFromSections(result.sections.length ? result.sections : sections);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel title="LED actions" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Name</th>
+							<th className="px-3 py-2 font-medium">LED</th>
+							<th className="px-3 py-2 font-medium">Trigger</th>
+							<th className="px-3 py-2 font-medium">Device</th>
+							<th className="px-3 py-2 font-medium">Mode</th>
+							<th className="px-3 py-2 font-medium">Interval</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.length ? (
+							rows.map((row) => (
+								<tr className="border-b align-top last:border-0" key={row.section}>
+									<td className="px-3 py-2">
+										<Input onChange={(event) => update(row.section, "name", event.target.value)} value={row.name} />
+									</td>
+									<td className="px-3 py-2">
+										<select
+											className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+											onChange={(event) => update(row.section, "sysfs", event.target.value)}
+											value={row.sysfs}
+										>
+											{row.sysfs && !ledNames.includes(row.sysfs) ? <option value={row.sysfs}>{row.sysfs}</option> : null}
+											{ledNames.map((name) => (
+												<option key={name} value={name}>
+													{name}
+												</option>
+											))}
+										</select>
+									</td>
+									<td className="px-3 py-2">
+										<Input onChange={(event) => update(row.section, "trigger", event.target.value)} value={row.trigger} />
+									</td>
+									<td className="px-3 py-2">
+										<Input onChange={(event) => update(row.section, "dev", event.target.value)} value={row.dev} />
+									</td>
+									<td className="px-3 py-2">
+										<Input onChange={(event) => update(row.section, "mode", event.target.value)} value={row.mode} />
+									</td>
+									<td className="px-3 py-2">
+										<Input inputMode="numeric" onChange={(event) => update(row.section, "interval", event.target.value)} value={row.interval} />
+									</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+									No LED actions configured.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+			<div className="mt-3 flex justify-end gap-2">
+				<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+					Cancel
+				</Button>
+				<Button disabled={!dirty || saving || rows.length === 0} onClick={() => void save()} type="button">
+					Save
+				</Button>
+			</div>
+		</Panel>
+	);
+}
+
+function ledRowsFromSections(sections: ConfigSection[]): LedConfigRow[] {
+	return sections
+		.filter((section) => section.type === "led")
+		.map((section) => ({
+			section: section.name,
+			name: configValue(section, "name") || section.name,
+			sysfs: configValue(section, "sysfs"),
+			trigger: configValue(section, "trigger") || "none",
+			dev: configValue(section, "dev"),
+			mode: configValue(section, "mode"),
+			interval: configValue(section, "interval"),
+		}));
 }
 
 function WirelessSummary({ data }: { data: NativePageData }) {

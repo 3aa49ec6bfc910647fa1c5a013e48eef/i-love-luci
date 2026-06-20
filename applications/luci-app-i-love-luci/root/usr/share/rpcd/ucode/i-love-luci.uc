@@ -67,7 +67,7 @@ const nativeRoutes = {
 	'/admin/system/commands/config': { status: 'partial', nativePath: '/native/service/commands', autoMode: 'legacy' },
 	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
 	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
-	'/admin/system/leds': { status: 'supported', nativePath: '/native/leds' },
+	'/admin/system/leds': { status: 'partial', nativePath: '/native/leds' },
 	'/admin/services': { status: 'supported', nativePath: '/native/services' },
 	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
 	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
@@ -1184,6 +1184,68 @@ function save_dropbear_config(config) {
 	};
 }
 
+function clean_uci_value(value) {
+	value = trim('' + (value || ''));
+	return replace(value, /[\r\n]/g, '');
+}
+
+function save_led_config(rows) {
+	rows ||= [];
+	uci.load('system');
+
+	let changed = false;
+
+	for (let row in rows) {
+		let section = clean_uci_value(row?.section || '');
+
+		if (!length(section) || uci.get('system', section) != 'led')
+			return {
+				saved: false,
+				message: 'LED section was not found.',
+				changed: false,
+				sections: collect_uci_config('system', ['led'])
+			};
+
+		let next = {
+			name: clean_uci_value(row?.name || section),
+			sysfs: clean_uci_value(row?.sysfs || ''),
+			trigger: clean_uci_value(row?.trigger || 'none'),
+			dev: clean_uci_value(row?.dev || ''),
+			mode: clean_uci_value(row?.mode || ''),
+			interval: clean_uci_value(row?.interval || '')
+		};
+
+		if (!length(next.name) || !length(next.sysfs))
+			return {
+				saved: false,
+				message: 'LED name and sysfs LED are required.',
+				changed: false,
+				sections: collect_uci_config('system', ['led'])
+			};
+
+		for (let key, value in next) {
+			let current = uci.get('system', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				set_uci_option('system', section, key, value);
+			}
+		}
+	}
+
+	if (changed) {
+		uci.commit('system');
+		system('/etc/init.d/led reload >/dev/null 2>&1 || /etc/init.d/led restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'LED configuration saved and reloaded.' : 'LED configuration already up to date.',
+		changed,
+		sections: collect_uci_config('system', ['led'])
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -1650,6 +1712,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_dropbear_config(request.args.config || {}));
+		}
+	},
+
+	led_config_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			return respond(save_led_config(request.args.rows || []));
 		}
 	},
 

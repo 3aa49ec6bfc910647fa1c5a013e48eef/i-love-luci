@@ -81,7 +81,7 @@ expected_pages = {
 	"sshkeys": {"text": True},
 	"password": {},
 	"repokeys": {"commands": ["Repository public keys"]},
-	"leds": {"commands": ["LED sysfs state"]},
+	"leds": {"commands": ["LED sysfs state"], "sections": True, "required_options": ["name", "sysfs", "trigger"]},
 	"flash": {"commands": ["Mounted filesystems", "Flash partitions"]},
 	"services": {"services": True},
 	"reboot": {"commands": ["System uptime"]},
@@ -162,6 +162,18 @@ for page, rules in expected_pages.items():
 
 	if rules.get("services") and not data.get("services"):
 		failures.append(f"{page}: expected services data")
+
+	if rules.get("sections") and not data.get("sections"):
+		failures.append(f"{page}: expected UCI sections")
+
+	required_options = set(rules.get("required_options", []))
+	if required_options:
+		options = set()
+		for section in data.get("sections") or []:
+			options.update((section.get("values") or {}).keys())
+		for option in required_options:
+			if option not in options:
+				failures.append(f"{page}: expected UCI option {option!r}")
 
 	if rules.get("lines") and not data.get("lines"):
 		failures.append(f"{page}: expected package line data")

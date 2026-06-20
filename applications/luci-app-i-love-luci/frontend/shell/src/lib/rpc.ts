@@ -291,6 +291,23 @@ export type DropbearConfigResult = {
 	init: ServiceState | null;
 };
 
+export type LedConfigRow = {
+	section: string;
+	name: string;
+	sysfs: string;
+	trigger: string;
+	dev: string;
+	mode: string;
+	interval: string;
+};
+
+export type LedConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -586,6 +603,20 @@ export async function saveDropbearConfig(config: DropbearConfigInput): Promise<D
 			changed: false,
 			section: null,
 			init: null,
+		};
+	}
+}
+
+export async function saveLedConfig(rows: LedConfigRow[]): Promise<LedConfigResult> {
+	try {
+		return await callBridge<LedConfigResult>("led_config_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "LED configuration save failed.",
+			changed: false,
+			sections: [],
 		};
 	}
 }
