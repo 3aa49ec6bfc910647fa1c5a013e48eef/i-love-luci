@@ -300,6 +300,193 @@ CI should:
 - build OpenWrt package for supported targets
 - publish only from `main`
 
+## Testing Strategy
+
+Testing needs to cover two different systems:
+
+- frontend correctness before packaging
+- router integration after packaging
+
+The spike should use layered tests so most issues are caught before installing on a router, while still proving the real LuCI/rpcd/uhttpd path on target hardware.
+
+### Frontend Tests
+
+Run these in `applications/luci-app-i-love-luci/src/shell`:
+
+```sh
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+```
+
+Expected tooling:
+
+- TypeScript strict mode for the shell and typed RPC client.
+- Vitest for utility, state, RPC client, route, and component behavior.
+- Testing Library for accessible component behavior.
+- Playwright for shell, navigation, search, toasts, responsive layout, and legacy frame smoke tests.
+
+Frontend test fixtures should use sanitized fake router data only.
+
+### Static Build Verification
+
+After `npm run build`, verify:
+
+- `htdocs/luci-static/i-love-luci-app/index.html` exists.
+- hashed JS/CSS assets exist under `htdocs/luci-static/i-love-luci-app/assets/`.
+- no source maps are shipped unless explicitly enabled for debug builds.
+- asset paths work when served from `/luci-static/i-love-luci-app/`.
+- bundle size stays within a documented budget.
+
+Recommended first bundle budget:
+
+- initial JS under 300 KB gzip
+- initial CSS under 80 KB gzip
+- lazy-load native routes where practical
+
+### Package Build Tests
+
+CI should build the OpenWrt package after frontend assets are generated:
+
+```sh
+OPENWRT_VERSION=24.10.7 OPENWRT_TARGET=rockchip/armv8 PACKAGE_FORMAT=ipk scripts/build-openwrt-package.sh
+OPENWRT_VERSION=25.12.4 OPENWRT_TARGET=rockchip/armv8 PACKAGE_FORMAT=apk scripts/build-openwrt-package.sh
+```
+
+Package checks:
+
+- package contains built app assets
+- package contains menu JSON
+- package contains ACL JSON
+- package contains `rpcd` ucode bridge
+- package install clears LuCI cache and reloads `rpcd`
+- package uninstall leaves classic LuCI usable
+
+### Router Integration Tests
+
+Use a test router or VM. Do not run destructive firmware or package changes on a primary router without a rollback path.
+
+Install the package, then run:
+
+```sh
+rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
+/etc/init.d/rpcd reload
+/etc/init.d/uhttpd restart
+```
+
+Verify:
+
+- app route loads
+- current user/session is detected
+- menu tree endpoint responds
+- legacy iframe can open an existing LuCI page
+- search indexes menu items
+- toast provider renders top-center toasts
+- pending changes badge reflects UCI changes
+- classic LuCI remains reachable
+
+### Secondary `uhttpd` Instance
+
+During router testing, use a second `uhttpd` instance on a different port where possible. This lets the spike test new routing and headers without breaking the main LuCI admin session.
+
+Recommended test port:
+
+```text
+8081
+```
+
+Example UCI shape:
+
+```sh
+uci -q delete uhttpd.iloveluci_test
+uci set uhttpd.iloveluci_test='uhttpd'
+uci add_list uhttpd.iloveluci_test.listen_http='0.0.0.0:8081'
+uci add_list uhttpd.iloveluci_test.listen_http='[::]:8081'
+uci set uhttpd.iloveluci_test.home='/www'
+uci set uhttpd.iloveluci_test.ucode_prefix='/cgi-bin/luci=/usr/share/ucode/luci/uhttpd.uc'
+uci set uhttpd.iloveluci_test.rfc1918_filter='1'
+uci set uhttpd.iloveluci_test.max_requests='3'
+uci set uhttpd.iloveluci_test.max_connections='100'
+uci commit uhttpd
+/etc/init.d/uhttpd restart
+```
+
+Test URL:
+
+```text
+http://router-address:8081/cgi-bin/luci/admin/i-love-luci
+```
+
+Rules:
+
+- keep standard LuCI on port 80/443 as fallback
+- use port 8081 only for spike verification
+- remove the test instance after testing if it is not needed
+- do not expose the test port outside the trusted LAN
+- prefer HTTPS for MFA/passkey work once the authentication prototype starts
+
+Cleanup:
+
+```sh
+uci -q delete uhttpd.iloveluci_test
+uci commit uhttpd
+/etc/init.d/uhttpd restart
+```
+
+### Playwright Router Smoke Tests
+
+Run Playwright against the secondary port:
+
+- login screen renders
+- password field focus works when username is prefilled
+- MFA code screen renders when server returns `mfa_required`
+- shell renders after login
+- sidebar opens/closes on mobile
+- search opens and returns results
+- toast appears after a mock save
+- legacy iframe opens `/admin/status/overview`
+- classic LuCI fallback link works
+
+Use environment variables for router target and credentials:
+
+```sh
+ILOVELUCI_TEST_URL=http://192.168.1.1:8081/cgi-bin/luci
+ILOVELUCI_TEST_USER=root
+ILOVELUCI_TEST_PASSWORD=...
+npm run test:e2e:router
+```
+
+Do not commit credentials. `.env` stays ignored.
+
+### MFA Test Plan
+
+MFA tests must cover security-sensitive behavior server-side:
+
+- setup creates a secret only after authenticated session
+- setup requires first valid TOTP before enabling
+- login requires second factor when enabled
+- invalid codes are rejected
+- replayed codes are rejected when possible
+- rate limiting/backoff works
+- recovery codes are one-time use
+- disabling MFA requires password plus valid second factor
+- lost-MFA recovery path is documented
+
+Do not test MFA only with frontend mocks. Use unit tests for TOTP helpers and integration tests against the `rpcd` bridge.
+
+### CI Gate
+
+Pull requests should pass:
+
+- frontend lint/typecheck/unit tests
+- frontend production build
+- static asset verification
+- OpenWrt package build for supported targets
+- optional Playwright mock-backend smoke test
+
+Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
+
 ## Initial Spike Deliverables
 
 1. Package skeleton for `luci-app-i-love-luci`.
@@ -312,6 +499,7 @@ CI should:
 8. `rpcd` bridge stub returning menu/session metadata.
 9. CI updates to build frontend assets before package build.
 10. Router install instructions and rollback path.
+11. Documented test plan with secondary `uhttpd` test-port workflow.
 
 ## Open Questions
 
