@@ -2031,12 +2031,34 @@ function DropbearAccessPanel({ configs }: { configs: ConfigSection[] }) {
 									<option value="on">enabled</option>
 								</select>
 							</label>
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Bind mode</span>
+								<select
+									className="h-9 rounded-md border bg-card px-2 text-sm"
+									onChange={(event) => update(index, "bindMode", event.target.value as DropbearConfigInput["bindMode"])}
+									value={row.bindMode}
+								>
+									<option value="all">all interfaces</option>
+									<option value="interface">interface</option>
+									<option value="direct">direct interface</option>
+								</select>
+							</label>
 							<label className="grid gap-2 text-sm sm:col-span-2">
 								<span className="font-medium">Listen interface</span>
 								<Input
 									onChange={(event) => update(index, "Interface", event.target.value)}
+									disabled={row.bindMode !== "interface"}
 									placeholder="All interfaces"
 									value={row.Interface}
+								/>
+							</label>
+							<label className="grid gap-2 text-sm sm:col-span-2">
+								<span className="font-medium">Direct interface</span>
+								<Input
+									disabled={row.bindMode !== "direct"}
+									onChange={(event) => update(index, "DirectInterface", event.target.value)}
+									placeholder="No direct interface"
+									value={row.DirectInterface}
 								/>
 							</label>
 						</div>
@@ -2473,26 +2495,33 @@ function normalizeUpnpdRule(rule: UpnpdRule): UpnpdRule {
 }
 
 function dropbearFormValues(config: ConfigSection | undefined): DropbearConfigInput {
+	const iface = configValue(config, "Interface");
+	const directInterface = configValue(config, "DirectInterface");
+
 	return {
 		section: config?.name ?? "",
+		bindMode: directInterface ? "direct" : iface ? "interface" : "all",
 		enable: configValue(config, "enable") === "0" ? "0" : "1",
 		Port: configValue(config, "Port") || "22",
 		PasswordAuth: dropbearOnOff(configValue(config, "PasswordAuth") || "on"),
 		RootPasswordAuth: dropbearOnOff(configValue(config, "RootPasswordAuth") || "on"),
 		GatewayPorts: dropbearOnOff(configValue(config, "GatewayPorts") || "off"),
-		Interface: configValue(config, "Interface"),
+		Interface: iface,
+		DirectInterface: directInterface,
 	};
 }
 
 function newDropbearRow(): DropbearConfigInput {
 	return {
 		section: "",
+		bindMode: "all",
 		enable: "1",
 		Port: "22",
 		PasswordAuth: "on",
 		RootPasswordAuth: "on",
 		GatewayPorts: "off",
 		Interface: "",
+		DirectInterface: "",
 	};
 }
 

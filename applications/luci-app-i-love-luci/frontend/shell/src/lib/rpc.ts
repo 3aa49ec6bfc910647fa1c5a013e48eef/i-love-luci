@@ -395,12 +395,14 @@ export type ConfigBackupResult = {
 
 export type DropbearConfigInput = {
 	section?: string;
+	bindMode?: "all" | "interface" | "direct";
 	enable: string;
 	Port: string;
 	PasswordAuth: string;
 	RootPasswordAuth: string;
 	GatewayPorts: string;
 	Interface?: string;
+	DirectInterface?: string;
 };
 
 export type DropbearConfigResult = {

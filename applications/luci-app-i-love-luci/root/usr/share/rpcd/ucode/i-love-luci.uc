@@ -51,7 +51,7 @@ const nativeRoutes = {
 	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/password': { status: 'supported', nativePath: '/native/password' },
-	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
+	'/admin/system/admin/dropbear': { status: 'supported', nativePath: '/native/service/dropbear' },
 	'/admin/system/admin/sshkeys': { status: 'supported', nativePath: '/native/sshkeys' },
 	'/admin/system/admin/uhttpd': { status: 'supported', nativePath: '/native/service/uhttpd' },
 	'/admin/system/admin/repokeys': { status: 'supported', nativePath: '/native/repokeys' },
@@ -3863,7 +3863,8 @@ function save_dropbear_config(config) {
 		PasswordAuth: on_off(config.PasswordAuth),
 		RootPasswordAuth: on_off(config.RootPasswordAuth),
 		GatewayPorts: on_off(config.GatewayPorts) == 'on' ? 'on' : '',
-		Interface: trim('' + (config.Interface || ''))
+		Interface: trim('' + (config.Interface || '')),
+		DirectInterface: trim('' + (config.DirectInterface || ''))
 	};
 	let current = {};
 
@@ -3918,7 +3919,9 @@ save_dropbear_config_rows = function(rows) {
 		let section = replace(trim('' + (row?.section || '')), /[\r\n]/g, '');
 		let is_existing = length(section) && existing[section] == true;
 		let port = int(row?.Port || row?.port || 22);
+		let bind_mode = row?.bindMode == 'direct' ? 'direct' : (row?.bindMode == 'interface' ? 'interface' : 'all');
 		let iface = trim('' + (row?.Interface || ''));
+		let direct_iface = trim('' + (row?.DirectInterface || ''));
 
 		if (length(section) && !is_existing)
 			return {
@@ -3940,7 +3943,18 @@ save_dropbear_config_rows = function(rows) {
 				init: fast_service_state('dropbear')
 			};
 
-		if (length(iface) && replace(iface, /[^A-Za-z0-9_.: -]/g, '') != iface)
+		if (bind_mode == 'all') {
+			iface = '';
+			direct_iface = '';
+		}
+		else if (bind_mode == 'direct') {
+			iface = '';
+		}
+		else {
+			direct_iface = '';
+		}
+
+		if ((length(iface) && replace(iface, /[^A-Za-z0-9_.: -]/g, '') != iface) || (length(direct_iface) && replace(direct_iface, /[^A-Za-z0-9_.: -]/g, '') != direct_iface))
 			return {
 				saved: false,
 				message: 'SSH listen interface contains unsupported characters.',
@@ -3959,7 +3973,8 @@ save_dropbear_config_rows = function(rows) {
 				PasswordAuth: on_off(row?.PasswordAuth),
 				RootPasswordAuth: on_off(row?.RootPasswordAuth),
 				GatewayPorts: on_off(row?.GatewayPorts) == 'on' ? 'on' : '',
-				Interface: iface
+				Interface: iface,
+				DirectInterface: direct_iface
 			}
 		});
 	}
