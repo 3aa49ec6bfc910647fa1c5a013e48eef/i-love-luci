@@ -10,6 +10,7 @@ import {
 	getCoreSettings,
 	getDashboardStatus,
 	saveFirewallDefaults,
+	saveFirewallZones,
 	saveDhcpDomains,
 	saveDhcpHosts,
 	saveDhcpPools,
@@ -26,6 +27,7 @@ import {
 	type DhcpPool,
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
+	type FirewallZone,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
 	type ServiceState,
@@ -1024,19 +1026,14 @@ function FirewallSummary({
 				/>
 			) : null}
 
-			<SimpleSectionTable
-				columns={["Zone", "Networks", "Devices", "Input", "Output", "Forward", "NAT"]}
-				empty="No firewall zones configured."
-				rows={zones.map((section) => [
-					valueText(section.values.name || section.name),
-					valueText(section.values.network),
-					valueText(section.values.device),
-					valueText(section.values.input),
-					valueText(section.values.output),
-					valueText(section.values.forward),
-					enabledText(section.values.masq),
-				])}
-				title="Zones"
+			<FirewallZoneEditor
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
+				zones={zones}
 			/>
 
 			<SimpleSectionTable
@@ -1187,6 +1184,234 @@ function firewallDefaultsValues(section: ConfigSection): FirewallDefaultsInput {
 function firewallPolicyText(value: unknown) {
 	const text = rawValue(value).toUpperCase();
 	return text === "ACCEPT" || text === "DROP" || text === "REJECT" ? text : "REJECT";
+}
+
+function FirewallZoneEditor({
+	onSaved,
+	zones,
+}: {
+	onSaved: (sections: ConfigSection[]) => void;
+	zones: ConfigSection[];
+}) {
+	const [rows, setRows] = useState(() => zones.map(firewallZoneValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallZone, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				network: "",
+				device: "",
+				input: "REJECT",
+				output: "ACCEPT",
+				forward: "REJECT",
+				masq: "0",
+				mtu_fix: "0",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallZones(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.zones.map(normalizeFirewallZone);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Zones</h2>
+					<p className="text-sm text-muted-foreground">Configure firewall zones, interface membership, policies, and NAT flags.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add zone
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[78rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Networks</th>
+								<th className="px-3 py-2 font-medium">Devices</th>
+								<th className="px-3 py-2 font-medium">Input</th>
+								<th className="px-3 py-2 font-medium">Output</th>
+								<th className="px-3 py-2 font-medium">Forward</th>
+								<th className="px-3 py-2 font-medium">NAT</th>
+								<th className="px-3 py-2 font-medium">MTU fix</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((zone, index) => (
+									<tr className="border-b align-top last:border-0" key={`${zone.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Zone name"
+												onChange={(event) => updateRow(index, "name", event.target.value)}
+												value={zone.name}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Networks"
+												className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "network", event.target.value)}
+												spellCheck={false}
+												value={zone.network}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Devices"
+												className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "device", event.target.value)}
+												spellCheck={false}
+												value={zone.device}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<FirewallPolicySelect
+												id={`firewall-zone-input-${index}`}
+												onChange={(value) => updateRow(index, "input", value)}
+												value={zone.input}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<FirewallPolicySelect
+												id={`firewall-zone-output-${index}`}
+												onChange={(value) => updateRow(index, "output", value)}
+												value={zone.output}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<FirewallPolicySelect
+												id={`firewall-zone-forward-${index}`}
+												onChange={(value) => updateRow(index, "forward", value)}
+												value={zone.forward}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-zone-masq-${index}`}
+												onChange={(value) => updateRow(index, "masq", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={zone.masq}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-zone-mtu-${index}`}
+												onChange={(value) => updateRow(index, "mtu_fix", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={zone.mtu_fix}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${zone.name || "zone"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={9}>
+										No firewall zones configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function firewallZoneValues(section: ConfigSection): FirewallZone {
+	return normalizeFirewallZone({
+		section: section.name,
+		name: rawValue(section.values.name || section.name),
+		network: rawListValue(section.values.network).join("\n"),
+		device: rawListValue(section.values.device).join("\n"),
+		input: firewallPolicyText(section.values.input),
+		output: firewallPolicyText(section.values.output),
+		forward: firewallPolicyText(section.values.forward),
+		masq: booleanValue(section.values.masq),
+		mtu_fix: booleanValue(section.values.mtu_fix),
+	});
+}
+
+function normalizeFirewallZone(zone: FirewallZone): FirewallZone {
+	return {
+		section: zone.section ?? "",
+		name: zone.name ?? "",
+		network: zone.network ?? "",
+		device: zone.device ?? "",
+		input: firewallPolicyText(zone.input),
+		output: firewallPolicyText(zone.output),
+		forward: firewallPolicyText(zone.forward),
+		masq: zone.masq === "1" ? "1" : "0",
+		mtu_fix: zone.mtu_fix === "1" ? "1" : "0",
+	};
 }
 
 function FirewallRuleTable({ rules }: { rules: ConfigSection[] }) {

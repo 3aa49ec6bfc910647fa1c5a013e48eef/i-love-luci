@@ -471,6 +471,26 @@ export type FirewallDefaultsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallZone = {
+	section: string;
+	name: string;
+	network: string;
+	device: string;
+	input: string;
+	output: string;
+	forward: string;
+	masq: string;
+	mtu_fix: string;
+};
+
+export type FirewallZonesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	zones: FirewallZone[];
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -914,6 +934,21 @@ export async function saveFirewallDefaults(config: FirewallDefaultsInput): Promi
 			message: "Firewall defaults save failed.",
 			changed: false,
 			section: null,
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallZones(rows: FirewallZone[]): Promise<FirewallZonesResult> {
+	try {
+		return await callBridge<FirewallZonesResult>("firewall_zones_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall zones save failed.",
+			changed: false,
+			zones: [],
 			sections: [],
 		};
 	}

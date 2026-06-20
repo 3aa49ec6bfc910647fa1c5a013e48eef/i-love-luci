@@ -1495,6 +1495,172 @@ function save_firewall_defaults(config) {
 	};
 }
 
+function firewall_zone_rows() {
+	let zones = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return zones;
+	}
+
+	uci.foreach('firewall', 'zone', function(section) {
+		push(zones, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			network: join('\n', dhcp_normalize_list(section.network)),
+			device: join('\n', dhcp_normalize_list(section.device)),
+			input: section.input || '',
+			output: section.output || '',
+			forward: section.forward || '',
+			masq: section.masq || '',
+			mtu_fix: section.mtu_fix || ''
+		});
+	});
+
+	return zones;
+}
+
+function valid_firewall_name(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_.-]/g, '') == value;
+}
+
+function valid_firewall_list_values(values) {
+	for (let value in values)
+		if (!valid_network_rule_name(value))
+			return false;
+
+	return true;
+}
+
+function save_firewall_zones(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+	let names = {};
+
+	uci.foreach('firewall', 'zone', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'zone';
+
+		if (!is_existing) {
+			section = uci.add('firewall', 'zone');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let name = dhcp_clean_value(row?.name || '');
+		let networks = split_dhcp_list(row?.network || '');
+		let devices = split_dhcp_list(row?.device || '');
+		let next = {
+			name,
+			input: firewall_policy_value(row?.input || ''),
+			output: firewall_policy_value(row?.output || ''),
+			forward: firewall_policy_value(row?.forward || ''),
+			masq: dhcp_zero_one(row?.masq),
+			mtu_fix: dhcp_zero_one(row?.mtu_fix)
+		};
+
+		if (!valid_firewall_name(name))
+			return {
+				saved: false,
+				message: 'Firewall zone name is required and may contain only letters, numbers, dots, dashes, and underscores.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (names[name])
+			return {
+				saved: false,
+				message: 'Firewall zone names must be unique.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		names[name] = true;
+
+		if (!length(next.input) || !length(next.output) || !length(next.forward))
+			return {
+				saved: false,
+				message: 'Firewall zone policies must be ACCEPT, REJECT, or DROP.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (!valid_firewall_list_values(networks) || !valid_firewall_list_values(devices))
+			return {
+				saved: false,
+				message: 'Firewall zone networks and devices contain unsupported characters.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if ((key == 'masq' || key == 'mtu_fix') && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'masq' || key == 'mtu_fix') && value == '0')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'network') || [], networks)) {
+			changed = true;
+			if (length(networks))
+				uci.set('firewall', section, 'network', length(networks) == 1 ? networks[0] : networks);
+			else
+				uci.delete('firewall', section, 'network');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'device') || [], devices)) {
+			changed = true;
+			if (length(devices))
+				uci.set('firewall', section, 'device', length(devices) == 1 ? devices[0] : devices);
+			else
+				uci.delete('firewall', section, 'device');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall zones saved and firewall reloaded.' : 'Firewall zones already up to date.',
+		changed,
+		zones: firewall_zone_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2793,6 +2959,26 @@ const methods = {
 					message: 'Firewall defaults save failed: ' + e,
 					changed: false,
 					section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_zones_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_zones(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall zones save failed: ' + e,
+					changed: false,
+					zones: firewall_zone_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}
