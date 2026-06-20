@@ -25,6 +25,7 @@
 					"changes_apply",
 					"changes_revert",
 					"crontab_save",
+					"custom_command_run",
 					"diagnostics_run",
 					"service_action",
 					"ssh_keys_save",

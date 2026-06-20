@@ -548,9 +548,9 @@ Converted to native React/Vite surfaces:
 - `/admin/system/flash`: read-only filesystem and flash partition overview.
 - `/admin/system/leds`: LED trigger configuration and current sysfs LED state.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
-- `/admin/system/commands` and children: modern read-only UCI summary for custom commands. Auto mode defaults to LuCI compat until command execution/config editing reaches parity.
+- `/admin/system/commands` and children: modern custom command dashboard can list and execute configured LuCI commands by section id, with UCI summary. Auto mode still defaults to LuCI compat until command add/edit/delete and download/public-link parity are complete.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
-- `/admin/services`: service overview with native lifecycle actions where an init script exists. Auto mode defaults to LuCI compat for service-app routes until adapter parity is proven.
+- `/admin/services`: service overview with native lifecycle actions where an init script exists. The root services route is native by default; service-app child routes still default to LuCI compat until adapter parity is proven.
 - `/admin/services/banip` and child routes: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 - `/admin/services/adblock-fast`: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 - `/admin/services/upnp`: service status, lifecycle actions, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
@@ -564,11 +564,12 @@ Validation on `172.16.172.1`:
 - `native_page` returned `sshkeys` successfully. The router currently has no `/etc/dropbear/authorized_keys`, so save was not exercised to avoid creating an empty file during validation.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
 - `service_action` and `startup_action` returned current state for `uhttpd` with non-mutating `status`; invalid init names are rejected.
-- Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
+- Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout. The root Services route now resolves to native in auto mode.
 - Browser smoke tests loaded `#/native/wireless` and `#/native/attendedsysupgrade`.
 - Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
 - Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
 - Menu policy validation confirmed incomplete LuCI app routes such as banIP, AdBlock Fast, UPnP, uHTTPd, custom commands, attended sysupgrade, and package manager default to LuCI compat in auto mode while keeping native preview routes available for explicit `modern` selection.
+- Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
 
 Remaining legacy or partial gaps:
 
@@ -576,7 +577,7 @@ Remaining legacy or partial gaps:
 - Attended sysupgrade has a native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is inventory-only and available only when a route is explicitly forced to modern.
-- Advanced service editors for banIP, AdBlock Fast, UPnP, custom commands, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Sysupgrade and Standalone Direction
@@ -717,7 +718,7 @@ Required tooling:
 Acceptance gate:
 
 - The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
-- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=41`, `legacy=19`, `menu_files=15`, and `luci_apps=9`.
+- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=42`, `legacy=18`, `menu_files=15`, and `luci_apps=9`.
 
 Final release/test gate:
 

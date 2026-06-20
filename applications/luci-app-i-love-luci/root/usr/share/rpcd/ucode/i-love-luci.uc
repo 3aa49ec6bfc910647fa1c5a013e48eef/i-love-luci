@@ -4,7 +4,7 @@
 
 import { cursor } from 'uci';
 import { connect } from 'ubus';
-import { glob, open, popen, readfile, stat, writefile } from 'fs';
+import { glob, mkstemp, open, popen, readfile, stat, writefile } from 'fs';
 
 const uci = cursor();
 const ubus = connect();
@@ -67,7 +67,7 @@ const nativeRoutes = {
 	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
 	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
 	'/admin/system/leds': { status: 'supported', nativePath: '/native/leds' },
-	'/admin/services': { status: 'partial', nativePath: '/native/services', autoMode: 'legacy' },
+	'/admin/services': { status: 'supported', nativePath: '/native/services' },
 	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
 	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
 	'/admin/services/banip/allowlist': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
@@ -83,7 +83,7 @@ const nativeRoutes = {
 const servicePackages = {
 	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'] },
 	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'] },
-	commands: { package: 'luci-commands', init: null, title: 'Custom Commands', sections: ['command'] },
+	commands: { package: 'luci', init: null, title: 'Custom Commands', sections: ['command'] },
 	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'] },
 	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'] },
 	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'] }
@@ -368,6 +368,115 @@ function shell_output(command) {
 	return output;
 }
 
+function parse_command_args(str) {
+	let args = [];
+
+	str = '' + (str || '');
+
+	function isspace(c) {
+		if (c == 9 || c == 10 || c == 11 || c == 12 || c == 13 || c == 32)
+			return c;
+	}
+
+	function isquote(c) {
+		if (c == 34 || c == 39 || c == 96)
+			return c;
+	}
+
+	function isescape(c) {
+		if (c == 92)
+			return c;
+	}
+
+	function ismeta(c) {
+		if (c == 36 || c == 92 || c == 96)
+			return c;
+	}
+
+	function unquote(start, end) {
+		let esc, quote, res = [];
+
+		for (let off = start; off < end; off++) {
+			const byte = ord(str, off);
+			const q = isquote(byte);
+			const e = isescape(byte);
+			const m = ismeta(byte);
+
+			if (esc) {
+				if (!m)
+					push(res, 92);
+
+				push(res, byte);
+				esc = false;
+			}
+			else if (e && quote != 39) {
+				esc = true;
+			}
+			else if (q && quote && q == quote) {
+				quote = null;
+			}
+			else if (q && !quote) {
+				quote = q;
+			}
+			else {
+				push(res, byte);
+			}
+		}
+
+		push(args, chr(...res));
+	}
+
+	let esc, start, quote;
+
+	for (let off = 0; off <= length(str); off++) {
+		const byte = ord(str, off);
+		const q = isquote(byte);
+		const s = isspace(byte) ?? (byte === null);
+		const e = isescape(byte);
+
+		if (esc) {
+			esc = false;
+		}
+		else if (e && quote != 39) {
+			esc = true;
+			start ??= off;
+		}
+		else if (q && quote && q == quote) {
+			quote = null;
+		}
+		else if (q && !quote) {
+			start ??= off;
+			quote = q;
+		}
+		else if (s && !quote) {
+			if (start !== null) {
+				unquote(start, off);
+				start = null;
+			}
+		}
+		else {
+			start ??= off;
+		}
+	}
+
+	if (quote)
+		unquote(start, length(str));
+
+	return args;
+}
+
+function quote_command_args(argv) {
+	return map(argv, value => match(value, /[^\w.\/|-]/) ? `'${replace(value, "'", "'\\''")}'` : value);
+}
+
+function contains_binary(text) {
+	for (let off = 0, byte = ord(text); off < length(text); byte = ord(text, ++off))
+		if (byte <= 8 || (byte >= 14 && byte <= 31))
+			return true;
+
+	return false;
+}
+
 function safe_read(path) {
 	try {
 		return readfile(path) || '';
@@ -522,6 +631,121 @@ function service_overview() {
 	return services;
 }
 
+function custom_command_entries() {
+	let entries = [];
+
+	try {
+		uci.load('luci');
+	}
+	catch (e) {
+		return entries;
+	}
+
+	uci.foreach('luci', 'command', function(section) {
+		push(entries, {
+			id: section['.name'],
+			name: section.name || section['.name'],
+			command: section.command || '',
+			param: section.param == '1',
+			public: section.public == '1'
+		});
+	});
+
+	return entries;
+}
+
+function custom_command_section(id) {
+	let result = null;
+
+	id = '' + (id || '');
+
+	if (!length(id) || replace(id, /[^A-Za-z0-9_.-]/g, '') != id)
+		return null;
+
+	try {
+		uci.load('luci');
+	}
+	catch (e) {
+		return null;
+	}
+
+	uci.foreach('luci', 'command', function(section) {
+		if (section['.name'] == id)
+			result ??= section;
+	});
+
+	return result;
+}
+
+function run_custom_command(id, args) {
+	let section = custom_command_section(id);
+
+	if (!section?.command)
+		return {
+			ok: false,
+			message: 'No such command.',
+			command: '',
+			stdout: '',
+			stderr: '',
+			exitcode: 127,
+			binary: false
+		};
+
+	args = '' + (args || '');
+
+	if (length(args) > 4096)
+		return {
+			ok: false,
+			message: 'Command arguments are too large.',
+			command: '',
+			stdout: '',
+			stderr: '',
+			exitcode: 1,
+			binary: false
+		};
+
+	let argv = parse_command_args(section.command);
+
+	if (section.param == '1' && length(args))
+		push(argv, ...(parse_command_args(args) ?? []));
+
+	if (!length(argv))
+		return {
+			ok: false,
+			message: 'Command is empty.',
+			command: '',
+			stdout: '',
+			stderr: '',
+			exitcode: 127,
+			binary: false
+		};
+
+	let quoted = quote_command_args(argv);
+	let outfd = mkstemp();
+	let errfd = mkstemp();
+	let exitcode = system(`${join(' ', quoted)} >&${outfd.fileno()} 2>&${errfd.fileno()}`);
+
+	outfd.seek(0);
+	errfd.seek(0);
+
+	let stdout = outfd.read(1024 * 512) || '';
+	let stderr = errfd.read(1024 * 512) || '';
+	let binary = contains_binary(stdout);
+
+	outfd.close();
+	errfd.close();
+
+	return {
+		ok: true,
+		message: exitcode == 0 ? 'Command completed.' : 'Command failed.',
+		command: join(' ', quoted),
+		stdout: binary ? '' : stdout,
+		stderr,
+		exitcode,
+		binary
+	};
+}
+
 function package_list() {
 	let output = command_exists('apk')
 		? shell_output('apk info -vv | sort | head -n 300')
@@ -540,6 +764,7 @@ function service_detail(id) {
 			package: id,
 			init: null,
 			sections: [],
+			customCommands: [],
 			logs: {}
 		};
 
@@ -549,6 +774,7 @@ function service_detail(id) {
 		package: meta.package,
 		init: fast_service_state(meta.init),
 		sections: collect_uci_config(meta.package, meta.sections || []),
+		customCommands: id == 'commands' ? custom_command_entries() : [],
 		logs: {}
 	};
 }
@@ -920,6 +1146,16 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(service_action(request.args.id || '', request.args.action || 'status'));
+		}
+	},
+
+	custom_command_run: {
+		args: {
+			id: '',
+			args: ''
+		},
+		call: function(request) {
+			return respond(run_custom_command(request.args.id || '', request.args.args || ''));
 		}
 	},
 

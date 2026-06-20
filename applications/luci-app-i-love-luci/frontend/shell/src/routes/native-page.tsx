@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
 	getNativePage,
 	getServiceDetail,
+	runCustomCommand,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -16,6 +17,8 @@ import {
 	saveSshKeys,
 	type CommandBlock,
 	type ConfigSection,
+	type CustomCommand,
+	type CustomCommandResult,
 	type InitAction,
 	type NativePageData,
 	type NativeService,
@@ -101,7 +104,6 @@ const pageMeta: Record<string, PageMeta> = {
 	services: {
 		title: "Services",
 		description: "Installed service overview with modern status and configuration summaries.",
-		badge: "partial modern",
 	},
 };
 
@@ -191,10 +193,94 @@ export function NativeServicePage() {
 				loading={!detail}
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
+			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
 			<ConfigTable sections={sections} />
 			{logs.map(([name, text]) => (
 				<TextPanel key={name} title={pageTitle(name)} text={text} />
 			))}
+		</div>
+	);
+}
+
+function CustomCommandsPanel({ commands }: { commands: CustomCommand[] }) {
+	if (!commands.length) {
+		return (
+			<Panel title="Commands">
+				<p className="text-sm text-muted-foreground">No custom commands are configured.</p>
+			</Panel>
+		);
+	}
+
+	return (
+		<Panel title="Commands">
+			<div className="grid gap-3">
+				{commands.map((command) => (
+					<CustomCommandRunner command={command} key={command.id} />
+				))}
+			</div>
+		</Panel>
+	);
+}
+
+function CustomCommandRunner({ command }: { command: CustomCommand }) {
+	const [args, setArgs] = useState("");
+	const [running, setRunning] = useState(false);
+	const [result, setResult] = useState<CustomCommandResult | null>(null);
+
+	async function run() {
+		setRunning(true);
+		const nextResult = await runCustomCommand(command.id, args);
+		setRunning(false);
+		setResult(nextResult);
+
+		if (nextResult.ok && nextResult.exitcode === 0) {
+			toast.success(nextResult.message);
+		}
+		else {
+			toast.error(nextResult.message);
+		}
+	}
+
+	return (
+		<div className="grid gap-3 rounded-md border bg-card p-3">
+			<div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="min-w-0">
+					<h3 className="text-sm font-semibold">{command.name}</h3>
+					<code className="mt-1 block break-words rounded bg-secondary px-2 py-1 text-xs text-muted-foreground">
+						{command.command}
+					</code>
+				</div>
+				<div className="flex shrink-0 flex-wrap items-center gap-2">
+					{command.public ? <Badge>public</Badge> : null}
+					{command.param ? <Badge>args</Badge> : null}
+				</div>
+			</div>
+			<div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+				{command.param ? (
+					<Input
+						placeholder="Arguments"
+						value={args}
+						onChange={(event) => setArgs(event.target.value)}
+					/>
+				) : (
+					<div />
+				)}
+				<Button disabled={running} onClick={() => void run()} type="button">
+					<Play className="size-4" />
+					Run
+				</Button>
+			</div>
+			{result ? (
+				<div className="grid gap-2">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+						<Badge className={result.exitcode === 0 ? "text-primary" : ""}>exit {result.exitcode}</Badge>
+						<span className="break-all font-mono">{result.command}</span>
+					</div>
+					{result.binary ? <p className="text-sm text-muted-foreground">Binary output hidden.</p> : null}
+					{result.stdout ? <Preformatted text={result.stdout} /> : null}
+					{result.stderr ? <Preformatted text={result.stderr} /> : null}
+				</div>
+			) : null}
 		</div>
 	);
 }

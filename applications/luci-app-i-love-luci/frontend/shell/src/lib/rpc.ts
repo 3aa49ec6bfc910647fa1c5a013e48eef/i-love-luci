@@ -166,6 +166,24 @@ export type InitActionResult = {
 	state: ServiceState | null;
 };
 
+export type CustomCommand = {
+	id: string;
+	name: string;
+	command: string;
+	param: boolean;
+	public: boolean;
+};
+
+export type CustomCommandResult = {
+	ok: boolean;
+	message: string;
+	command: string;
+	stdout: string;
+	stderr: string;
+	exitcode: number;
+	binary: boolean;
+};
+
 export type NativeService = {
 	id?: string;
 	name?: string;
@@ -173,6 +191,7 @@ export type NativeService = {
 	package?: string;
 	init?: ServiceState | null;
 	sections?: ConfigSection[];
+	customCommands?: CustomCommand[];
 	logs?: Record<string, string>;
 	enabled?: boolean;
 	running?: boolean;
@@ -404,6 +423,23 @@ export async function runDiagnostics(tool: string, target: string): Promise<stri
 	}
 	catch {
 		return "Diagnostic command failed.";
+	}
+}
+
+export async function runCustomCommand(id: string, args: string): Promise<CustomCommandResult> {
+	try {
+		return await callBridge<CustomCommandResult>("custom_command_run", { id, args });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Command failed.",
+			command: "",
+			stdout: "",
+			stderr: "",
+			exitcode: 1,
+			binary: false,
+		};
 	}
 }
 

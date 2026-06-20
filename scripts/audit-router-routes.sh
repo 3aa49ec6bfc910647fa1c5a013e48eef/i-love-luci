@@ -126,7 +126,7 @@ for item in visible:
 		failures.append(f"{path}: firstChildPath missing from menu_tree: {item['firstChildPath']}")
 
 compat_prefixes = (
-	"/admin/services",
+	"/admin/services/",
 	"/admin/system/commands",
 )
 compat_exact = {
