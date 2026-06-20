@@ -1,0 +1,13 @@
+{
+	"admin/i-love-luci": {
+		"title": "I Love LuCI",
+		"order": 1,
+		"action": {
+			"type": "template",
+			"path": "i-love-luci/app"
+		},
+		"depends": {
+			"acl": [ "luci-app-i-love-luci" ]
+		}
+	}
+}

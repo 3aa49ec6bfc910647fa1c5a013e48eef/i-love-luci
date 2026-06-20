@@ -121,9 +121,41 @@ Design constraints:
 - no marketing-style hero layout
 - dense but readable data surfaces
 - full keyboard support
+- first-class mobile support across every native route, dialog, table, form, toast, and navigation surface
 - mobile-first sidebar/search behavior
+- no horizontal page overflow on narrow screens
+- tap targets sized for touch input
+- input fields sized to avoid mobile browser zoom, with the root viewport locked to `width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover`
 - no card-in-card layout
 - no sensitive router values in docs/screenshots
+
+## Mobile Support
+
+Mobile is a first-class target for the modern shell, not a reduced fallback. Every native route should be designed and tested at phone, tablet, and desktop widths before it is considered complete.
+
+Required behavior:
+
+- header actions must not overlap search, pending-change badges, refresh indicators, or the profile menu
+- sidebar navigation must collapse predictably, close on outside tap, and avoid duplicate close buttons
+- command/search popovers must be viewport-aware and usable with the on-screen keyboard open
+- tab bars and action rows must wrap or scroll horizontally without pushing the page wider than the viewport
+- tables must use responsive column priority, compact density, or horizontal scroll containers instead of clipping content
+- forms must use mobile-safe input sizing and must not trigger browser zoom when focused
+- dialogs, sheets, and toasts must remain visible above legacy iframe content
+- legacy iframe routes must be wrapped so the shell remains usable on small screens
+
+Minimum test viewports:
+
+- 390 x 844 phone
+- 430 x 932 large phone
+- 768 x 1024 tablet
+- 1280 x 800 desktop
+
+The root Vite shell index must set the viewport to:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+```
 
 ## Legacy Compatibility Bridge
 

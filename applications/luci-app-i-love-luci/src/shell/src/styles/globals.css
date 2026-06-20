@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Galano", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--color-background: #fafafa;
+	--color-foreground: #18181b;
+	--color-card: #ffffff;
+	--color-card-foreground: #18181b;
+	--color-muted: #f4f4f5;
+	--color-muted-foreground: #71717a;
+	--color-border: #e4e4e7;
+	--color-input: #e4e4e7;
+	--color-ring: #0f766e;
+	--color-primary: #0f766e;
+	--color-primary-foreground: #ffffff;
+	--color-secondary: #f4f4f5;
+	--color-secondary-foreground: #18181b;
+	--color-destructive: #dc2626;
+	--color-destructive-foreground: #ffffff;
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.75rem;
+}
+
+@font-face {
+	font-family: "Galano";
+	src: url("/luci-static/i-love-luci/GalanoGrotesqueW00-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+
+@layer base {
+	* {
+		border-color: var(--color-border);
+	}
+
+	html,
+	body,
+	#i-love-luci-root {
+		min-height: 100%;
+	}
+
+	body {
+		margin: 0;
+		background: var(--color-background);
+		color: var(--color-foreground);
+		font-family: var(--font-sans);
+		font-size: 14px;
+		letter-spacing: 0;
+	}
+
+	button:not(:disabled),
+	[role="button"]:not(:disabled) {
+		cursor: pointer;
+	}
+}
+
+@layer components {
+	.iloveluci-shell {
+		min-height: 100vh;
+		background:
+			linear-gradient(180deg, rgb(255 255 255 / 0.7), transparent 18rem),
+			var(--color-background);
+	}
+
+	.iloveluci-focus {
+		outline: 2px solid transparent;
+		outline-offset: 2px;
+	}
+
+	.iloveluci-focus:focus-visible {
+		outline-color: var(--color-ring);
+	}
+}

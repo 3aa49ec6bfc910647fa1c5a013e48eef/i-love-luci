@@ -1,0 +1,16 @@
+{% include('header') %}
+
+<link rel="stylesheet" href="{{ resource }}/../i-love-luci-app/assets/app.css?v={{ luciversion }}" />
+
+<div id="i-love-luci-root"></div>
+
+<script>
+	window.ILoveLuCI = {
+		basePath: '{{ dispatcher.build_url("admin", "i-love-luci") }}',
+		legacyBasePath: '{{ dispatcher.build_url("admin") }}',
+		resourcePath: '{{ resource }}/../i-love-luci-app'
+	};
+</script>
+<script type="module" src="{{ resource }}/../i-love-luci-app/assets/app.js?v={{ luciversion }}"></script>
+
+{% include('footer') %}

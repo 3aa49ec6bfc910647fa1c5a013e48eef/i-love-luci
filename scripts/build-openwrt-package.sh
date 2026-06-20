@@ -7,6 +7,7 @@ OPENWRT_VERSION="${OPENWRT_VERSION:-25.12.4}"
 OPENWRT_TARGET="${OPENWRT_TARGET:-rockchip/armv8}"
 PACKAGE_FORMAT="${PACKAGE_FORMAT:-auto}"
 PACKAGE_RELEASE="${PACKAGE_RELEASE:-}"
+BUILD_FRONTEND="${BUILD_FRONTEND:-auto}"
 WORK_DIR="${WORK_DIR:-build/sdk-ci}"
 OUT_DIR="${OUT_DIR:-dist/openwrt}"
 JOBS="${JOBS:-1}"
@@ -36,6 +37,39 @@ if [ ! -d "${PACKAGE_DIR}" ]; then
 	echo "Package directory not found: ${PACKAGE_DIR}" >&2
 	exit 1
 fi
+
+if [ -f "${PACKAGE_DIR}/src/shell/package.json" ]; then
+	case "${BUILD_FRONTEND}" in
+		auto|1|true|yes)
+			echo "Building frontend assets for ${PACKAGE_NAME}"
+			(
+				cd "${PACKAGE_DIR}/src/shell"
+				if [ -f package-lock.json ]; then
+					npm ci
+				else
+					npm install
+				fi
+				npm run build
+			)
+			;;
+		0|false|no)
+			echo "Skipping frontend build for ${PACKAGE_NAME}"
+			;;
+		*)
+			echo "BUILD_FRONTEND must be auto, true, false, 1, or 0" >&2
+			exit 1
+			;;
+	esac
+fi
+
+case "${PACKAGE_NAME}" in
+	luci-theme-*) luci_feed_subdir="themes" ;;
+	luci-app-*) luci_feed_subdir="applications" ;;
+	luci-mod-*) luci_feed_subdir="modules" ;;
+	luci-proto-*) luci_feed_subdir="protocols" ;;
+	luci-lib-*) luci_feed_subdir="libs" ;;
+	*) luci_feed_subdir="${LUCI_FEED_SUBDIR:-applications}" ;;
+esac
 
 target_slug="${OPENWRT_TARGET//\//-}"
 target_dir="${OPENWRT_TARGET%/*}"
@@ -76,15 +110,15 @@ echo "Fetching base, package, and LuCI feeds"
 	./scripts/feeds update base packages luci
 )
 
-echo "Installing ${PACKAGE_NAME} into SDK LuCI feed"
-rm -rf "${sdk_dir}/feeds/luci/themes/${PACKAGE_NAME}"
-mkdir -p "${sdk_dir}/feeds/luci/themes"
-rsync -a --delete "${PACKAGE_DIR}/" "${sdk_dir}/feeds/luci/themes/${PACKAGE_NAME}/"
+echo "Installing ${PACKAGE_NAME} into SDK LuCI ${luci_feed_subdir} feed"
+rm -rf "${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}"
+mkdir -p "${sdk_dir}/feeds/luci/${luci_feed_subdir}"
+rsync -a --delete "${PACKAGE_DIR}/" "${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}/"
 
 if [ -n "${PACKAGE_RELEASE}" ]; then
 	echo "Using package release ${PACKAGE_RELEASE}"
 	sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=${PACKAGE_RELEASE}/" \
-		"${sdk_dir}/feeds/luci/themes/${PACKAGE_NAME}/Makefile"
+		"${sdk_dir}/feeds/luci/${luci_feed_subdir}/${PACKAGE_NAME}/Makefile"
 fi
 
 (
