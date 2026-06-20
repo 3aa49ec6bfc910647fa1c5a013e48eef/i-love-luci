@@ -323,6 +323,14 @@ Required adapter behavior:
 
 The target outcome is that I Love LuCI can evolve native screens without losing functionality from current or future LuCI apps installed from OpenWrt feeds.
 
+Route audit must be treated as a release gate, not an optional validation step. Each release candidate should prove that:
+
+- all installed LuCI routes are discovered from live router metadata
+- every route has an explicit compat/native decision recorded in the route inventory
+- native I Love LuCI routes cover the workflows already migrated from LuCI
+- partial native routes keep LuCI compat as their default until edit/save/apply parity is proven
+- newly installed LuCI apps appear automatically after menu/cache refresh and work through compat without a package-specific code change
+
 ## Build Strategy
 
 Development:
@@ -733,12 +741,15 @@ Audit inputs:
 Audit checks:
 
 - Every visible LuCI route appears in I Love LuCI navigation/search.
+- Every visible LuCI route has compat configured, unless it is explicitly replaced by a fully migrated native route with documented parity.
+- Every native I Love LuCI route is mapped back to the LuCI route or workflow it replaces, with fallback behavior documented.
 - Every visible route resolves to exactly one working target:
   - native route when `effectiveMode=modern`
   - LuCI compat route when `effectiveMode=legacy`
   - hidden only when explicitly configured hidden or hidden by LuCI metadata
 - Every route with `nativeStatus=partial` and incomplete write/action parity defaults to LuCI compat in `auto`.
 - Every `luci-app-*` package has all of its menu children represented and defaults to LuCI compat unless a reusable native adapter proves parity.
+- Native route migrations are tested route-by-route, including dashboard/status, network, firewall, system, services, package, console, pending-change, and settings surfaces.
 - Installing a new LuCI app after I Love LuCI is installed requires no manual migration step: the route scanner should pick it up after cache refresh or service reload.
 - Uninstalling a LuCI app removes its routes from navigation/search without leaving dead native links.
 - ACL-ineligible routes are not shown as usable routes.
@@ -760,6 +771,7 @@ LuCI app adapter robustness checks:
 - Adapter selection must be deterministic: native adapter first, generic service/UCI/file adapter second, LuCI compat frame last.
 - Unknown current and future `luci-app-*` packages must be considered supported through compat unless ACL/menu metadata says otherwise.
 - Installing a future LuCI app must not require a code change, rebuild, or manual route mapping for basic navigation and compat rendering.
+- The adapter must not special-case only known apps such as banIP or AdBlock Fast; those apps should validate the generic adapter pattern used for all service-style LuCI apps.
 - Route discovery must tolerate new menu files, changed route nesting, missing optional ACL files, package uninstall/reinstall, and renamed init scripts.
 - Adapter failures must degrade to LuCI compat instead of showing a broken native screen.
 - Cache refresh or service reload must be enough for newly installed LuCI apps to appear in sidebar and search.
