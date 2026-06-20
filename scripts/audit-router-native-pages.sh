@@ -93,7 +93,7 @@ expected_pages = {
 }
 
 expected_core_pages = {
-	"network": {"sections": "network", "arrays": ["networkRoutes"]},
+	"network": {"sections": "network", "arrays": ["networkRoutes", "networkRules"]},
 	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
 	"firewall": {"sections": "firewall"},
 	"system": {"sections": "system"},

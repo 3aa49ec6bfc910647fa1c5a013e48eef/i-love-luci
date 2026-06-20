@@ -13,6 +13,7 @@ import {
 	saveDhcpHosts,
 	saveDhcpPools,
 	saveDnsmasqConfig,
+	saveNetworkRules,
 	saveNetworkRoutes,
 	saveSystemSettings,
 	type ConfigSection,
@@ -24,6 +25,7 @@ import {
 	type DhcpPool,
 	type DnsmasqConfigInput,
 	type NetworkInterfaceStatus,
+	type PolicyRule,
 	type ServiceState,
 	type StaticRoute,
 	type SystemSettingsInput,
@@ -1484,6 +1486,7 @@ function NetworkSummary({
 		.filter(([, device]) => device.present && device.devtype === "ethernet")
 		.sort(([a], [b]) => a.localeCompare(b));
 	const routes = settings.networkRoutes ?? [];
+	const rules = settings.networkRules ?? [];
 
 	if (!interfaces.length && !devices.length && !settings.network.length) {
 		return null;
@@ -1502,6 +1505,16 @@ function NetworkSummary({
 					})
 				}
 				routes={routes}
+			/>
+			<PolicyRuleEditor
+				onSaved={(nextRules, sections) =>
+					onSettingsChange({
+						...settings,
+						network: sections,
+						networkRules: nextRules,
+					})
+				}
+				rules={rules}
 			/>
 		</div>
 	);
@@ -1724,6 +1737,210 @@ function StaticRouteEditor({
 	);
 }
 
+function PolicyRuleEditor({
+	onSaved,
+	rules,
+}: {
+	onSaved: (rules: PolicyRule[], sections: ConfigSection[]) => void;
+	rules: PolicyRule[];
+}) {
+	const [rows, setRows] = useState(() => rules.map(normalizePolicyRule));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof PolicyRule, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				family: "rule",
+				in: "",
+				out: "",
+				src: "",
+				dest: "",
+				priority: "",
+				lookup: "",
+				fwmark: "",
+				tos: "",
+				action: "",
+				invert: "0",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveNetworkRules(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.rules.map(normalizePolicyRule);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Policy rules</h2>
+					<p className="text-sm text-muted-foreground">Configure IPv4 and IPv6 routing policy rules managed by UCI.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add rule
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[82rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">In</th>
+								<th className="px-3 py-2 font-medium">Out</th>
+								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">Destination</th>
+								<th className="px-3 py-2 font-medium">Priority</th>
+								<th className="px-3 py-2 font-medium">Lookup</th>
+								<th className="px-3 py-2 font-medium">Mark</th>
+								<th className="px-3 py-2 font-medium">TOS</th>
+								<th className="px-3 py-2 font-medium">Action</th>
+								<th className="px-3 py-2 font-medium">Invert</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((rule, index) => (
+									<tr className="border-b align-top last:border-0" key={`${rule.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`policy-rule-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["rule", "IPv4"],
+													["rule6", "IPv6"],
+												]}
+												value={rule.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Input interface" onChange={(event) => updateRow(index, "in", event.target.value)} value={rule.in} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Output interface"
+												onChange={(event) => updateRow(index, "out", event.target.value)}
+												value={rule.out}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Source" onChange={(event) => updateRow(index, "src", event.target.value)} value={rule.src} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination"
+												onChange={(event) => updateRow(index, "dest", event.target.value)}
+												value={rule.dest}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Priority"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "priority", event.target.value)}
+												value={rule.priority}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Lookup table"
+												onChange={(event) => updateRow(index, "lookup", event.target.value)}
+												value={rule.lookup}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Mark" onChange={(event) => updateRow(index, "fwmark", event.target.value)} value={rule.fwmark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="TOS" onChange={(event) => updateRow(index, "tos", event.target.value)} value={rule.tos} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Action" onChange={(event) => updateRow(index, "action", event.target.value)} value={rule.action} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`policy-rule-invert-${index}`}
+												onChange={(value) => updateRow(index, "invert", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={rule.invert}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label="Remove rule"
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={12}>
+										No policy rules configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
 function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStatus[] }) {
 	return (
 		<section className="grid gap-3">
@@ -1890,6 +2107,23 @@ function normalizeStaticRoute(route: StaticRoute): StaticRoute {
 		source: route.source ?? "",
 		mtu: route.mtu ?? "",
 		onlink: route.onlink === "1" ? "1" : "0",
+	};
+}
+
+function normalizePolicyRule(rule: PolicyRule): PolicyRule {
+	return {
+		section: rule.section ?? "",
+		family: rule.family === "rule6" ? "rule6" : "rule",
+		in: rule.in ?? "",
+		out: rule.out ?? "",
+		src: rule.src ?? "",
+		dest: rule.dest ?? "",
+		priority: rule.priority ?? "",
+		lookup: rule.lookup ?? "",
+		fwmark: rule.fwmark ?? "",
+		tos: rule.tos ?? "",
+		action: rule.action ?? "",
+		invert: rule.invert === "1" ? "1" : "0",
 	};
 }
 

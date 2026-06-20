@@ -222,10 +222,26 @@ export type StaticRoute = {
 	onlink: string;
 };
 
+export type PolicyRule = {
+	section: string;
+	family: string;
+	in: string;
+	out: string;
+	src: string;
+	dest: string;
+	priority: string;
+	lookup: string;
+	fwmark: string;
+	tos: string;
+	action: string;
+	invert: string;
+};
+
 export type CoreSettings = {
 	page: string;
 	network: ConfigSection[];
 	networkRoutes?: StaticRoute[];
+	networkRules?: PolicyRule[];
 	dhcp: ConfigSection[];
 	dhcpLeases?: DhcpLease[];
 	dhcpHosts?: DhcpHost[];
@@ -426,6 +442,14 @@ export type StaticRoutesResult = {
 	message: string;
 	changed: boolean;
 	routes: StaticRoute[];
+	sections: ConfigSection[];
+};
+
+export type PolicyRulesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	rules: PolicyRule[];
 	sections: ConfigSection[];
 };
 
@@ -842,6 +866,21 @@ export async function saveNetworkRoutes(rows: StaticRoute[]): Promise<StaticRout
 			message: "Static routes save failed.",
 			changed: false,
 			routes: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveNetworkRules(rows: PolicyRule[]): Promise<PolicyRulesResult> {
+	try {
+		return await callBridge<PolicyRulesResult>("network_rules_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Policy rules save failed.",
+			changed: false,
+			rules: [],
 			sections: [],
 		};
 	}

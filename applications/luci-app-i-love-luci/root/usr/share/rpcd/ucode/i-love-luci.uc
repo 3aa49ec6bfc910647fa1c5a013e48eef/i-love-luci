@@ -1268,6 +1268,152 @@ function save_network_routes(rows) {
 	};
 }
 
+function network_rule_rows() {
+	let rules = [];
+
+	try {
+		uci.load('network');
+	}
+	catch (e) {
+		return rules;
+	}
+
+	for (let section_type in ['rule', 'rule6']) {
+		uci.foreach('network', section_type, function(section) {
+			push(rules, {
+				section: section['.name'] || '',
+				family: section_type,
+				in: section.in || '',
+				out: section.out || '',
+				src: section.src || '',
+				dest: section.dest || '',
+				priority: section.priority || '',
+				lookup: section.lookup || section.table || '',
+				fwmark: section.fwmark || section.mark || '',
+				tos: section.tos || '',
+				action: section.action || '',
+				invert: section.invert || ''
+			});
+		});
+	}
+
+	return rules;
+}
+
+function valid_network_rule_name(value) {
+	return value == '' || replace(value, /[^A-Za-z0-9_.:-]/g, '') == value;
+}
+
+function save_network_rules(rows) {
+	rows ||= [];
+	uci.load('network');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	for (let section_type in ['rule', 'rule6']) {
+		uci.foreach('network', section_type, function(section) {
+			existing[section['.name']] = true;
+		});
+	}
+
+	for (let row in rows) {
+		let family = row?.family == 'rule6' ? 'rule6' : 'rule';
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('network', section) == family;
+
+		if (!is_existing) {
+			section = uci.add('network', family);
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = {
+			in: dhcp_clean_value(row?.in || ''),
+			out: dhcp_clean_value(row?.out || ''),
+			src: dhcp_clean_value(row?.src || ''),
+			dest: dhcp_clean_value(row?.dest || ''),
+			priority: dhcp_clean_value(row?.priority || ''),
+			lookup: dhcp_clean_value(row?.lookup || ''),
+			fwmark: dhcp_clean_value(row?.fwmark || ''),
+			tos: dhcp_clean_value(row?.tos || ''),
+			action: dhcp_clean_value(row?.action || ''),
+			invert: dhcp_zero_one(row?.invert)
+		};
+
+		for (let key, value in next) {
+			if (key == 'priority' && value != '' && !dhcp_numeric_value(value))
+				return {
+					saved: false,
+					message: 'Policy rule priority must be numeric.',
+					changed: false,
+					rules: network_rule_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+
+			if ((key == 'in' || key == 'out' || key == 'lookup' || key == 'action') && !valid_network_rule_name(value))
+				return {
+					saved: false,
+					message: 'Policy rule interface, table, and action fields contain unsupported characters.',
+					changed: false,
+					rules: network_rule_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+
+			if ((key == 'src' || key == 'dest' || key == 'fwmark' || key == 'tos') && !valid_network_route_text(value))
+				return {
+					saved: false,
+					message: 'Policy rule match fields contain unsupported characters.',
+					changed: false,
+					rules: network_rule_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+		}
+
+		for (let key, value in next) {
+			let current = uci.get('network', section, key) || '';
+
+			if (key == 'lookup')
+				current ||= uci.get('network', section, 'table') || '';
+			else if (key == 'fwmark')
+				current ||= uci.get('network', section, 'mark') || '';
+
+			if (key == 'invert' && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'invert' && value == '0') || value == '')
+					uci.delete('network', section, key);
+				else
+					uci.set('network', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('network', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('network');
+		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Policy rules saved and network reloaded.' : 'Policy rules already up to date.',
+		changed,
+		rules: network_rule_rows(),
+		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2241,6 +2387,7 @@ function build_core_settings(page) {
 		dhcpPools: [],
 		dhcpStatus: {},
 		networkRoutes: [],
+		networkRules: [],
 		firewall: [],
 		system: []
 	};
@@ -2262,6 +2409,7 @@ function build_core_settings(page) {
 	else {
 		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
 		data.networkRoutes = network_route_rows();
+		data.networkRules = network_rule_rows();
 	}
 
 	return data;
@@ -2524,6 +2672,26 @@ const methods = {
 					message: 'Static routes save failed: ' + e,
 					changed: false,
 					routes: network_route_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				});
+			}
+		}
+	},
+
+	network_rules_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_network_rules(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Policy rules save failed: ' + e,
+					changed: false,
+					rules: network_rule_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				});
 			}
