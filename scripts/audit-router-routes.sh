@@ -38,6 +38,7 @@ EOF
 
 python3 - "${TMP_OUTPUT}" <<'PY'
 import json
+import re
 import sys
 from collections import Counter
 
@@ -101,6 +102,38 @@ visible_paths = {item.get("path") for item in visible}
 failures = []
 warnings = []
 
+known_native_pages = {
+	"attendedsysupgrade",
+	"connections",
+	"crontab",
+	"diagnostics",
+	"firewall-status",
+	"flash",
+	"leds",
+	"logs",
+	"packages",
+	"processes",
+	"reboot",
+	"repokeys",
+	"services",
+	"sshkeys",
+	"startup",
+	"status-routes",
+	"wireless",
+}
+known_core_pages = {"dhcp", "firewall", "network", "system"}
+
+def known_native_path(path):
+	if path in {"/", "/realtime", "/settings"}:
+		return True
+	if path.startswith("/core/"):
+		return path.removeprefix("/core/") in known_core_pages
+	if path.startswith("/native/service/"):
+		return re.fullmatch(r"/native/service/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?", path) is not None
+	if path.startswith("/native/"):
+		return path.removeprefix("/native/") in known_native_pages
+	return False
+
 if not visible:
 	failures.append("No visible routes returned by menu_tree")
 
@@ -115,6 +148,12 @@ for item in visible:
 
 	if mode == "modern" and not native_path:
 		failures.append(f"{path}: modern route has no nativePath")
+
+	if item.get("nativeStatus") in {"supported", "partial"}:
+		if not native_path:
+			failures.append(f"{path}: native-capable route has no native preview path")
+		elif not known_native_path(native_path):
+			failures.append(f"{path}: nativePath does not match a known shell route pattern: {native_path}")
 
 	if mode == "legacy" and not resolved:
 		failures.append(f"{path}: legacy route has no resolved legacy path")
@@ -181,6 +220,7 @@ print(
 	f"partial={native_counter.get('partial', 0)} unsupported={native_counter.get('unsupported', 0)}"
 )
 print(f"menu_files={len(menu_files)} luci_apps={len(luci_apps)}")
+print(f"native_preview_routes={sum(1 for item in visible if item.get('nativePath'))}")
 
 legacy_app_routes = [
 	item for item in visible
