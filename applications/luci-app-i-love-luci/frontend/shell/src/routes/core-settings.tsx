@@ -85,6 +85,7 @@ export function CoreSettingsPage() {
 			{page === "network" ? <NetworkSummary dashboard={dashboard} /> : null}
 			{page === "dhcp" && settings ? <DhcpSummary settings={settings} /> : null}
 			{page === "firewall" && settings ? <FirewallSummary settings={settings} /> : null}
+			{page === "system" && settings ? <SystemSummary settings={settings} dashboard={dashboard} /> : null}
 
 			<section className="grid gap-3">
 				<div className="flex items-center justify-between gap-3">
@@ -354,6 +355,104 @@ function FirewallRedirectTable({ redirects }: { redirects: ConfigSection[] }) {
 			])}
 			title="Port forwards"
 		/>
+	);
+}
+
+function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashboard: DashboardStatus | null }) {
+	const system = settings.system.find((section) => section.type === "system");
+	const timeservers = settings.system.filter((section) => section.type === "timeserver");
+	const leds = settings.system.filter((section) => section.type === "led");
+	const dropbear = settings.system.filter((section) => section.type === "dropbear");
+	const uhttpd = settings.system.filter((section) => section.type === "uhttpd");
+	const certs = settings.system.filter((section) => section.type === "cert");
+
+	return (
+		<div className="grid gap-5">
+			<SimpleSectionTable
+				columns={["Hostname", "Timezone", "Local time", "Uptime", "Log size", "Console log", "Cron log"]}
+				empty="No system identity configured."
+				rows={
+					system
+						? [
+								[
+									valueText(system.values.hostname || dashboard?.board.hostname),
+									valueText(system.values.zonename || system.values.timezone),
+									formatLocalTime(dashboard?.system.localtime),
+									formatUptime(dashboard?.system.uptime),
+									valueText(system.values.log_size),
+									valueText(system.values.conloglevel),
+									valueText(system.values.cronloglevel),
+								],
+							]
+						: []
+				}
+				title="System"
+			/>
+
+			<SimpleSectionTable
+				columns={["Section", "Servers"]}
+				empty="No NTP servers configured."
+				rows={timeservers.map((section) => [section.name, valueText(section.values.server)])}
+				title="Time servers"
+			/>
+
+			<SimpleSectionTable
+				columns={["Section", "Status", "Port", "Password auth", "Root password auth"]}
+				empty="No Dropbear instances configured."
+				rows={dropbear.map((section) => [
+					section.name,
+					enabledText(section.values.enable),
+					valueText(section.values.Port),
+					valueText(section.values.PasswordAuth),
+					valueText(section.values.RootPasswordAuth),
+				])}
+				title="SSH access"
+			/>
+
+			<SimpleSectionTable
+				columns={["Section", "HTTP", "HTTPS", "HTTPS redirect", "Home", "Max connections", "Ubus"]}
+				empty="No uHTTPd instances configured."
+				rows={uhttpd.map((section) => [
+					section.name,
+					valueText(section.values.listen_http),
+					valueText(section.values.listen_https),
+					enabledText(section.values.redirect_https),
+					valueText(section.values.home),
+					valueText(section.values.max_connections),
+					valueText(section.values.ubus_prefix),
+				])}
+				title="Web server"
+			/>
+
+			<SimpleSectionTable
+				columns={["LED", "Device", "Trigger", "Mode", "Interface"]}
+				empty="No LEDs configured."
+				rows={leds.map((section) => [
+					valueText(section.values.name || section.name),
+					valueText(section.values.sysfs),
+					valueText(section.values.trigger),
+					valueText(section.values.mode),
+					valueText(section.values.dev),
+				])}
+				title="LEDs"
+			/>
+
+			{certs.length ? (
+				<SimpleSectionTable
+					columns={["Section", "Days", "Key type", "Bits", "Curve", "Common name"]}
+					empty="No certificate defaults configured."
+					rows={certs.map((section) => [
+						section.name,
+						valueText(section.values.days),
+						valueText(section.values.key_type),
+						valueText(section.values.bits),
+						valueText(section.values.ec_curve),
+						valueText(section.values.commonname),
+					])}
+					title="Certificate defaults"
+				/>
+			) : null}
+		</div>
 	);
 }
 
@@ -652,6 +751,14 @@ function formatUptime(seconds?: number) {
 	}
 
 	return formatDuration(seconds);
+}
+
+function formatLocalTime(value?: number) {
+	if (typeof value !== "number") {
+		return "unknown";
+	}
+
+	return new Date(value * 1000).toLocaleString();
 }
 
 function sortNetworkInterfaces(a: NetworkInterfaceStatus, b: NetworkInterfaceStatus) {
