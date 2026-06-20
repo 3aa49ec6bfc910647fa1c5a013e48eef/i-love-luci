@@ -4261,20 +4261,35 @@ function save_uhttpd_config(config) {
 	let section = first_uci_section('uhttpd', 'uhttpd') || 'main';
 	let listen_http = config.listen_http == null ? normalize_uci_list(uci.get('uhttpd', section, 'listen_http') || []) : split_uci_lines(config.listen_http || '');
 	let listen_https = config.listen_https == null ? normalize_uci_list(uci.get('uhttpd', section, 'listen_https') || []) : split_uci_lines(config.listen_https || '');
+	let list_options = {
+		index_page: config.index_page == null ? normalize_uci_list(uci.get('uhttpd', section, 'index_page') || []) : split_uci_lines(config.index_page || ''),
+		interpreter: config.interpreter == null ? normalize_uci_list(uci.get('uhttpd', section, 'interpreter') || []) : split_uci_lines(config.interpreter || ''),
+		alias: config.alias == null ? normalize_uci_list(uci.get('uhttpd', section, 'alias') || []) : split_uci_lines(config.alias || ''),
+		lua_prefix: config.lua_prefix == null ? normalize_uci_list(uci.get('uhttpd', section, 'lua_prefix') || []) : split_uci_lines(config.lua_prefix || '')
+	};
 	let next = {
 		redirect_https: zero_one(config.redirect_https),
 		home: config.home == null ? (uci.get('uhttpd', section, 'home') || '') : clean_uci_value(config.home || ''),
 		rfc1918_filter: config.rfc1918_filter == null ? (uci.get('uhttpd', section, 'rfc1918_filter') || '') : zero_one(config.rfc1918_filter),
+		no_symlinks: config.no_symlinks == null ? (uci.get('uhttpd', section, 'no_symlinks') || '') : zero_one(config.no_symlinks),
+		no_dirlists: config.no_dirlists == null ? (uci.get('uhttpd', section, 'no_dirlists') || '') : zero_one(config.no_dirlists),
 		max_requests: config.max_requests == null ? (uci.get('uhttpd', section, 'max_requests') || '') : clean_uci_value(config.max_requests || ''),
 		max_connections: config.max_connections == null ? (uci.get('uhttpd', section, 'max_connections') || '') : clean_uci_value(config.max_connections || ''),
 		cert: config.cert == null ? (uci.get('uhttpd', section, 'cert') || '') : clean_uci_value(config.cert || ''),
 		key: config.key == null ? (uci.get('uhttpd', section, 'key') || '') : clean_uci_value(config.key || ''),
 		cgi_prefix: config.cgi_prefix == null ? (uci.get('uhttpd', section, 'cgi_prefix') || '') : clean_uci_value(config.cgi_prefix || ''),
+		lua_handler: config.lua_handler == null ? (uci.get('uhttpd', section, 'lua_handler') || '') : clean_uci_value(config.lua_handler || ''),
+		realm: config.realm == null ? (uci.get('uhttpd', section, 'realm') || '') : clean_uci_value(config.realm || ''),
+		config: config.config == null ? (uci.get('uhttpd', section, 'config') || '') : clean_uci_value(config.config || ''),
+		error_page: config.error_page == null ? (uci.get('uhttpd', section, 'error_page') || '') : clean_uci_value(config.error_page || ''),
 		script_timeout: config.script_timeout == null ? (uci.get('uhttpd', section, 'script_timeout') || '') : clean_uci_value(config.script_timeout || ''),
 		network_timeout: config.network_timeout == null ? (uci.get('uhttpd', section, 'network_timeout') || '') : clean_uci_value(config.network_timeout || ''),
 		http_keepalive: config.http_keepalive == null ? (uci.get('uhttpd', section, 'http_keepalive') || '') : clean_uci_value(config.http_keepalive || ''),
 		tcp_keepalive: config.tcp_keepalive == null ? (uci.get('uhttpd', section, 'tcp_keepalive') || '') : zero_one(config.tcp_keepalive),
-		ubus_prefix: config.ubus_prefix == null ? (uci.get('uhttpd', section, 'ubus_prefix') || '') : clean_uci_value(config.ubus_prefix || '')
+		ubus_prefix: config.ubus_prefix == null ? (uci.get('uhttpd', section, 'ubus_prefix') || '') : clean_uci_value(config.ubus_prefix || ''),
+		ubus_socket: config.ubus_socket == null ? (uci.get('uhttpd', section, 'ubus_socket') || '') : clean_uci_value(config.ubus_socket || ''),
+		ubus_cors: config.ubus_cors == null ? (uci.get('uhttpd', section, 'ubus_cors') || '') : zero_one(config.ubus_cors),
+		no_ubusauth: config.no_ubusauth == null ? (uci.get('uhttpd', section, 'no_ubusauth') || '') : zero_one(config.no_ubusauth)
 	};
 
 	for (let value in listen_http)
@@ -4308,7 +4323,7 @@ function save_uhttpd_config(config) {
 			};
 	}
 
-	for (let key in ['home', 'cert', 'key', 'cgi_prefix', 'ubus_prefix']) {
+	for (let key in ['home', 'cert', 'key', 'cgi_prefix', 'lua_handler', 'config', 'error_page', 'ubus_prefix', 'ubus_socket']) {
 		if (replace(next[key], /[^A-Za-z0-9_./:-]/g, '') != next[key])
 			return {
 				saved: false,
@@ -4317,6 +4332,28 @@ function save_uhttpd_config(config) {
 				section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
 				init: fast_service_state('uhttpd')
 			};
+	}
+
+	if (replace(next.realm, /[^A-Za-z0-9 .,:_@/+()-]/g, '') != next.realm)
+		return {
+			saved: false,
+			message: 'uHTTPd realm contains unsupported characters.',
+			changed: false,
+			section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+			init: fast_service_state('uhttpd')
+		};
+
+	for (let key, values in list_options) {
+		for (let value in values) {
+			if (replace(value, /[^A-Za-z0-9_./:=@+-]/g, '') != value)
+				return {
+					saved: false,
+					message: 'uHTTPd list fields contain unsupported characters.',
+					changed: false,
+					section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+					init: fast_service_state('uhttpd')
+				};
+		}
 	}
 
 	let changed = false;
@@ -4339,8 +4376,22 @@ function save_uhttpd_config(config) {
 
 	for (let key, value in next) {
 		let current = uci.get('uhttpd', section, key) || '';
+		let optional_flag = key == 'no_symlinks' || key == 'no_dirlists' || key == 'ubus_cors' || key == 'no_ubusauth';
+
+		if (optional_flag && value == '0' && current == '')
+			continue;
 
 		if (current != value) {
+			changed = true;
+			if (optional_flag && value == '0')
+				uci.delete('uhttpd', section, key);
+			else
+				set_uci_option('uhttpd', section, key, value);
+		}
+	}
+
+	for (let key, value in list_options) {
+		if (!uci_list_equal(uci.get('uhttpd', section, key) || [], value)) {
 			changed = true;
 			set_uci_option('uhttpd', section, key, value);
 		}

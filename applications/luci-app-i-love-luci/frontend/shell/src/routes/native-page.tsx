@@ -1927,6 +1927,26 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 							<Input onChange={(event) => update("ubus_prefix", event.target.value)} value={values.ubus_prefix} />
 						</label>
 						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Lua handler</span>
+							<Input onChange={(event) => update("lua_handler", event.target.value)} value={values.lua_handler} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Ubus socket</span>
+							<Input onChange={(event) => update("ubus_socket", event.target.value)} value={values.ubus_socket} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Error page</span>
+							<Input onChange={(event) => update("error_page", event.target.value)} value={values.error_page} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Auth realm</span>
+							<Input onChange={(event) => update("realm", event.target.value)} value={values.realm} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Auth config file</span>
+							<Input onChange={(event) => update("config", event.target.value)} value={values.config} />
+						</label>
+						<label className="grid gap-2 text-sm">
 							<span className="font-medium">Certificate</span>
 							<Input onChange={(event) => update("cert", event.target.value)} value={values.cert} />
 						</label>
@@ -1944,6 +1964,88 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 								<option value="1">enabled</option>
 								<option value="0">disabled</option>
 							</select>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Directory listings</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("no_dirlists", event.target.value)}
+								value={values.no_dirlists}
+							>
+								<option value="0">enabled</option>
+								<option value="1">disabled</option>
+							</select>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">External symlinks</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("no_symlinks", event.target.value)}
+								value={values.no_symlinks}
+							>
+								<option value="0">enabled</option>
+								<option value="1">disabled</option>
+							</select>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Ubus CORS</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("ubus_cors", event.target.value)}
+								value={values.ubus_cors}
+							>
+								<option value="0">disabled</option>
+								<option value="1">enabled</option>
+							</select>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Ubus auth</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("no_ubusauth", event.target.value)}
+								value={values.no_ubusauth}
+							>
+								<option value="0">enabled</option>
+								<option value="1">disabled</option>
+							</select>
+						</label>
+					</div>
+					<div className="grid gap-3 md:grid-cols-2">
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Index pages</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("index_page", event.target.value)}
+								spellCheck={false}
+								value={values.index_page}
+							/>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">CGI filetype handlers</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("interpreter", event.target.value)}
+								spellCheck={false}
+								value={values.interpreter}
+							/>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Aliases</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("alias", event.target.value)}
+								spellCheck={false}
+								value={values.alias}
+							/>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Lua prefixes</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("lua_prefix", event.target.value)}
+								spellCheck={false}
+								value={values.lua_prefix}
+							/>
 						</label>
 					</div>
 					<div className="grid gap-3 md:grid-cols-3">
@@ -2025,16 +2127,29 @@ function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput 
 		listen_https: joinConfigValue(config?.values.listen_https),
 		home: configValue(config, "home"),
 		rfc1918_filter: configValue(config, "rfc1918_filter") === "0" ? "0" : "1",
+		no_symlinks: configValue(config, "no_symlinks") === "1" ? "1" : "0",
+		no_dirlists: configValue(config, "no_dirlists") === "1" ? "1" : "0",
 		max_requests: configValue(config, "max_requests"),
 		max_connections: configValue(config, "max_connections"),
 		cert: configValue(config, "cert"),
 		key: configValue(config, "key"),
 		cgi_prefix: configValue(config, "cgi_prefix"),
+		index_page: joinConfigValue(config?.values.index_page),
+		interpreter: joinConfigValue(config?.values.interpreter),
+		alias: joinConfigValue(config?.values.alias),
+		lua_prefix: joinConfigValue(config?.values.lua_prefix),
+		lua_handler: configValue(config, "lua_handler"),
+		realm: configValue(config, "realm"),
+		config: configValue(config, "config"),
+		error_page: configValue(config, "error_page"),
 		script_timeout: configValue(config, "script_timeout"),
 		network_timeout: configValue(config, "network_timeout"),
 		http_keepalive: configValue(config, "http_keepalive"),
 		tcp_keepalive: configValue(config, "tcp_keepalive") === "0" ? "0" : "1",
 		ubus_prefix: configValue(config, "ubus_prefix"),
+		ubus_socket: configValue(config, "ubus_socket"),
+		ubus_cors: configValue(config, "ubus_cors") === "1" ? "1" : "0",
+		no_ubusauth: configValue(config, "no_ubusauth") === "1" ? "1" : "0",
 	};
 }
 

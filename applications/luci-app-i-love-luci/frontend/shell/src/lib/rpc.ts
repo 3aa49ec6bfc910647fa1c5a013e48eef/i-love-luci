@@ -432,16 +432,29 @@ export type UhttpdConfigInput = {
 	listen_https: string;
 	home: string;
 	rfc1918_filter: string;
+	no_symlinks: string;
+	no_dirlists: string;
 	max_requests: string;
 	max_connections: string;
 	cert: string;
 	key: string;
 	cgi_prefix: string;
+	index_page: string;
+	interpreter: string;
+	alias: string;
+	lua_prefix: string;
+	lua_handler: string;
+	realm: string;
+	config: string;
+	error_page: string;
 	script_timeout: string;
 	network_timeout: string;
 	http_keepalive: string;
 	tcp_keepalive: string;
 	ubus_prefix: string;
+	ubus_socket: string;
+	ubus_cors: string;
+	no_ubusauth: string;
 };
 
 export type UhttpdConfigResult = {

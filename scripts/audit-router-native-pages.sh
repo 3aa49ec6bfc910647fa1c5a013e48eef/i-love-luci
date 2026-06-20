@@ -120,7 +120,7 @@ expected_services = {
 	},
 	"upnpd": {"sections": True},
 	"commands": {"customCommands": True},
-	"uhttpd": {"sections": True, "required_options": ["redirect_https"]},
+	"uhttpd": {"sections": True, "required_options": ["redirect_https", "lua_prefix"]},
 	"dropbear": {"sections": True, "required_options": ["Port", "PasswordAuth", "RootPasswordAuth"]},
 }
 
