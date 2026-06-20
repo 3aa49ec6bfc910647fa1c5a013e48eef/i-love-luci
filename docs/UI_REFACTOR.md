@@ -611,6 +611,7 @@ Validation on `172.16.172.1`:
 - Browser smoke tests loaded `#/native/service/adblock-fast`, `#/native/service/banip`, `#/native/service/upnpd`, `#/native/service/dropbear`, and `#/native/service/uhttpd` with the `1.0.0-r4-native25` bundle and confirmed structured service-specific summaries render without raw `<pre>` output. Service running-state detection was corrected to use full `ubus service list` plus init `status` fallback; uHTTPd and AdBlock Fast now show `running` on the router.
 - Route audit on `172.16.172.1` with `1.0.0-r4-native25` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 - Native page audit on `172.16.172.1` passed with `scripts/audit-router-native-pages.sh`: `native_pages=17`, `service_adapters=6`. The audit calls every current native page RPC, every current service adapter, and `console_status`, then fails if required data sources disappear.
+- HTTP route smoke on `172.16.172.1` passed with `scripts/smoke-router-http-routes.sh`: `visible_routes=60`, `native_shell_checks=42`, `legacy_route_checks=18`. The smoke test verifies the React/Vite login shell, authenticates through standard LuCI form fields, checks the app shell, and fetches every visible legacy compat target for dispatch/login regressions.
 
 Remaining legacy or partial gaps:
 
@@ -783,6 +784,11 @@ Required tooling:
   - service adapter detail failures
   - missing service enabled/running state
   - console bridge availability/URL regressions
+- `scripts/smoke-router-http-routes.sh` logs into LuCI over HTTP using the React/Vite login form contract and reports:
+  - login shell missing the React/Vite app bundle
+  - authenticated app shell failing to load
+  - visible native routes whose shell target fails
+  - visible legacy compat routes that return login, 404, dispatch failure, or HTTP errors
 - Add browser smoke coverage for representative route types:
   - supported native core route
   - partial native preview forced to modern
