@@ -291,6 +291,8 @@ applications/luci-app-i-love-luci/htdocs/luci-static/i-love-luci-app/
 
 OpenWrt package build should consume committed or CI-built static assets. Do not run Node.js on the router.
 
+During the spike, build locally only. Do not rely on GitHub Actions as the primary feedback loop until the package skeleton, frontend build, local package build, and router install path have all succeeded at least once. CI should be wired after the spike has a known-good local build so CI failures reflect real regressions instead of unresolved scaffolding work.
+
 CI should:
 
 - install frontend dependencies
