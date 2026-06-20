@@ -366,6 +366,15 @@ export type RebootResult = {
 	delay?: number;
 };
 
+export type ConfigBackupResult = {
+	ok: boolean;
+	message: string;
+	filename: string;
+	size: number;
+	mime: string;
+	data: string;
+};
+
 export type DropbearConfigInput = {
 	enable: string;
 	Port: string;
@@ -1536,6 +1545,22 @@ export async function confirmReboot(confirm: string): Promise<RebootResult> {
 		return {
 			accepted: false,
 			message: "Reboot request failed.",
+		};
+	}
+}
+
+export async function createConfigBackup(dryRun = false): Promise<ConfigBackupResult> {
+	try {
+		return await callBridge<ConfigBackupResult>("config_backup_create", { dry_run: dryRun });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Configuration backup failed.",
+			filename: "",
+			size: 0,
+			mime: "application/gzip",
+			data: "",
 		};
 	}
 }

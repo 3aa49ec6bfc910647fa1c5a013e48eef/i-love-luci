@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
 	confirmReboot,
+	createConfigBackup,
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
@@ -272,7 +273,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	reboot: {
 		title: "Reboot",
-		description: "Reboot guard surface. The destructive action remains disabled until a confirmation RPC is added.",
+		description: "Guarded reboot surface with exact hostname confirmation.",
 	},
 	services: {
 		title: "Services",
@@ -3577,6 +3578,21 @@ function AttendedSelect({ label, onChange, value }: { label: string; onChange: (
 function FlashSummary({ data }: { data: NativePageData }) {
 	const filesystems = parseFilesystems(commandOutput(data.commands, "Mounted filesystems"));
 	const partitions = parseFlashPartitions(commandOutput(data.commands, "Flash partitions"));
+	const [creatingBackup, setCreatingBackup] = useState(false);
+
+	async function createBackup() {
+		setCreatingBackup(true);
+		const result = await createConfigBackup();
+		setCreatingBackup(false);
+
+		if (!result.ok || !result.data) {
+			toast.error(result.message);
+			return;
+		}
+
+		downloadBase64File(result.filename || "openwrt-config-backup.tar.gz", result.mime || "application/gzip", result.data);
+		toast.success(`${result.message} ${formatBytes(result.size)}`);
+	}
 
 	return (
 		<div className="grid gap-4">
@@ -3585,10 +3601,42 @@ function FlashSummary({ data }: { data: NativePageData }) {
 				<MetricBlock label="Root used" value={storagePercent(data.system.root)} />
 				<MetricBlock label="Overlay free" value={formatStorageKiB(data.system.root?.free ?? data.system.root?.avail)} />
 			</div>
+			<Panel
+				title="Configuration backup"
+				actions={
+					<Button disabled={creatingBackup} onClick={() => void createBackup()} size="sm" type="button" variant="outline">
+						<Download className="size-4" />
+						Download
+					</Button>
+				}
+			>
+				<p className="text-sm text-muted-foreground">
+					Create an authenticated sysupgrade configuration archive for this router. Firmware image upload and flashing remain guarded.
+				</p>
+			</Panel>
 			<FilesystemTable entries={filesystems} />
 			<FlashPartitionTable entries={partitions} />
 		</div>
 	);
+}
+
+function downloadBase64File(filename: string, mime: string, data: string) {
+	const binary = atob(data);
+	const bytes = new Uint8Array(binary.length);
+
+	for (let index = 0; index < binary.length; index += 1) {
+		bytes[index] = binary.charCodeAt(index);
+	}
+
+	const blob = new Blob([bytes], { type: mime });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = filename;
+	document.body.append(anchor);
+	anchor.click();
+	anchor.remove();
+	URL.revokeObjectURL(url);
 }
 
 function FilesystemTable({ entries }: { entries: FilesystemEntry[] }) {

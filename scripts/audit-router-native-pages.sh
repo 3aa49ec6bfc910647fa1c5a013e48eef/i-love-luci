@@ -54,6 +54,8 @@ echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
 echo '---ILOVELUCI-REBOOT-REJECT---'
 ubus call luci.iloveluci reboot_confirm \"{\\\"confirm\\\":\\\"__audit_do_not_reboot__\\\"}\"
+echo '---ILOVELUCI-CONFIG-BACKUP-DRY-RUN---'
+ubus call luci.iloveluci config_backup_create \"{\\\"dry_run\\\":true}\"
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-RELEASE---'
@@ -309,6 +311,14 @@ if not reboot_reject or not reboot_reject.get("ok"):
 	failures.append("reboot_confirm reject check did not return ok")
 elif reboot_reject.get("data", {}).get("accepted") is not False:
 	failures.append("reboot_confirm accepted invalid confirmation")
+
+backup_dry_run = json_after_marker("---ILOVELUCI-CONFIG-BACKUP-DRY-RUN---")
+if not backup_dry_run or not backup_dry_run.get("ok"):
+	failures.append("config_backup_create dry-run check did not return ok")
+elif backup_dry_run.get("data", {}).get("ok") is not True:
+	failures.append("config_backup_create dry-run did not report helper availability")
+elif backup_dry_run.get("data", {}).get("data"):
+	failures.append("config_backup_create dry-run returned backup data")
 
 package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
 if not package_search or not package_search.get("ok"):

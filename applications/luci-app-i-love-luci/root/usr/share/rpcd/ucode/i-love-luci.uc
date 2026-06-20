@@ -508,6 +508,26 @@ function contains_binary(text) {
 	return false;
 }
 
+function base64_encode(data) {
+	const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+	let output = '';
+	let total = length(data || '');
+
+	for (let offset = 0; offset < total; offset += 3) {
+		let b1 = ord(data, offset);
+		let b2 = offset + 1 < total ? ord(data, offset + 1) : 0;
+		let b3 = offset + 2 < total ? ord(data, offset + 2) : 0;
+		let n = (b1 << 16) | (b2 << 8) | b3;
+
+		output += substr(alphabet, (n >> 18) & 63, 1);
+		output += substr(alphabet, (n >> 12) & 63, 1);
+		output += offset + 1 < total ? substr(alphabet, (n >> 6) & 63, 1) : '=';
+		output += offset + 2 < total ? substr(alphabet, n & 63, 1) : '=';
+	}
+
+	return output;
+}
+
 function safe_read(path) {
 	try {
 		return readfile(path) || '';
@@ -4522,6 +4542,75 @@ function reboot_confirm(confirm) {
 	};
 }
 
+function create_config_backup(dry_run) {
+	if (!command_exists('sysupgrade'))
+		return {
+			ok: false,
+			message: 'sysupgrade helper is not installed.',
+			filename: '',
+			size: 0,
+			mime: 'application/gzip',
+			data: ''
+		};
+
+	if (dry_run)
+		return {
+			ok: true,
+			message: 'Configuration backup helper is available.',
+			filename: '',
+			size: 0,
+			mime: 'application/gzip',
+			data: ''
+		};
+
+	let board = ubus.call('system', 'board') || {};
+	let hostname = replace(trim('' + (board.hostname || 'openwrt')), /[^A-Za-z0-9_.-]/g, '-');
+	let filename = `${hostname}-config-backup-${time()}.tar.gz`;
+	let path = `/tmp/${filename}`;
+	let list_path = `${path}.list`;
+	let quoted = quote_command_args([path])[0];
+	let list_quoted = quote_command_args([list_path])[0];
+	let code = system(`/sbin/sysupgrade -l 2>/dev/null | sed 's#^/##' > ${list_quoted} && tar -czf ${quoted} -C / -T ${list_quoted} >/dev/null 2>&1`);
+	let info = stat(path);
+	system(`rm -f ${list_quoted} >/dev/null 2>&1 || true`);
+
+	if (code != 0 || info?.type != 'file') {
+		system(`rm -f ${quoted} >/dev/null 2>&1 || true`);
+		return {
+			ok: false,
+			message: 'Configuration backup failed.',
+			filename,
+			size: 0,
+			mime: 'application/gzip',
+			data: ''
+		};
+	}
+
+	if (info.size > 2097152) {
+		system(`rm -f ${quoted} >/dev/null 2>&1 || true`);
+		return {
+			ok: false,
+			message: 'Configuration backup is larger than the native download limit.',
+			filename,
+			size: info.size,
+			mime: 'application/gzip',
+			data: ''
+		};
+	}
+
+	let data = base64_encode(readfile(path) || '');
+	system(`rm -f ${quoted} >/dev/null 2>&1 || true`);
+
+	return {
+		ok: length(data) > 0,
+		message: length(data) > 0 ? 'Configuration backup created.' : 'Configuration backup encoding failed.',
+		filename,
+		size: info.size,
+		mime: 'application/gzip',
+		data
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -5374,6 +5463,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(reboot_confirm(request.args.confirm || ''));
+		}
+	},
+
+	config_backup_create: {
+		args: {
+			dry_run: false
+		},
+		call: function(request) {
+			return respond(create_config_backup(!!request.args.dry_run));
 		}
 	},
 

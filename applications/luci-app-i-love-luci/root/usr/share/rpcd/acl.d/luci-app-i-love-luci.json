@@ -28,6 +28,7 @@
 					"attendedsysupgrade_config_save",
 					"banip_config_save",
 					"banip_file_save",
+					"config_backup_create",
 					"changes_apply",
 					"changes_revert",
 					"crontab_save",
