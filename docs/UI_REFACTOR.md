@@ -536,15 +536,17 @@ Converted to native React/Vite surfaces:
 - `/admin/network/network`, `/admin/network/routes`, `/admin/network/dhcp`, `/admin/network/dns`, `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with live interface status where available.
 - `/admin/network/wireless`: guarded wireless configuration/status surface.
 - `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
-- `/admin/system/system`, `/admin/system/admin`, repo keys, and LED routes: modern read-only UCI summaries.
+- `/admin/system/system` and `/admin/system/admin`: modern read-only UCI summaries.
 - `/admin/system/admin/dropbear`: Dropbear service status and UCI summary.
 - `/admin/system/admin/sshkeys`: Dropbear authorized keys editor.
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
+- `/admin/system/admin/repokeys`: installed package repository public keys.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
 - `/admin/system/package-manager`: installed package inventory. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: read-only filesystem and flash partition overview.
+- `/admin/system/leds`: LED trigger configuration and current sysfs LED state.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
 - `/admin/system/commands` and children: modern read-only UCI summary for custom commands. Auto mode defaults to LuCI compat until command execution/config editing reaches parity.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
@@ -557,7 +559,7 @@ Converted to native React/Vite surfaces:
 Validation on `172.16.172.1`:
 
 - All visible LuCI menu routes have either a native route or a LuCI compat route. Service/package LuCI apps with incomplete native parity default to `legacy` effective mode in `auto`, so full LuCI functionality remains available.
-- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
+- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `sshkeys`, `repokeys`, `leds`, `flash`, `services`, and `reboot`.
 - `crontab_save` saved through the native bridge and reloaded cron on `172.16.172.1`; the test router had no existing root crontab entries.
 - `native_page` returned `sshkeys` successfully. The router currently has no `/etc/dropbear/authorized_keys`, so save was not exercised to avoid creating an empty file during validation.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
@@ -565,6 +567,7 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
 - Browser smoke tests loaded `#/native/wireless` and `#/native/attendedsysupgrade`.
 - Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
+- Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
 - Menu policy validation confirmed incomplete LuCI app routes such as banIP, AdBlock Fast, UPnP, uHTTPd, custom commands, attended sysupgrade, and package manager default to LuCI compat in auto mode while keeping native preview routes available for explicit `modern` selection.
 
 Remaining legacy or partial gaps:
@@ -714,6 +717,20 @@ Required tooling:
 Acceptance gate:
 
 - The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
+
+Final release/test gate:
+
+- Merge validated work through PR into `main`.
+- Publish package/feed artifacts from GitHub.
+- Install the GitHub-published package on `172.16.172.1`, not a local file copy.
+- Run the full route audit against the installed release package.
+- Browser-smoke every visible route target at least once:
+  - native route renders expected title/content
+  - compat route renders framed LuCI content
+  - search and sidebar resolve to the same target
+  - login uses React/Vite bundle after session expiry
+  - console opens without re-entering router credentials
+- Do not mark this project complete until the GitHub-installed package passes the route audit.
 
 ## Login Conversion
 

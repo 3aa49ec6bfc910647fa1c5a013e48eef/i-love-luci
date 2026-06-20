@@ -80,6 +80,14 @@ const pageMeta: Record<string, PageMeta> = {
 		title: "SSH keys",
 		description: "Edit Dropbear authorized keys without leaving the modern shell.",
 	},
+	repokeys: {
+		title: "Repository keys",
+		description: "Installed package repository public keys.",
+	},
+	leds: {
+		title: "LED configuration",
+		description: "LED trigger configuration and current sysfs LED state.",
+	},
 	flash: {
 		title: "Backup / flash firmware",
 		description: "Storage and flash partition overview. Firmware write actions remain in legacy LuCI.",

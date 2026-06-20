@@ -53,7 +53,7 @@ const nativeRoutes = {
 	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
 	'/admin/system/admin/sshkeys': { status: 'supported', nativePath: '/native/sshkeys' },
 	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
-	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/repokeys': { status: 'supported', nativePath: '/native/repokeys' },
 	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
 	'/admin/system/attendedsysupgrade/overview': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
 	'/admin/system/attendedsysupgrade/configuration': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
@@ -66,7 +66,7 @@ const nativeRoutes = {
 	'/admin/system/commands/config': { status: 'partial', nativePath: '/native/service/commands', autoMode: 'legacy' },
 	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
 	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
-	'/admin/system/leds': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/leds': { status: 'supported', nativePath: '/native/leds' },
 	'/admin/services': { status: 'partial', nativePath: '/native/services', autoMode: 'legacy' },
 	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
 	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
@@ -678,6 +678,23 @@ function native_page(page) {
 	}
 	else if (page == 'sshkeys') {
 		data.text = safe_read(sshAuthorizedKeysPath);
+	}
+	else if (page == 'repokeys') {
+		data.commands = [
+			{
+				title: 'Repository public keys',
+				output: shell_output('for f in /etc/apk/keys/* /etc/opkg/keys/*; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sed -n "1,40p" "$f"; echo; done')
+			}
+		];
+	}
+	else if (page == 'leds') {
+		data.sections = collect_uci_config('system', ['led']);
+		data.commands = [
+			{
+				title: 'LED sysfs state',
+				output: shell_output('for f in /sys/class/leds/*; do [ -d "$f" ] || continue; echo "=== ${f##*/} ==="; cat "$f/trigger" 2>/dev/null; printf "brightness: "; cat "$f/brightness" 2>/dev/null; echo; done')
+			}
+		];
 	}
 	else if (page == 'flash') {
 		data.commands = [
