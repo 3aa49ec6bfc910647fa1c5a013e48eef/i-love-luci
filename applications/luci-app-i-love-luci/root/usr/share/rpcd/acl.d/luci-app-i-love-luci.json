@@ -25,6 +25,7 @@
 			"ubus": {
 				"luci.iloveluci": [
 					"adblock_fast_config_save",
+					"attendedsysupgrade_config_save",
 					"banip_config_save",
 					"banip_file_save",
 					"changes_apply",
@@ -66,6 +67,7 @@
 			},
 			"uci": [
 				"adblock-fast",
+				"attendedsysupgrade",
 				"banip",
 				"dropbear",
 				"dhcp",

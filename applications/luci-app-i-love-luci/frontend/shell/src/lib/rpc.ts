@@ -278,6 +278,21 @@ export type PackageActionResult = {
 	message: string;
 };
 
+export type AttendedSysupgradeConfigInput = {
+	server_url: string;
+	upgrade_packages: string;
+	auto_search: string;
+	advanced_mode: string;
+	login_check_for_upgrades: string;
+};
+
+export type AttendedSysupgradeConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	sections: ConfigSection[];
+};
+
 export type ServiceState = {
 	name: string;
 	enabled: boolean;
@@ -1002,6 +1017,20 @@ export async function runPackageAction(action: PackageAction, name = "", simulat
 			command: "",
 			output: "",
 			message: "Package action failed.",
+		};
+	}
+}
+
+export async function saveAttendedSysupgradeConfig(config: AttendedSysupgradeConfigInput): Promise<AttendedSysupgradeConfigResult> {
+	try {
+		return await callBridge<AttendedSysupgradeConfigResult>("attendedsysupgrade_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Attended sysupgrade settings save failed.",
+			changed: false,
+			sections: [],
 		};
 	}
 }

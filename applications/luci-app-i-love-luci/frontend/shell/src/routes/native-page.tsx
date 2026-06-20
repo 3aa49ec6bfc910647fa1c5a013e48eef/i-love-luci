@@ -11,6 +11,7 @@ import {
 	getServiceDetail,
 	runCustomCommand,
 	runPackageAction,
+	saveAttendedSysupgradeConfig,
 	saveAdblockFastConfig,
 	saveBanipConfig,
 	saveBanipFile,
@@ -29,6 +30,7 @@ import {
 	setRouterPassword,
 	type AdblockFastConfigInput,
 	type AdblockFastFeed,
+	type AttendedSysupgradeConfigInput,
 	type BanipConfigInput,
 	type CommandBlock,
 	type ConfigSection,
@@ -2036,6 +2038,16 @@ function banipConfigValues(config: ConfigSection | undefined): BanipConfigInput 
 	};
 }
 
+function attendedSysupgradeConfigValues(server: ConfigSection | undefined, client: ConfigSection | undefined): AttendedSysupgradeConfigInput {
+	return {
+		server_url: configValue(server, "url") || "https://sysupgrade.openwrt.org",
+		upgrade_packages: configValue(client, "upgrade_packages") === "0" ? "0" : "1",
+		auto_search: configValue(client, "auto_search") === "1" ? "1" : "0",
+		advanced_mode: configValue(client, "advanced_mode") === "1" ? "1" : "0",
+		login_check_for_upgrades: configValue(client, "login_check_for_upgrades") === "0" ? "0" : "1",
+	};
+}
+
 function adblockFastConfigValues(config: ConfigSection | undefined): AdblockFastConfigInput {
 	return {
 		enabled: configValue(config, "enabled") === "0" ? "0" : "1",
@@ -3457,6 +3469,7 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 	const firmware = parseKeyValueLines(commandOutput(data.commands, "Current firmware"));
 	const helper = commandOutput(data.commands, "Upgrade helper").trim();
 	const server = data.sections.find((section) => section.type === "server");
+	const client = data.sections.find((section) => section.type === "client");
 
 	return (
 		<div className="grid gap-4">
@@ -3465,30 +3478,7 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 				<MetricBlock label="Target" value={firmware.DISTRIB_TARGET ?? data.board.release?.target ?? "unknown"} />
 				<MetricBlock label="Upgrade helper" value={helper || "unknown"} />
 			</div>
-			<Panel title="Build server" flush>
-				<div className="overflow-x-auto">
-					<table className="w-full min-w-[36rem] text-left text-sm">
-						<thead className="border-b text-xs uppercase text-muted-foreground">
-							<tr>
-								<th className="px-3 py-2 font-medium">Section</th>
-								<th className="px-3 py-2 font-medium">URL</th>
-								<th className="px-3 py-2 font-medium">Status</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td className="px-3 py-3 font-medium">{server?.name ?? "server"}</td>
-								<td className="px-3 py-3 font-mono text-xs">{server?.values.url ?? "none"}</td>
-								<td className="px-3 py-3">
-									<Badge className={helper.includes("not installed") ? "" : "text-primary"}>
-										{helper.includes("not installed") ? "manual / LuCI compat" : "helper available"}
-									</Badge>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</Panel>
+			<AttendedSysupgradeConfigPanel client={client} helper={helper} server={server} />
 			<Panel title="Guardrails">
 				<p className="text-sm text-muted-foreground">
 					Image requests, package retention, build progress, and flash handoff remain in LuCI compat until the native flow
@@ -3496,6 +3486,90 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 				</p>
 			</Panel>
 		</div>
+	);
+}
+
+function AttendedSysupgradeConfigPanel({
+	client,
+	helper,
+	server,
+}: {
+	client: ConfigSection | undefined;
+	helper: string;
+	server: ConfigSection | undefined;
+}) {
+	const initial = useMemo(() => attendedSysupgradeConfigValues(server, client), [server, client]);
+	const [values, setValues] = useState(initial);
+	const [savedValues, setSavedValues] = useState(initial);
+	const [sections, setSections] = useState({ server, client });
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function update<K extends keyof AttendedSysupgradeConfigInput>(key: K, value: AttendedSysupgradeConfigInput[K]) {
+		setValues((current) => ({ ...current, [key]: value }));
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveAttendedSysupgradeConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextServer = firstSection(result.sections, "server") ?? sections.server;
+		const nextClient = firstSection(result.sections, "client") ?? sections.client;
+		const nextValues = attendedSysupgradeConfigValues(nextServer, nextClient);
+		setSections({ server: nextServer, client: nextClient });
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel
+			title="Attended sysupgrade settings"
+			actions={
+				<Badge className={helper.includes("not installed") ? "" : "text-primary"}>
+					{helper.includes("not installed") ? "manual / LuCI compat" : "helper available"}
+				</Badge>
+			}
+		>
+			<div className="grid gap-4">
+				<div className="grid gap-3 md:grid-cols-2">
+					<label className="grid gap-2 text-sm md:col-span-2">
+						<span className="font-medium">Build server URL</span>
+						<Input onChange={(event) => update("server_url", event.target.value)} value={values.server_url} />
+					</label>
+					<AttendedSelect label="Retain installed packages" onChange={(value) => update("upgrade_packages", value)} value={values.upgrade_packages} />
+					<AttendedSelect label="Auto search upgrades" onChange={(value) => update("auto_search", value)} value={values.auto_search} />
+					<AttendedSelect label="Advanced mode" onChange={(value) => update("advanced_mode", value)} value={values.advanced_mode} />
+					<AttendedSelect label="Login upgrade check" onChange={(value) => update("login_check_for_upgrades", value)} value={values.login_check_for_upgrades} />
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+		</Panel>
+	);
+}
+
+function AttendedSelect({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<label className="grid gap-2 text-sm">
+			<span className="font-medium">{label}</span>
+			<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => onChange(event.target.value)} value={value}>
+				<option value="1">enabled</option>
+				<option value="0">disabled</option>
+			</select>
+		</label>
 	);
 }
 

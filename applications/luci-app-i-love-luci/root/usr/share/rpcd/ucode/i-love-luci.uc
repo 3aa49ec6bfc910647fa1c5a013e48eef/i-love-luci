@@ -2870,6 +2870,68 @@ function package_upgrades() {
 	return shell_output('opkg list-upgradable 2>&1 | sed -n "1,160p"');
 }
 
+function attendedsysupgrade_sections() {
+	return collect_uci_config('attendedsysupgrade', ['server', 'client', 'owut']);
+}
+
+function save_attendedsysupgrade_config(config) {
+	config ||= {};
+	uci.load('attendedsysupgrade');
+
+	let server = null;
+	let client = null;
+
+	uci.foreach('attendedsysupgrade', 'server', function(section) {
+		server ??= section['.name'];
+	});
+	uci.foreach('attendedsysupgrade', 'client', function(section) {
+		client ??= section['.name'];
+	});
+
+	server ||= uci.add('attendedsysupgrade', 'server');
+	client ||= uci.add('attendedsysupgrade', 'client');
+
+	let url = replace(trim('' + (config.server_url || '')), /[\r\n]/g, '');
+
+	if (!length(url) || replace(url, /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\\]-]/g, '') != url)
+		return {
+			saved: false,
+			message: 'Attended sysupgrade build server URL is required.',
+			changed: false,
+			sections: attendedsysupgrade_sections()
+		};
+
+	let client_options = {
+		upgrade_packages: ('' + config.upgrade_packages) == '1' ? '1' : '0',
+		auto_search: ('' + config.auto_search) == '1' ? '1' : '0',
+		advanced_mode: ('' + config.advanced_mode) == '1' ? '1' : '0',
+		login_check_for_upgrades: ('' + config.login_check_for_upgrades) == '1' ? '1' : '0'
+	};
+	let changed = false;
+
+	if ((uci.get('attendedsysupgrade', server, 'url') || '') != url) {
+		changed = true;
+		uci.set('attendedsysupgrade', server, 'url', url);
+	}
+
+	for (let key, value in client_options) {
+		if ((uci.get('attendedsysupgrade', client, key) || '') != value) {
+			changed = true;
+			uci.set('attendedsysupgrade', client, key, value);
+		}
+	}
+
+	if (changed)
+		uci.commit('attendedsysupgrade');
+
+	return {
+		saved: true,
+		message: changed ? 'Attended sysupgrade settings saved.' : 'Attended sysupgrade settings already up to date.',
+		changed,
+		sections: attendedsysupgrade_sections()
+	};
+}
+
 function package_search(query) {
 	query = trim('' + (query || ''));
 
@@ -4371,7 +4433,7 @@ function native_page(page) {
 		];
 	}
 	else if (page == 'attendedsysupgrade') {
-		data.sections = collect_uci_config('attendedsysupgrade', ['server']);
+		data.sections = attendedsysupgrade_sections();
 		data.commands = [
 			{ title: 'Current firmware', output: shell_output('cat /etc/openwrt_release') },
 			{ title: 'Upgrade helper', output: command_exists('auc') ? shell_output('auc --help 2>&1 | head -n 80') : 'auc is not installed.' }
@@ -4927,6 +4989,25 @@ const methods = {
 					command: '',
 					output: '',
 					message: 'Package action failed: ' + e
+				});
+			}
+		}
+	},
+
+	attendedsysupgrade_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_attendedsysupgrade_config(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Attended sysupgrade settings save failed: ' + e,
+					changed: false,
+					sections: attendedsysupgrade_sections()
 				});
 			}
 		}
