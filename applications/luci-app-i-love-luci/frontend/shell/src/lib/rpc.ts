@@ -505,6 +505,31 @@ export type FirewallForwardingsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallRuleRow = {
+	section: string;
+	name: string;
+	enabled: string;
+	src: string;
+	dest: string;
+	proto: string;
+	src_ip: string;
+	dest_ip: string;
+	src_port: string;
+	dest_port: string;
+	icmp_type: string;
+	family: string;
+	limit: string;
+	target: string;
+};
+
+export type FirewallRulesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	rules: FirewallRuleRow[];
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -978,6 +1003,21 @@ export async function saveFirewallForwardings(rows: FirewallForwarding[]): Promi
 			message: "Firewall forwardings save failed.",
 			changed: false,
 			forwardings: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallRules(rows: FirewallRuleRow[]): Promise<FirewallRulesResult> {
+	try {
+		return await callBridge<FirewallRulesResult>("firewall_rules_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall rules save failed.",
+			changed: false,
+			rules: [],
 			sections: [],
 		};
 	}

@@ -1750,6 +1750,226 @@ function save_firewall_forwardings(rows) {
 	};
 }
 
+function firewall_rule_rows() {
+	let rules = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return rules;
+	}
+
+	uci.foreach('firewall', 'rule', function(section) {
+		push(rules, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			enabled: section.enabled == '0' ? '0' : '1',
+			src: section.src || '',
+			dest: section.dest || '',
+			proto: join('\n', dhcp_normalize_list(section.proto)),
+			src_ip: section.src_ip || '',
+			dest_ip: section.dest_ip || '',
+			src_port: section.src_port || '',
+			dest_port: section.dest_port || '',
+			icmp_type: join('\n', dhcp_normalize_list(section.icmp_type)),
+			family: section.family || '',
+			limit: section.limit || '',
+			target: section.target || ''
+		});
+	});
+
+	return rules;
+}
+
+function valid_firewall_rule_value(value) {
+	return value == '' || replace(value, /[^A-Za-z0-9:._/*%-]/g, '') == value;
+}
+
+function valid_firewall_rule_list(values) {
+	for (let value in values)
+		if (!valid_firewall_rule_value(value))
+			return false;
+
+	return true;
+}
+
+function firewall_family_value(value) {
+	value = dhcp_clean_value(value || '');
+
+	if (value == '' || value == 'any' || value == 'ipv4' || value == 'ipv6')
+		return value;
+
+	return null;
+}
+
+function save_firewall_rules(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('firewall', 'rule', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'rule';
+		let proto = split_dhcp_list(row?.proto || '');
+		let icmp_type = split_dhcp_list(row?.icmp_type || '');
+		let family = firewall_family_value(row?.family || '');
+		let target = firewall_policy_value(row?.target || '');
+		let next = {
+			name: dhcp_clean_value(row?.name || ''),
+			enabled: dhcp_zero_one(row?.enabled),
+			src: dhcp_clean_value(row?.src || ''),
+			dest: dhcp_clean_value(row?.dest || ''),
+			src_ip: dhcp_clean_value(row?.src_ip || ''),
+			dest_ip: dhcp_clean_value(row?.dest_ip || ''),
+			src_port: dhcp_clean_value(row?.src_port || ''),
+			dest_port: dhcp_clean_value(row?.dest_port || ''),
+			family,
+			limit: dhcp_clean_value(row?.limit || ''),
+			target
+		};
+
+		if (!length(next.name))
+			return {
+				saved: false,
+				message: 'Firewall rule name is required.',
+				changed: false,
+				rules: firewall_rule_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (!length(target))
+			return {
+				saved: false,
+				message: 'Firewall rule target must be ACCEPT, REJECT, or DROP.',
+				changed: false,
+				rules: firewall_rule_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (family == null)
+			return {
+				saved: false,
+				message: 'Firewall rule family must be any, ipv4, ipv6, or blank.',
+				changed: false,
+				rules: firewall_rule_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		for (let key, value in next) {
+			if ((key == 'src' || key == 'dest') && value != '' && value != '*' && !valid_firewall_name(value))
+				return {
+					saved: false,
+					message: 'Firewall rule zone names contain unsupported characters.',
+					changed: false,
+					rules: firewall_rule_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+
+			if ((key == 'src_ip' || key == 'dest_ip' || key == 'src_port' || key == 'dest_port' || key == 'limit') && !valid_firewall_rule_value(value))
+				return {
+					saved: false,
+					message: 'Firewall rule match fields contain unsupported characters.',
+					changed: false,
+					rules: firewall_rule_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+		}
+
+		if (!valid_firewall_rule_list(proto) || !valid_firewall_rule_list(icmp_type))
+			return {
+				saved: false,
+				message: 'Firewall rule protocol and ICMP type fields contain unsupported characters.',
+				changed: false,
+				rules: firewall_rule_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			proto,
+			icmp_type,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'rule');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let proto = item.proto;
+		let icmp_type = item.icmp_type;
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if (key == 'enabled' && value == '1' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'enabled' && value == '1') || value == '')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'proto') || [], proto)) {
+			changed = true;
+			if (length(proto))
+				uci.set('firewall', section, 'proto', length(proto) == 1 ? proto[0] : proto);
+			else
+				uci.delete('firewall', section, 'proto');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'icmp_type') || [], icmp_type)) {
+			changed = true;
+			if (length(icmp_type))
+				uci.set('firewall', section, 'icmp_type', length(icmp_type) == 1 ? icmp_type[0] : icmp_type);
+			else
+				uci.delete('firewall', section, 'icmp_type');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall rules saved and firewall reloaded.' : 'Firewall rules already up to date.',
+		changed,
+		rules: firewall_rule_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -3088,6 +3308,26 @@ const methods = {
 					message: 'Firewall forwardings save failed: ' + e,
 					changed: false,
 					forwardings: firewall_forwarding_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_rules_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_rules(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall rules save failed: ' + e,
+					changed: false,
+					rules: firewall_rule_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}

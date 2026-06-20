@@ -11,6 +11,7 @@ import {
 	getDashboardStatus,
 	saveFirewallDefaults,
 	saveFirewallForwardings,
+	saveFirewallRules,
 	saveFirewallZones,
 	saveDhcpDomains,
 	saveDhcpHosts,
@@ -29,6 +30,7 @@ import {
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
+	type FirewallRuleRow,
 	type FirewallZone,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
@@ -1048,7 +1050,15 @@ function FirewallSummary({
 				}
 			/>
 
-			<FirewallRuleTable rules={rules} />
+			<FirewallRuleEditor
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
+				rules={rules}
+			/>
 
 			{redirects.length ? <FirewallRedirectTable redirects={redirects} /> : null}
 		</div>
@@ -1569,55 +1579,281 @@ function normalizeFirewallForwarding(forwarding: FirewallForwarding): FirewallFo
 	};
 }
 
-function FirewallRuleTable({ rules }: { rules: ConfigSection[] }) {
+function FirewallRuleEditor({
+	onSaved,
+	rules,
+}: {
+	onSaved: (sections: ConfigSection[]) => void;
+	rules: ConfigSection[];
+}) {
+	const [rows, setRows] = useState(() => rules.map(firewallRuleValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallRuleRow, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				enabled: "1",
+				src: "",
+				dest: "",
+				proto: "",
+				src_ip: "",
+				dest_ip: "",
+				src_port: "",
+				dest_port: "",
+				icmp_type: "",
+				family: "",
+				limit: "",
+				target: "ACCEPT",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallRules(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.rules.map(normalizeFirewallRule);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
 	return (
 		<section className="grid gap-3">
-			<div className="flex items-center justify-between gap-3">
-				<h2 className="text-base font-semibold">Traffic rules</h2>
-				<span className="text-xs text-muted-foreground">{rules.length} rules</span>
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Traffic rules</h2>
+					<p className="text-sm text-muted-foreground">Configure common allow, reject, and drop rules.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add rule
+				</Button>
 			</div>
-			<div className="overflow-x-auto rounded-md border bg-card">
-				<table className="w-full min-w-[58rem] text-left text-sm">
-					<thead className="border-b text-xs uppercase text-muted-foreground">
-						<tr>
-							<th className="px-3 py-2 font-medium">Rule</th>
-							<th className="px-3 py-2 font-medium">Status</th>
-							<th className="px-3 py-2 font-medium">From</th>
-							<th className="px-3 py-2 font-medium">To</th>
-							<th className="px-3 py-2 font-medium">Protocol</th>
-							<th className="px-3 py-2 font-medium">Ports</th>
-							<th className="px-3 py-2 font-medium">Target</th>
-						</tr>
-					</thead>
-					<tbody>
-						{rules.length ? (
-							rules.map((rule) => (
-								<tr className="border-b align-top last:border-0" key={rule.name}>
-									<td className="px-3 py-3 font-medium">{valueText(rule.values.name || rule.name)}</td>
-									<td className="px-3 py-3">
-										<Badge className={isEnabledValue(rule.values.enabled) ? "text-primary" : ""}>
-											{isEnabledValue(rule.values.enabled) ? "enabled" : "disabled"}
-										</Badge>
-									</td>
-									<td className="px-3 py-3">{firewallEndpoint(rule.values.src, rule.values.src_ip)}</td>
-									<td className="px-3 py-3">{firewallEndpoint(rule.values.dest, rule.values.dest_ip)}</td>
-									<td className="px-3 py-3">{valueText(rule.values.proto)}</td>
-									<td className="px-3 py-3">{valueText(rule.values.dest_port || rule.values.src_port || rule.values.icmp_type)}</td>
-									<td className="px-3 py-3">{targetText(rule.values.target, rule.values.family)}</td>
-								</tr>
-							))
-						) : (
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[112rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
-									No traffic rules configured.
-								</td>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">Destination</th>
+								<th className="px-3 py-2 font-medium">Protocols</th>
+								<th className="px-3 py-2 font-medium">Source IP</th>
+								<th className="px-3 py-2 font-medium">Destination IP</th>
+								<th className="px-3 py-2 font-medium">Source port</th>
+								<th className="px-3 py-2 font-medium">Destination port</th>
+								<th className="px-3 py-2 font-medium">ICMP types</th>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Limit</th>
+								<th className="px-3 py-2 font-medium">Target</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
-						)}
-					</tbody>
-				</table>
-			</div>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((rule, index) => (
+									<tr className="border-b align-top last:border-0" key={`${rule.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Rule name"
+												onChange={(event) => updateRow(index, "name", event.target.value)}
+												value={rule.name}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-rule-enabled-${index}`}
+												onChange={(value) => updateRow(index, "enabled", value)}
+												options={[
+													["1", "Enabled"],
+													["0", "Disabled"],
+												]}
+												value={rule.enabled}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Source zone" onChange={(event) => updateRow(index, "src", event.target.value)} value={rule.src} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination zone"
+												onChange={(event) => updateRow(index, "dest", event.target.value)}
+												value={rule.dest}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Protocols"
+												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "proto", event.target.value)}
+												spellCheck={false}
+												value={rule.proto}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Source IP" onChange={(event) => updateRow(index, "src_ip", event.target.value)} value={rule.src_ip} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination IP"
+												onChange={(event) => updateRow(index, "dest_ip", event.target.value)}
+												value={rule.dest_ip}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source port"
+												onChange={(event) => updateRow(index, "src_port", event.target.value)}
+												value={rule.src_port}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination port"
+												onChange={(event) => updateRow(index, "dest_port", event.target.value)}
+												value={rule.dest_port}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="ICMP types"
+												className="min-h-10 w-56 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "icmp_type", event.target.value)}
+												spellCheck={false}
+												value={rule.icmp_type}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-rule-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["", "Any"],
+													["ipv4", "IPv4"],
+													["ipv6", "IPv6"],
+												]}
+												value={rule.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Limit" onChange={(event) => updateRow(index, "limit", event.target.value)} value={rule.limit} />
+										</td>
+										<td className="px-3 py-3">
+											<FirewallPolicySelect
+												id={`firewall-rule-target-${index}`}
+												onChange={(value) => updateRow(index, "target", value)}
+												value={rule.target}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${rule.name || "rule"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={14}>
+										No traffic rules configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
 		</section>
 	);
+}
+
+function firewallRuleValues(section: ConfigSection): FirewallRuleRow {
+	return normalizeFirewallRule({
+		section: section.name,
+		name: rawValue(section.values.name || section.name),
+		enabled: isEnabledValue(section.values.enabled) ? "1" : "0",
+		src: rawValue(section.values.src),
+		dest: rawValue(section.values.dest),
+		proto: rawListValue(section.values.proto).join("\n"),
+		src_ip: rawValue(section.values.src_ip),
+		dest_ip: rawValue(section.values.dest_ip),
+		src_port: rawValue(section.values.src_port),
+		dest_port: rawValue(section.values.dest_port),
+		icmp_type: rawListValue(section.values.icmp_type).join("\n"),
+		family: firewallFamilyText(section.values.family),
+		limit: rawValue(section.values.limit),
+		target: firewallPolicyText(section.values.target),
+	});
+}
+
+function normalizeFirewallRule(rule: FirewallRuleRow): FirewallRuleRow {
+	return {
+		section: rule.section ?? "",
+		name: rule.name ?? "",
+		enabled: rule.enabled === "0" ? "0" : "1",
+		src: rule.src ?? "",
+		dest: rule.dest ?? "",
+		proto: rule.proto ?? "",
+		src_ip: rule.src_ip ?? "",
+		dest_ip: rule.dest_ip ?? "",
+		src_port: rule.src_port ?? "",
+		dest_port: rule.dest_port ?? "",
+		icmp_type: rule.icmp_type ?? "",
+		family: firewallFamilyText(rule.family),
+		limit: rule.limit ?? "",
+		target: firewallPolicyText(rule.target),
+	};
+}
+
+function firewallFamilyText(value: unknown) {
+	const text = rawValue(value);
+	return text === "ipv4" || text === "ipv6" ? text : "";
 }
 
 function FirewallRedirectTable({ redirects }: { redirects: ConfigSection[] }) {
@@ -2678,18 +2914,6 @@ function isEnabledValue(value: ConfigSection["values"][string] | undefined) {
 
 function enabledText(value: ConfigSection["values"][string] | undefined) {
 	return isEnabledValue(value) ? "enabled" : "disabled";
-}
-
-function firewallEndpoint(zone: ConfigSection["values"][string] | undefined, address: ConfigSection["values"][string] | undefined) {
-	const parts = [valueText(zone), valueText(address)].filter((value) => value !== "none");
-	return parts.length ? parts.join(" / ") : "any";
-}
-
-function targetText(target: ConfigSection["values"][string] | undefined, family: ConfigSection["values"][string] | undefined) {
-	const targetValue = valueText(target);
-	const familyValue = valueText(family);
-
-	return familyValue === "none" || familyValue === "any" ? targetValue : `${targetValue} (${familyValue})`;
 }
 
 function formatBytes(value?: number) {
