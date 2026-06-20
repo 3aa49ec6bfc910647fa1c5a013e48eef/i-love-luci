@@ -1,3 +1,4 @@
+import { Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
 	getCoreSettings,
 	getDashboardStatus,
+	saveDhcpHosts,
 	saveSystemSettings,
 	type ConfigSection,
 	type CoreSettings,
@@ -30,7 +32,7 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 	},
 	dhcp: {
 		title: "DHCP and DNS",
-		description: "Modern read-only view of dnsmasq, DHCP pools, host leases, and odhcpd sections.",
+		description: "Modern DHCP view with static host reservations, active leases, and DNS summaries.",
 		configKey: "dhcp",
 	},
 	firewall: {
@@ -87,7 +89,7 @@ export function CoreSettingsPage() {
 			</header>
 
 			{page === "network" ? <NetworkSummary dashboard={dashboard} /> : null}
-			{page === "dhcp" && settings ? <DhcpSummary settings={settings} /> : null}
+			{page === "dhcp" && settings ? <DhcpSummary onSettingsChange={setSettings} settings={settings} /> : null}
 			{page === "firewall" && settings ? <FirewallSummary settings={settings} /> : null}
 			{page === "system" && settings ? <SystemSummary settings={settings} dashboard={dashboard} /> : null}
 
@@ -131,7 +133,13 @@ export function CoreSettingsPage() {
 	);
 }
 
-function DhcpSummary({ settings }: { settings: CoreSettings }) {
+function DhcpSummary({
+	onSettingsChange,
+	settings,
+}: {
+	onSettingsChange: (settings: CoreSettings) => void;
+	settings: CoreSettings;
+}) {
 	const leases = settings.dhcpLeases ?? [];
 	const staticHosts = settings.dhcpHosts ?? [];
 	const domainRecords = settings.dhcpDomains ?? [];
@@ -152,7 +160,16 @@ function DhcpSummary({ settings }: { settings: CoreSettings }) {
 			</section>
 
 			<LeaseTable leases={leases} />
-			<StaticHostTable hosts={staticHosts} />
+			<StaticHostEditor
+				hosts={staticHosts}
+				onSaved={(hosts, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpHosts: hosts,
+					})
+				}
+			/>
 			<DomainRecordTable records={domainRecords} />
 		</div>
 	);
@@ -215,15 +232,149 @@ function LeaseTable({ leases }: { leases: DhcpLease[] }) {
 	);
 }
 
-function StaticHostTable({ hosts }: { hosts: DhcpHost[] }) {
+function StaticHostEditor({
+	hosts,
+	onSaved,
+}: {
+	hosts: DhcpHost[];
+	onSaved: (hosts: DhcpHost[], sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => hosts.map(normalizeDhcpHost));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpHost, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [...current, { section: "", name: "", ip: "", mac: "" }]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpHosts(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.hosts.map(normalizeDhcpHost);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
 	return (
-		<SimpleSectionTable
-			columns={["Name", "IP", "MAC"]}
-			empty="No static DHCP hosts configured."
-			rows={hosts.map((host) => [host.name, host.ip, host.mac])}
-			title="Static DHCP hosts"
-		/>
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Static DHCP hosts</h2>
+					<p className="text-sm text-muted-foreground">Reserve addresses by MAC address.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add host
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[46rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">IP</th>
+								<th className="px-3 py-2 font-medium">MAC</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((host, index) => (
+									<tr className="border-b align-top last:border-0" key={`${host.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Host name"
+												onChange={(event) => updateRow(index, "name", event.target.value)}
+												value={host.name}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Reserved IP"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "ip", event.target.value)}
+												value={host.ip}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="MAC address"
+												onChange={(event) => updateRow(index, "mac", event.target.value)}
+												value={host.mac}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${host.name || host.ip || "host"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+										No static DHCP hosts configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
+}
+
+function normalizeDhcpHost(host: DhcpHost): DhcpHost {
+	return {
+		section: host.section ?? "",
+		name: host.name ?? "",
+		ip: host.ip ?? "",
+		mac: host.mac ?? "",
+	};
 }
 
 function DomainRecordTable({ records }: { records: DhcpDomain[] }) {

@@ -177,6 +177,7 @@ export type DhcpLease = {
 };
 
 export type DhcpHost = {
+	section: string;
 	name: string;
 	ip: string;
 	mac: string;
@@ -336,6 +337,14 @@ export type SystemSettingsResult = {
 	saved: boolean;
 	message: string;
 	changed: boolean;
+	sections: ConfigSection[];
+};
+
+export type DhcpHostsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	hosts: DhcpHost[];
 	sections: ConfigSection[];
 };
 
@@ -676,6 +685,21 @@ export async function saveSystemSettings(config: SystemSettingsInput): Promise<S
 			saved: false,
 			message: "System settings save failed.",
 			changed: false,
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpHosts(rows: DhcpHost[]): Promise<DhcpHostsResult> {
+	try {
+		return await callBridge<DhcpHostsResult>("dhcp_hosts_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Static DHCP hosts save failed.",
+			changed: false,
+			hosts: [],
 			sections: [],
 		};
 	}

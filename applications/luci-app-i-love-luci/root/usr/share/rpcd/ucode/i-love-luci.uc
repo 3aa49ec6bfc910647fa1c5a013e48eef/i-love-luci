@@ -620,7 +620,8 @@ function dhcp_static_hosts() {
 
 	uci.foreach('dhcp', 'host', function(section) {
 		push(hosts, {
-			name: section.name || section['.name'] || '',
+			section: section['.name'] || '',
+			name: section.name || '',
 			ip: section.ip || '',
 			mac: type(section.mac) == 'array' ? join(', ', section.mac) : (section.mac || '')
 		});
@@ -647,6 +648,151 @@ function dhcp_domain_records() {
 	});
 
 	return records;
+}
+
+function dhcp_clean_value(value) {
+	value = trim('' + (value || ''));
+	return replace(value, /[\r\n]/g, '');
+}
+
+function split_dhcp_list(value) {
+	let rows = [];
+
+	for (let piece in split(replace('' + (value || ''), /\n/g, ','), ',')) {
+		piece = dhcp_clean_value(piece);
+
+		if (length(piece))
+			push(rows, piece);
+	}
+
+	return rows;
+}
+
+function dhcp_normalize_list(value) {
+	if (type(value) == 'array')
+		return value;
+
+	if (value == null || value == '')
+		return [];
+
+	return [value];
+}
+
+function dhcp_set_option(section, option, value) {
+	if (value == null || value == '')
+		uci.delete('dhcp', section, option);
+	else
+		uci.set('dhcp', section, option, value);
+}
+
+function same_dhcp_list(current, next) {
+	current = dhcp_normalize_list(current);
+	next = dhcp_normalize_list(next);
+
+	if (length(current) != length(next))
+		return false;
+
+	for (let i = 0; i < length(current); i++)
+		if (current[i] != next[i])
+			return false;
+
+	return true;
+}
+
+function valid_ipv4(value) {
+	return match(value, /^([0-9]{1,3}\.){3}[0-9]{1,3}$/);
+}
+
+function valid_mac_list(value) {
+	return length(value) && replace(value, /[^A-Fa-f0-9:,\n -]/g, '') == value;
+}
+
+function save_dhcp_static_hosts(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'host', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'host';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'host');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let name = dhcp_clean_value(row?.name || '');
+		let ip = dhcp_clean_value(row?.ip || '');
+		let mac = dhcp_clean_value(row?.mac || '');
+		let mac_list = split_dhcp_list(mac);
+
+		if (!valid_ipv4(ip))
+			return {
+				saved: false,
+				message: 'Static DHCP host IP must be an IPv4 address.',
+				changed: false,
+				hosts: dhcp_static_hosts(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		if (!valid_mac_list(mac) || !length(mac_list))
+			return {
+				saved: false,
+				message: 'Static DHCP host MAC address is required.',
+				changed: false,
+				hosts: dhcp_static_hosts(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		let current_name = uci.get('dhcp', section, 'name') || '';
+		let current_ip = uci.get('dhcp', section, 'ip') || '';
+		let current_mac = uci.get('dhcp', section, 'mac') || [];
+
+		if (current_name != name) {
+			changed = true;
+			dhcp_set_option(section, 'name', name);
+		}
+
+		if (current_ip != ip) {
+			changed = true;
+			uci.set('dhcp', section, 'ip', ip);
+		}
+
+		if (!same_dhcp_list(current_mac, mac_list)) {
+			changed = true;
+			uci.set('dhcp', section, 'mac', length(mac_list) == 1 ? mac_list[0] : mac_list);
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+		system('/etc/init.d/odhcpd reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Static DHCP hosts saved and services reloaded.' : 'Static DHCP hosts already up to date.',
+		changed,
+		hosts: dhcp_static_hosts(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+	};
 }
 
 function run_init_action(name, action) {
@@ -1804,6 +1950,26 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(build_core_settings(request.args.page || 'network'));
+		}
+	},
+
+	dhcp_hosts_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_static_hosts(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Static DHCP hosts save failed: ' + e,
+					changed: false,
+					hosts: dhcp_static_hosts(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
 		}
 	},
 

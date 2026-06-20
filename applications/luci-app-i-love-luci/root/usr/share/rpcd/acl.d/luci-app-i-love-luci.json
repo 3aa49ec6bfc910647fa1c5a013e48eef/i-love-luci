@@ -29,6 +29,7 @@
 					"crontab_save",
 					"custom_command_run",
 					"diagnostics_run",
+					"dhcp_hosts_save",
 					"dropbear_config_save",
 					"led_config_save",
 					"password_set",
@@ -46,6 +47,7 @@
 			},
 			"uci": [
 				"dropbear",
+				"dhcp",
 				"luci",
 				"i-love-luci",
 				"system",
