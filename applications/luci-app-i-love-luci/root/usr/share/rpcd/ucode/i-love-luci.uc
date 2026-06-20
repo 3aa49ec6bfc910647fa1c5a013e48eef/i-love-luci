@@ -3615,6 +3615,211 @@ function save_uhttpd_cert_defaults(config) {
 	};
 }
 
+function adblock_fast_feed_rows() {
+	let rows = [];
+
+	try {
+		uci.load('adblock-fast');
+	}
+	catch (e) {
+		return rows;
+	}
+
+	uci.foreach('adblock-fast', 'file_url', function(section) {
+		push(rows, {
+			section: section['.name'] || '',
+			enabled: section.enabled == '0' ? '0' : '1',
+			action: section.action || 'block',
+			name: section.name || '',
+			url: section.url || '',
+			size: section.size || ''
+		});
+	});
+
+	return rows;
+}
+
+function adblock_fast_save_state() {
+	return {
+		config: (collect_uci_config('adblock-fast', ['adblock-fast']) || [])[0] || null,
+		feeds: adblock_fast_feed_rows(),
+		sections: collect_uci_config('adblock-fast', ['adblock-fast', 'file_url'])
+	};
+}
+
+function save_adblock_fast_config(config, feeds) {
+	config ||= {};
+	feeds ||= [];
+	uci.load('adblock-fast');
+
+	let config_section = first_uci_section('adblock-fast', 'adblock-fast') || uci.add('adblock-fast', 'adblock-fast');
+	let allowed_domains = split_uci_lines(config.allowed_domain || '');
+	let blocked_domains = split_uci_lines(config.blocked_domain || '');
+	let next_config = {
+		enabled: zero_one(config.enabled),
+		dns: clean_uci_value(config.dns || ''),
+		force_dns: zero_one(config.force_dns),
+		parallel_downloads: clean_uci_value(config.parallel_downloads || ''),
+		auto_update_enabled: zero_one(config.auto_update_enabled),
+		allowed_domain: allowed_domains,
+		blocked_domain: blocked_domains
+	};
+
+	if (!length(next_config.dns) || replace(next_config.dns, /[^A-Za-z0-9_.-]/g, '') != next_config.dns)
+		return {
+			saved: false,
+			message: 'AdBlock Fast DNS backend is required.',
+			changed: false,
+			...adblock_fast_save_state()
+		};
+
+	if (!valid_numeric_value(next_config.parallel_downloads))
+		return {
+			saved: false,
+			message: 'AdBlock Fast parallel downloads must be numeric.',
+			changed: false,
+			...adblock_fast_save_state()
+		};
+
+	for (let domain in allowed_domains)
+		if (!length(domain) || replace(domain, /[^A-Za-z0-9_.:-]/g, '') != domain)
+			return {
+				saved: false,
+				message: 'Allowed domain entries contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+	for (let domain in blocked_domains)
+		if (!length(domain) || replace(domain, /[^A-Za-z0-9_.:-]/g, '') != domain)
+			return {
+				saved: false,
+				message: 'Blocked domain entries contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+	let existing = {};
+	uci.foreach('adblock-fast', 'file_url', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let keep = {};
+	let validated = [];
+
+	for (let row in feeds) {
+		let section = clean_uci_value(row?.section || '');
+		let is_existing = length(section) && existing[section] == true;
+		let next = {
+			enabled: zero_one(row?.enabled),
+			action: row?.action == 'allow' ? 'allow' : 'block',
+			name: clean_uci_value(row?.name || ''),
+			url: clean_uci_value(row?.url || ''),
+			size: clean_uci_value(row?.size || '')
+		};
+
+		if (length(section) && !is_existing)
+			return {
+				saved: false,
+				message: 'AdBlock Fast feed no longer exists. Refresh and try again.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+		if (!length(next.name) || !length(next.url))
+			return {
+				saved: false,
+				message: 'AdBlock Fast feed name and URL are required.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+		if (replace(next.name, /[^A-Za-z0-9 .,:_@/+()-]/g, '') != next.name || replace(next.url, /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\\]-]/g, '') != next.url)
+			return {
+				saved: false,
+				message: 'AdBlock Fast feed fields contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+		if (!valid_numeric_value(next.size))
+			return {
+				saved: false,
+				message: 'AdBlock Fast feed size must be numeric.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			next
+		});
+	}
+
+	let changed = false;
+
+	for (let key, value in next_config) {
+		let current = uci.get('adblock-fast', config_section, key) || '';
+
+		if (key == 'allowed_domain' || key == 'blocked_domain') {
+			if (!uci_list_equal(current, value)) {
+				changed = true;
+				set_uci_option('adblock-fast', config_section, key, value);
+			}
+			continue;
+		}
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('adblock-fast', config_section, key, value);
+		}
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('adblock-fast', 'file_url');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		for (let key, value in item.next) {
+			let current = uci.get('adblock-fast', section, key) || '';
+
+			if (key == 'enabled') {
+				value = value == '0' ? '0' : '';
+			}
+
+			if (current != value) {
+				changed = true;
+				set_uci_option('adblock-fast', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('adblock-fast', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('adblock-fast');
+		system('/etc/init.d/adblock-fast reload >/dev/null 2>&1 || /etc/init.d/adblock-fast restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'AdBlock Fast settings saved and reloaded.' : 'AdBlock Fast settings already up to date.',
+		changed,
+		...adblock_fast_save_state()
+	};
+}
+
 function upnpd_rule_rows() {
 	let rows = [];
 
@@ -4524,6 +4729,26 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_uhttpd_config(request.args.config || {}));
+		}
+	},
+
+	adblock_fast_config_save: {
+		args: {
+			config: {},
+			feeds: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_adblock_fast_config(request.args.config || {}, request.args.feeds || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'AdBlock Fast settings save failed: ' + e,
+					changed: false,
+					...adblock_fast_save_state()
+				});
+			}
 		}
 	},
 

@@ -415,6 +415,34 @@ export type UpnpdConfigResult = {
 	sections: ConfigSection[];
 };
 
+export type AdblockFastConfigInput = {
+	enabled: string;
+	dns: string;
+	force_dns: string;
+	parallel_downloads: string;
+	auto_update_enabled: string;
+	allowed_domain: string;
+	blocked_domain: string;
+};
+
+export type AdblockFastFeed = {
+	section: string;
+	enabled: string;
+	action: string;
+	name: string;
+	url: string;
+	size: string;
+};
+
+export type AdblockFastConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	config: ConfigSection | null;
+	feeds: AdblockFastFeed[];
+	sections: ConfigSection[];
+};
+
 export type UhttpdCertDefaultsInput = {
 	section: string;
 	days: string;
@@ -1000,6 +1028,22 @@ export async function saveUpnpdConfig(config: UpnpdConfigInput, rules: UpnpdRule
 			changed: false,
 			config: null,
 			rules: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveAdblockFastConfig(config: AdblockFastConfigInput, feeds: AdblockFastFeed[]): Promise<AdblockFastConfigResult> {
+	try {
+		return await callBridge<AdblockFastConfigResult>("adblock_fast_config_save", { config, feeds });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "AdBlock Fast settings save failed.",
+			changed: false,
+			config: null,
+			feeds: [],
 			sections: [],
 		};
 	}

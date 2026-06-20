@@ -10,6 +10,7 @@ import {
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
+	saveAdblockFastConfig,
 	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
@@ -23,6 +24,8 @@ import {
 	saveSshKeys,
 	searchPackages,
 	setRouterPassword,
+	type AdblockFastConfigInput,
+	type AdblockFastFeed,
 	type CommandBlock,
 	type ConfigSection,
 	type CustomCommand,
@@ -962,31 +965,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="Enabled feeds" value={enabledFeeds} />
 					<MetricBlock label="DNS backend" value={configValue(config, "dns") || "unknown"} />
 				</div>
-				<SimpleValueTable
-					columns={["Setting", "Value"]}
-					empty="No AdBlock Fast settings found."
-					rows={[
-						["Enabled", enabledText(configValue(config, "enabled"))],
-						["Force DNS", enabledText(configValue(config, "force_dns"))],
-						["Parallel downloads", configValue(config, "parallel_downloads") || "unknown"],
-						["Auto update", enabledText(configValue(config, "auto_update_enabled"))],
-						["Allowed domains", joinConfigValue(config?.values.allowed_domain)],
-						["Blocked domains", joinConfigValue(config?.values.blocked_domain)],
-					]}
-					title="AdBlock Fast settings"
-				/>
-				<SimpleValueTable
-					columns={["Feed", "Action", "Enabled", "Size", "URL"]}
-					empty="No feed URLs configured."
-					rows={feeds.map((feed) => [
-						configValue(feed, "name") || feed.name,
-						configValue(feed, "action") || "unknown",
-						enabledText(configValue(feed, "enabled", "1")),
-						configValue(feed, "size") || "unknown",
-						configValue(feed, "url") || "none",
-					])}
-					title="Feed sources"
-				/>
+				<AdblockFastPanel config={config} feeds={feeds} />
 			</div>
 		);
 	}
@@ -1059,6 +1038,219 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	return null;
+}
+
+function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined; feeds: ConfigSection[] }) {
+	const initialConfig = useMemo(() => adblockFastConfigValues(config), [config]);
+	const initialFeeds = useMemo(() => feeds.map(adblockFastFeedValues), [feeds]);
+	const [values, setValues] = useState(initialConfig);
+	const [savedValues, setSavedValues] = useState(initialConfig);
+	const [feedRows, setFeedRows] = useState(initialFeeds);
+	const [savedFeedRows, setSavedFeedRows] = useState(initialFeeds);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues) || JSON.stringify(feedRows) !== JSON.stringify(savedFeedRows);
+
+	function update<K extends keyof AdblockFastConfigInput>(key: K, value: AdblockFastConfigInput[K]) {
+		setValues((current) => ({ ...current, [key]: value }));
+	}
+
+	function updateFeed(index: number, field: keyof AdblockFastFeed, value: string) {
+		setFeedRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addFeed() {
+		setFeedRows((current) => [
+			...current,
+			{
+				section: "",
+				enabled: "1",
+				action: "block",
+				name: "",
+				url: "",
+				size: "",
+			},
+		]);
+	}
+
+	function removeFeed(index: number) {
+		setFeedRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	function reset() {
+		setValues(savedValues);
+		setFeedRows(savedFeedRows);
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveAdblockFastConfig(values, feedRows.map(normalizeAdblockFastFeed));
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = adblockFastConfigValues(result.config ?? config);
+		const nextFeeds = result.feeds.map(normalizeAdblockFastFeed);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		setFeedRows(nextFeeds);
+		setSavedFeedRows(nextFeeds);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel title="AdBlock Fast settings">
+			<div className="grid gap-5">
+				<div className="grid gap-3 md:grid-cols-3">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Enabled</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("enabled", event.target.value)}
+							value={values.enabled}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">DNS backend</span>
+						<Input onChange={(event) => update("dns", event.target.value)} value={values.dns} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Parallel downloads</span>
+						<Input inputMode="numeric" onChange={(event) => update("parallel_downloads", event.target.value)} value={values.parallel_downloads} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Force DNS</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("force_dns", event.target.value)}
+							value={values.force_dns}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Auto update</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("auto_update_enabled", event.target.value)}
+							value={values.auto_update_enabled}
+						>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+				</div>
+
+				<div className="grid gap-3 md:grid-cols-2">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Allowed domains</span>
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => update("allowed_domain", event.target.value)}
+							spellCheck={false}
+							value={values.allowed_domain}
+						/>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Blocked domains</span>
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => update("blocked_domain", event.target.value)}
+							spellCheck={false}
+							value={values.blocked_domain}
+						/>
+					</label>
+				</div>
+
+				<div className="grid gap-3">
+					<div className="flex items-center justify-between gap-3">
+						<h3 className="text-sm font-medium">Feed sources</h3>
+						<Button onClick={addFeed} size="sm" type="button" variant="outline">
+							<Plus className="mr-1.5 size-3.5" />
+							Add feed
+						</Button>
+					</div>
+					<div className="overflow-x-auto rounded-md border">
+						<table className="w-full min-w-[56rem] text-left text-sm">
+							<thead className="border-b bg-muted/30 text-xs uppercase text-muted-foreground">
+								<tr>
+									<th className="px-3 py-2 font-medium">Enabled</th>
+									<th className="px-3 py-2 font-medium">Action</th>
+									<th className="px-3 py-2 font-medium">Name</th>
+									<th className="px-3 py-2 font-medium">URL</th>
+									<th className="px-3 py-2 font-medium">Size</th>
+									<th className="w-12 px-3 py-2" />
+								</tr>
+							</thead>
+							<tbody>
+								{feedRows.length ? (
+									feedRows.map((feed, index) => (
+										<tr className="border-b last:border-0" key={`${feed.section || "new"}.${index}`}>
+											<td className="px-3 py-2">
+												<select
+													className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+													onChange={(event) => updateFeed(index, "enabled", event.target.value)}
+													value={feed.enabled}
+												>
+													<option value="1">enabled</option>
+													<option value="0">disabled</option>
+												</select>
+											</td>
+											<td className="px-3 py-2">
+												<select
+													className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+													onChange={(event) => updateFeed(index, "action", event.target.value)}
+													value={feed.action}
+												>
+													<option value="block">block</option>
+													<option value="allow">allow</option>
+												</select>
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateFeed(index, "name", event.target.value)} value={feed.name} />
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateFeed(index, "url", event.target.value)} value={feed.url} />
+											</td>
+											<td className="px-3 py-2">
+												<Input inputMode="numeric" onChange={(event) => updateFeed(index, "size", event.target.value)} value={feed.size} />
+											</td>
+											<td className="px-3 py-2 text-right">
+												<Button aria-label="Remove feed" onClick={() => removeFeed(index)} size="icon" type="button" variant="ghost">
+													<Trash2 className="size-4" />
+												</Button>
+											</td>
+										</tr>
+									))
+								) : (
+									<tr>
+										<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+											No feed URLs configured.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={reset} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+		</Panel>
+	);
 }
 
 function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined; rules: ConfigSection[] }) {
@@ -1527,6 +1719,40 @@ function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput 
 		http_keepalive: configValue(config, "http_keepalive"),
 		tcp_keepalive: configValue(config, "tcp_keepalive") === "0" ? "0" : "1",
 		ubus_prefix: configValue(config, "ubus_prefix"),
+	};
+}
+
+function adblockFastConfigValues(config: ConfigSection | undefined): AdblockFastConfigInput {
+	return {
+		enabled: configValue(config, "enabled") === "0" ? "0" : "1",
+		dns: configValue(config, "dns") || "dnsmasq.servers",
+		force_dns: configValue(config, "force_dns") === "0" ? "0" : "1",
+		parallel_downloads: configValue(config, "parallel_downloads") || "1",
+		auto_update_enabled: configValue(config, "auto_update_enabled") === "1" ? "1" : "0",
+		allowed_domain: textareaConfigList(config?.values.allowed_domain),
+		blocked_domain: textareaConfigList(config?.values.blocked_domain),
+	};
+}
+
+function adblockFastFeedValues(feed: ConfigSection): AdblockFastFeed {
+	return normalizeAdblockFastFeed({
+		section: feed.name,
+		enabled: configValue(feed, "enabled", "1"),
+		action: configValue(feed, "action") || "block",
+		name: configValue(feed, "name"),
+		url: configValue(feed, "url"),
+		size: configValue(feed, "size"),
+	});
+}
+
+function normalizeAdblockFastFeed(feed: AdblockFastFeed): AdblockFastFeed {
+	return {
+		section: feed.section || "",
+		enabled: feed.enabled === "0" ? "0" : "1",
+		action: feed.action === "allow" ? "allow" : "block",
+		name: feed.name || "",
+		url: feed.url || "",
+		size: feed.size || "",
 	};
 }
 
@@ -3486,6 +3712,14 @@ function joinConfigValue(value: ConfigSection["values"][string] | undefined) {
 	}
 
 	return String(value);
+}
+
+function textareaConfigList(value: ConfigSection["values"][string] | undefined) {
+	if (Array.isArray(value)) {
+		return value.map((item) => String(item)).join("\n");
+	}
+
+	return joinConfigValue(value);
 }
 
 function enabledText(value: ConfigSection["values"][string] | undefined) {
