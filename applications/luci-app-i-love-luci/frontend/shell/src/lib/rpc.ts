@@ -49,6 +49,14 @@ export type ConsoleStatus = {
 	url?: string;
 };
 
+export type PendingChange = {
+	config: string;
+	action: string;
+	section: string;
+	option: string;
+	value: string;
+};
+
 export type SystemMemory = {
 	total?: number;
 	free?: number;
@@ -370,6 +378,28 @@ export async function getPendingChanges(): Promise<number> {
 	}
 	catch {
 		return 0;
+	}
+}
+
+export async function getPendingChangeList(): Promise<PendingChange[]> {
+	try {
+		const data = await callBridge<{ changes: PendingChange[] }>("changes_list");
+		return data.changes ?? [];
+	}
+	catch {
+		return [];
+	}
+}
+
+export async function revertPendingChanges(): Promise<{ reverted: boolean; count: number }> {
+	try {
+		return await callBridge<{ reverted: boolean; count: number }>("changes_revert");
+	}
+	catch {
+		return {
+			reverted: false,
+			count: 0,
+		};
 	}
 }
 

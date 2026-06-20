@@ -612,6 +612,7 @@ Validation on `172.16.172.1`:
 - Route audit on `172.16.172.1` with `1.0.0-r4-native25` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 - Native page audit on `172.16.172.1` passed with `scripts/audit-router-native-pages.sh`: `native_pages=17`, `service_adapters=6`. The audit calls every current native page RPC, every current service adapter, and `console_status`, then fails if required data sources disappear.
 - HTTP route smoke on `172.16.172.1` passed with `scripts/smoke-router-http-routes.sh`: `visible_routes=60`, `native_shell_checks=42`, `legacy_route_checks=18`. The smoke test verifies the React/Vite login shell, authenticates through standard LuCI form fields, checks the app shell, and fetches every visible legacy compat target for dispatch/login regressions.
+- Pending-change bridge now reads real `uci changes` output and exposes a header dialog with config/action/section/option/value rows plus guarded discard. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native26` bundle created a harmless `i-love-luci.codex_probe` pending change, verified the `2 pending` chip and dialog, discarded through the UI, and confirmed `uci changes` was empty after discard.
 
 Remaining legacy or partial gaps:
 
@@ -625,7 +626,7 @@ Remaining legacy or partial gaps:
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory plus available-upgrades visibility with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Native preview pages now include service-specific status summaries, lifecycle controls, and structured UCI-derived tables, but native config edit/apply forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Native text-output debt remains only where output shape is intentionally arbitrary, such as custom commands from user configuration. These now render in a structured line table; future work should add command-specific renderers for commonly configured commands where practical.
-- Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
+- Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native. Pending-change listing and discard now work through the native shell; applying changes remains guarded until the rollback/confirm flow is implemented and tested.
 
 ## Sysupgrade and Standalone Direction
 
@@ -778,12 +779,13 @@ Required tooling:
   - dead native targets
   - partial routes that incorrectly default to modern
   - LuCI app routes without compat fallback
-- `scripts/audit-router-native-pages.sh` calls representative `native_page`, `service_detail`, and `console_status` RPCs on the router and reports:
+- `scripts/audit-router-native-pages.sh` calls representative `native_page`, `service_detail`, `console_status`, and `changes_list` RPCs on the router and reports:
   - native page RPC failures
   - missing command/section/service/text/package data for known native routes
   - service adapter detail failures
   - missing service enabled/running state
   - console bridge availability/URL regressions
+  - pending-change bridge shape regressions
 - `scripts/smoke-router-http-routes.sh` logs into LuCI over HTTP using the React/Vite login form contract and reports:
   - login shell missing the React/Vite app bundle
   - authenticated app shell failing to load

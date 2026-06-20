@@ -835,6 +835,64 @@ function package_upgrades() {
 	return shell_output('opkg list-upgradable 2>&1 | sed -n "1,160p"');
 }
 
+function uci_change_rows() {
+	let rows = [];
+	let output = trim(shell_output('uci changes 2>/dev/null'));
+
+	if (!length(output))
+		return rows;
+
+	for (let line in split(output, '\n')) {
+		let parts = split(line, '=');
+
+		if (length(parts) < 2)
+			continue;
+
+		let left = parts[0] || '';
+		let value_parts = [];
+
+		for (let i = 1; i < length(parts); i++)
+			push(value_parts, parts[i]);
+
+		let value = join('=', value_parts);
+		let path = split(left, '.');
+		let option_parts = [];
+
+		if (length(path) < 2)
+			continue;
+
+		for (let i = 2; i < length(path); i++)
+			push(option_parts, path[i]);
+
+		if (substr(value, 0, 1) == "'" && substr(value, length(value) - 1) == "'")
+			value = substr(value, 1, length(value) - 2);
+
+		push(rows, {
+			config: path[0] || '',
+			action: 'set',
+			section: path[1] || '',
+			option: join('.', option_parts),
+			value
+		});
+	}
+
+	return rows;
+}
+
+function revert_uci_changes() {
+	let rows = uci_change_rows();
+	let configs = {};
+
+	for (let row in rows)
+		if (row.config)
+			configs[row.config] = true;
+
+	for (let config, _ in configs)
+		system(`uci revert ${config} >/dev/null 2>&1`);
+
+	return length(rows);
+}
+
 function service_detail(id) {
 	let meta = servicePackages[id] || null;
 
@@ -1323,7 +1381,7 @@ const methods = {
 	changes_list: {
 		call: function() {
 			return respond({
-				changes: []
+				changes: uci_change_rows()
 			});
 		}
 	},
@@ -1339,9 +1397,10 @@ const methods = {
 
 	changes_revert: {
 		call: function() {
-			uci.unload();
+			let count = revert_uci_changes();
 			return respond({
-				reverted: true
+				reverted: true,
+				count
 			});
 		}
 	},

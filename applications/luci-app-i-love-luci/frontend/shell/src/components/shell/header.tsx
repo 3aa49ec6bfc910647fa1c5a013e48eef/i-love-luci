@@ -1,12 +1,22 @@
 import { Bell, LogOut, Menu, SquareTerminal } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 import { HeaderSearch } from "@/components/shell/header-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { getConsoleStatus, getPendingChanges, getSessionInfo, type ConsoleStatus, type SessionInfo } from "@/lib/rpc";
+import {
+	getConsoleStatus,
+	getPendingChangeList,
+	getPendingChanges,
+	getSessionInfo,
+	revertPendingChanges,
+	type ConsoleStatus,
+	type PendingChange,
+	type SessionInfo,
+} from "@/lib/rpc";
 
 type HeaderProps = {
 	onMenuClick: () => void;
@@ -17,6 +27,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 	const [session, setSession] = useState<SessionInfo | null>(null);
 	const [consoleStatus, setConsoleStatus] = useState<ConsoleStatus | null>(null);
 	const [consoleOpen, setConsoleOpen] = useState(false);
+	const [pendingOpen, setPendingOpen] = useState(false);
+	const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
 	const [profileOpen, setProfileOpen] = useState(false);
 	const user = session?.user ?? "root";
 	const initials = useMemo(() => user.slice(0, 1).toUpperCase() || "R", [user]);
@@ -42,6 +54,29 @@ export function Header({ onMenuClick }: HeaderProps) {
 		setConsoleOpen(true);
 	}
 
+	async function openPending() {
+		const changes = await getPendingChangeList();
+		setPendingChanges(changes);
+		setPending(changes.length);
+		setPendingOpen(true);
+	}
+
+	async function discardPending() {
+		const result = await revertPendingChanges();
+
+		if (!result.reverted) {
+			toast.error("Pending changes were not discarded.");
+			return;
+		}
+
+		setPending(0);
+		setPendingChanges([]);
+		setPendingOpen(false);
+		toast.success("Pending changes discarded.", {
+			description: `${result.count} change${result.count === 1 ? "" : "s"} reverted.`,
+		});
+	}
+
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-card/95 px-3 backdrop-blur sm:px-5">
 			<Button className="shrink-0 lg:hidden" size="icon" variant="ghost" aria-label="Open navigation" onClick={onMenuClick}>
@@ -56,7 +91,13 @@ export function Header({ onMenuClick }: HeaderProps) {
 			</div>
 			<div className="ml-auto flex shrink-0 items-center gap-2">
 				{pending > 0 ? (
-					<Badge className="hidden border-primary/30 text-primary sm:inline-flex">{pending} pending</Badge>
+					<button
+						className="hidden rounded-md border border-primary/30 px-2 py-1 text-xs font-medium text-primary sm:inline-flex"
+						type="button"
+						onClick={() => void openPending()}
+					>
+						{pending} pending
+					</button>
 				) : null}
 				<Badge className="hidden sm:inline-flex">
 					<Bell className="mr-1 size-3.5" />
@@ -119,6 +160,55 @@ export function Header({ onMenuClick }: HeaderProps) {
 						<p>Console bridge is not available. Install or enable `ttyd` on the router.</p>
 					</div>
 				)}
+			</Dialog>
+			<Dialog
+				className="max-w-3xl"
+				open={pendingOpen}
+				title="Pending changes"
+				onOpenChange={setPendingOpen}
+			>
+				<div className="grid gap-4">
+					<div className="overflow-x-auto rounded-md border">
+						<table className="w-full min-w-[40rem] text-left text-sm">
+							<thead className="border-b text-xs uppercase text-muted-foreground">
+								<tr>
+									<th className="px-3 py-2 font-medium">Config</th>
+									<th className="px-3 py-2 font-medium">Action</th>
+									<th className="px-3 py-2 font-medium">Section</th>
+									<th className="px-3 py-2 font-medium">Option</th>
+									<th className="px-3 py-2 font-medium">Value</th>
+								</tr>
+							</thead>
+							<tbody>
+								{pendingChanges.length ? (
+									pendingChanges.map((change, index) => (
+										<tr className="border-b last:border-0" key={`${index}.${change.config}.${change.section}.${change.option}`}>
+											<td className="px-3 py-3 font-medium">{change.config}</td>
+											<td className="px-3 py-3">{change.action}</td>
+											<td className="px-3 py-3 font-mono text-xs">{change.section || "none"}</td>
+											<td className="px-3 py-3 font-mono text-xs">{change.option || "none"}</td>
+											<td className="px-3 py-3 font-mono text-xs">{change.value || "none"}</td>
+										</tr>
+									))
+								) : (
+									<tr>
+										<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+											No pending changes.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+					<div className="flex justify-end gap-2">
+						<Button variant="outline" onClick={() => setPendingOpen(false)}>
+							Close
+						</Button>
+						<Button disabled={!pendingChanges.length} variant="outline" onClick={() => void discardPending()}>
+							Discard changes
+						</Button>
+					</div>
+				</div>
 			</Dialog>
 		</header>
 	);

@@ -45,6 +45,8 @@ for service in \$services; do
 done
 echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
+echo '---ILOVELUCI-CHANGES---'
+ubus call luci.iloveluci changes_list
 echo '---ILOVELUCI-RELEASE---'
 cat /etc/openwrt_release 2>/dev/null || true
 rm -f /tmp/i-love-luci-native-audit.sh
@@ -188,6 +190,12 @@ else:
 		warnings.append("console_status reports ttyd unavailable")
 	if console_data.get("enabled") and not console_data.get("url"):
 		failures.append("console_status enabled but missing URL")
+
+changes = json_after_marker("---ILOVELUCI-CHANGES---")
+if not changes or not changes.get("ok"):
+	failures.append("changes_list did not return ok")
+elif not isinstance(changes.get("data", {}).get("changes"), list):
+	failures.append("changes_list did not return a changes array")
 
 print("I Love LuCI native page audit")
 print(f"native_pages={len(expected_pages)} service_adapters={len(expected_services)}")
