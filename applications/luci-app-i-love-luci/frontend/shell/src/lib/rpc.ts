@@ -419,9 +419,12 @@ export type LedConfigRow = {
 	name: string;
 	sysfs: string;
 	trigger: string;
+	default: string;
 	dev: string;
 	mode: string;
 	interval: string;
+	delayon: string;
+	delayoff: string;
 };
 
 export type LedConfigResult = {

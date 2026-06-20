@@ -4386,6 +4386,7 @@ function save_led_config(rows) {
 	uci.load('system');
 
 	let changed = false;
+	let config_changed = false;
 	let keep = {};
 	let existing = {};
 	let existing_order = [];
@@ -4395,6 +4396,14 @@ function save_led_config(rows) {
 		existing[section['.name']] = true;
 		push(existing_order, section['.name']);
 	});
+
+	if (!length(rows) && length(existing_order))
+		return {
+			saved: false,
+			message: 'Refusing to remove all LED actions without confirmation.',
+			changed: false,
+			sections: collect_uci_config('system', ['led'])
+		};
 
 	for (let row in rows) {
 		let section = clean_uci_value(row?.section || '');
@@ -4413,9 +4422,12 @@ function save_led_config(rows) {
 			name: clean_uci_value(row?.name || section),
 			sysfs: clean_uci_value(row?.sysfs || ''),
 			trigger: clean_uci_value(row?.trigger || 'none'),
+			default: zero_one(row?.default),
 			dev: clean_uci_value(row?.dev || ''),
 			mode: clean_uci_value(row?.mode || ''),
-			interval: clean_uci_value(row?.interval || '')
+			interval: clean_uci_value(row?.interval || ''),
+			delayon: clean_uci_value(row?.delayon || ''),
+			delayoff: clean_uci_value(row?.delayoff || '')
 		};
 
 		if (!length(next.name) || !length(next.sysfs))
@@ -4428,6 +4440,9 @@ function save_led_config(rows) {
 
 		for (let key, value in next) {
 			let current = uci.get('system', section, key) || '';
+
+			if (key == 'default' && !length(current) && value == '0')
+				continue;
 
 			if (current != value) {
 				changed = true;
@@ -6788,7 +6803,17 @@ const methods = {
 			rows: []
 		},
 		call: function(request) {
-			return respond(save_led_config(request.args.rows || []));
+			try {
+				return respond(save_led_config(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'LED configuration save failed: ' + e,
+					changed: false,
+					sections: collect_uci_config('system', ['led'])
+				});
+			}
 		}
 	},
 

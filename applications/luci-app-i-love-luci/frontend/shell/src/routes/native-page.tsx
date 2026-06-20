@@ -3776,9 +3776,12 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 				name: "New LED action",
 				sysfs,
 				trigger: "none",
+				default: "0",
 				dev: "",
 				mode: "",
 				interval: "",
+				delayon: "",
+				delayoff: "",
 			},
 		]);
 	}
@@ -3833,15 +3836,18 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 			}
 		>
 			<div className="overflow-x-auto">
-				<table className="w-full min-w-[62rem] text-left text-sm">
+				<table className="w-full min-w-[78rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Name</th>
 							<th className="px-3 py-2 font-medium">LED</th>
 							<th className="px-3 py-2 font-medium">Trigger</th>
+							<th className="px-3 py-2 font-medium">Default</th>
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Mode</th>
 							<th className="px-3 py-2 font-medium">Interval</th>
+							<th className="px-3 py-2 font-medium">Delay on</th>
+							<th className="px-3 py-2 font-medium">Delay off</th>
 							<th className="px-3 py-2 text-right font-medium">Order</th>
 							<th className="px-3 py-2 text-right font-medium">Actions</th>
 						</tr>
@@ -3871,6 +3877,16 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 										<Input onChange={(event) => update(row.section, "trigger", event.target.value)} value={row.trigger} />
 									</td>
 									<td className="px-3 py-2">
+										<select
+											className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+											onChange={(event) => update(row.section, "default", event.target.value)}
+											value={row.default}
+										>
+											<option value="0">off</option>
+											<option value="1">on</option>
+										</select>
+									</td>
+									<td className="px-3 py-2">
 										<Input onChange={(event) => update(row.section, "dev", event.target.value)} value={row.dev} />
 									</td>
 									<td className="px-3 py-2">
@@ -3878,6 +3894,12 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 									</td>
 									<td className="px-3 py-2">
 										<Input inputMode="numeric" onChange={(event) => update(row.section, "interval", event.target.value)} value={row.interval} />
+									</td>
+									<td className="px-3 py-2">
+										<Input inputMode="numeric" onChange={(event) => update(row.section, "delayon", event.target.value)} value={row.delayon} />
+									</td>
+									<td className="px-3 py-2">
+										<Input inputMode="numeric" onChange={(event) => update(row.section, "delayoff", event.target.value)} value={row.delayoff} />
 									</td>
 									<td className="px-3 py-2 text-right">
 										<div className="inline-flex gap-1">
@@ -3912,7 +3934,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={8}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
 									No LED actions configured.
 								</td>
 							</tr>
@@ -3940,9 +3962,12 @@ function ledRowsFromSections(sections: ConfigSection[]): LedConfigRow[] {
 			name: configValue(section, "name") || section.name,
 			sysfs: configValue(section, "sysfs"),
 			trigger: configValue(section, "trigger") || "none",
+			default: configValue(section, "default") === "1" ? "1" : "0",
 			dev: configValue(section, "dev"),
 			mode: configValue(section, "mode"),
 			interval: configValue(section, "interval"),
+			delayon: configValue(section, "delayon"),
+			delayoff: configValue(section, "delayoff"),
 		}));
 }
 
