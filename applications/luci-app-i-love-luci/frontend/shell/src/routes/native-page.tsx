@@ -12,6 +12,7 @@ import {
 	runCustomCommand,
 	saveAdblockFastConfig,
 	saveBanipConfig,
+	saveBanipFile,
 	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
@@ -399,17 +400,17 @@ function serviceFocusMeta(service: string, focus: string) {
 	const focusMap: Record<string, { description: string; fileTitles?: string[]; logsOnly?: boolean; policyOnly?: boolean; title: string }> = {
 		allowlist: {
 			title: "allowlist",
-			description: "Read-only preview of the banIP allowlist file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			description: "Native editor for the banIP allowlist file with service reload on save.",
 			fileTitles: ["Allowlist"],
 		},
 		blocklist: {
 			title: "blocklist",
-			description: "Read-only preview of the banIP blocklist file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			description: "Native editor for the banIP blocklist file with service reload on save.",
 			fileTitles: ["Blocklist"],
 		},
 		feeds: {
 			title: "custom feeds",
-			description: "Read-only preview of the banIP custom feed file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			description: "Native editor for the banIP custom feed file with service reload on save.",
 			fileTitles: ["Custom feeds"],
 		},
 		setreport: {
@@ -470,7 +471,7 @@ function ServiceFileTables({ files }: { files: ServiceFile[] }) {
 				</div>
 			</Panel>
 			{files
-				.filter((file) => file.preview.length)
+				.filter((file) => !file.editable && file.preview.length)
 				.map((file) => (
 					<OutputLinesTable
 						empty="No preview lines."
@@ -483,7 +484,65 @@ function ServiceFileTables({ files }: { files: ServiceFile[] }) {
 						title={`${file.title} preview`}
 					/>
 				))}
+			{files
+				.filter((file) => file.editable)
+				.map((file) => (
+					<ServiceFileEditor file={file} key={file.path} />
+				))}
 		</div>
+	);
+}
+
+function ServiceFileEditor({ file }: { file: ServiceFile }) {
+	const initial = file.content ?? file.preview.join("\n");
+	const [text, setText] = useState(initial);
+	const [savedText, setSavedText] = useState(initial);
+	const [savedFile, setSavedFile] = useState(file);
+	const [saving, setSaving] = useState(false);
+	const dirty = text !== savedText;
+
+	async function save() {
+		setSaving(true);
+		const result = await saveBanipFile(savedFile.path, text);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextFile = result.file ?? savedFile;
+		const nextText = nextFile.content ?? text;
+		setSavedFile(nextFile);
+		setText(nextText);
+		setSavedText(nextText);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel
+			title={`${savedFile.title} editor`}
+			actions={
+				<div className="flex gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setText(savedText)} size="sm" type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} size="sm" type="button">
+						Save
+					</Button>
+				</div>
+			}
+		>
+			<div className="grid gap-3">
+				<p className="font-mono text-xs text-muted-foreground">{savedFile.path}</p>
+				<textarea
+					className="min-h-72 rounded-md border bg-card px-3 py-2 font-mono text-xs outline-none focus-visible:border-ring"
+					onChange={(event) => setText(event.target.value)}
+					spellCheck={false}
+					value={text}
+				/>
+			</div>
+		</Panel>
 	);
 }
 
@@ -4241,17 +4300,22 @@ function RebootPanel({ data }: { data: NativePageData | null }) {
 }
 
 function Panel({
+	actions,
 	title,
 	children,
 	flush = false,
 }: {
+	actions?: ReactNode;
 	title: ReactNode;
 	children: ReactNode;
 	flush?: boolean;
 }) {
 	return (
 		<section className="grid min-w-0 gap-3 border-t pt-4">
-			<h2 className="text-base font-semibold">{title}</h2>
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<h2 className="text-base font-semibold">{title}</h2>
+				{actions}
+			</div>
 			<div className={flush ? "min-w-0" : "min-w-0"}>{children}</div>
 		</section>
 	);

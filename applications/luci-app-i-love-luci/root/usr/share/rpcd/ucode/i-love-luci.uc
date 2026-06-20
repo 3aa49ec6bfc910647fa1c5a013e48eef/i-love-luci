@@ -99,9 +99,9 @@ const servicePackages = {
 		sections: ['banip'],
 		logPattern: 'banip',
 		files: [
-			{ title: 'Allowlist', path: '/etc/banip/banip.allowlist' },
-			{ title: 'Blocklist', path: '/etc/banip/banip.blocklist' },
-			{ title: 'Custom feeds', path: '/etc/banip/banip.custom.feeds' },
+			{ title: 'Allowlist', path: '/etc/banip/banip.allowlist', editable: true },
+			{ title: 'Blocklist', path: '/etc/banip/banip.blocklist', editable: true },
+			{ title: 'Custom feeds', path: '/etc/banip/banip.custom.feeds', editable: true },
 			{ title: 'Runtime status', path: '/tmp/run/banIP/banIP.runtime.json' }
 		]
 	},
@@ -2995,11 +2995,15 @@ function service_files(meta) {
 		let info = stat(path);
 		let preview = [];
 		let line_count = 0;
+		let content = '';
 		let quoted = quote_command_args([path])[0];
 
 		if (info?.type == 'file') {
 			line_count = int(trim(shell_output(`wc -l < ${quoted}`)) || 0);
 			preview = split(trim(shell_output(`sed -n '1,20p' ${quoted}`)), '\n');
+
+			if (file.editable && info.size <= 131072)
+				content = readfile(path) || '';
 		}
 
 		if (length(preview) == 1 && !length(preview[0]))
@@ -3011,11 +3015,66 @@ function service_files(meta) {
 			exists: info?.type == 'file',
 			size: info?.size || 0,
 			lines: line_count,
-			preview
+			preview,
+			editable: !!file.editable,
+			content
 		});
 	}
 
 	return entries;
+}
+
+function whitelisted_service_file(service_id, path) {
+	let meta = servicePackages[service_id] || null;
+
+	for (let file in meta?.files || []) {
+		if (file.editable && file.path == path)
+			return file;
+	}
+
+	return null;
+}
+
+function save_banip_file(path, text) {
+	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
+	text = '' + (text || '');
+
+	if (length(text) > 131072)
+		return {
+			saved: false,
+			message: 'banIP file is too large.',
+			changed: false,
+			file: null
+		};
+
+	let file = whitelisted_service_file('banip', path);
+
+	if (!file)
+		return {
+			saved: false,
+			message: 'banIP file is not editable from I Love LuCI.',
+			changed: false,
+			file: null
+		};
+
+	let current = readfile(path) || '';
+	let changed = current != text;
+
+	if (changed) {
+		writefile(path, text);
+		system('/etc/init.d/banip reload >/dev/null 2>&1 || /etc/init.d/banip restart >/dev/null 2>&1 || true');
+	}
+
+	let meta = {
+		files: [file]
+	};
+
+	return {
+		saved: true,
+		message: changed ? 'banIP file saved and reloaded.' : 'banIP file already up to date.',
+		changed,
+		file: service_files(meta)?.[0] || null
+	};
 }
 
 function service_detail(id) {
@@ -4904,6 +4963,26 @@ const methods = {
 					message: 'banIP settings save failed: ' + e,
 					changed: false,
 					...banip_save_state()
+				});
+			}
+		}
+	},
+
+	banip_file_save: {
+		args: {
+			path: '',
+			text: ''
+		},
+		call: function(request) {
+			try {
+				return respond(save_banip_file(request.args.path || '', request.args.text || ''));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'banIP file save failed: ' + e,
+					changed: false,
+					file: null
 				});
 			}
 		}

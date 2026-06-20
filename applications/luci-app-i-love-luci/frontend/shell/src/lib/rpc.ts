@@ -312,6 +312,8 @@ export type ServiceFile = {
 	size: number;
 	lines: number;
 	preview: string[];
+	editable?: boolean;
+	content?: string;
 };
 
 export type NativeService = {
@@ -475,6 +477,13 @@ export type BanipConfigResult = {
 	changed: boolean;
 	section: ConfigSection | null;
 	sections: ConfigSection[];
+};
+
+export type BanipFileResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	file: ServiceFile | null;
 };
 
 export type UhttpdCertDefaultsInput = {
@@ -1094,6 +1103,20 @@ export async function saveBanipConfig(config: BanipConfigInput): Promise<BanipCo
 			changed: false,
 			section: null,
 			sections: [],
+		};
+	}
+}
+
+export async function saveBanipFile(path: string, text: string): Promise<BanipFileResult> {
+	try {
+		return await callBridge<BanipFileResult>("banip_file_save", { path, text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "banIP file save failed.",
+			changed: false,
+			file: null,
 		};
 	}
 }

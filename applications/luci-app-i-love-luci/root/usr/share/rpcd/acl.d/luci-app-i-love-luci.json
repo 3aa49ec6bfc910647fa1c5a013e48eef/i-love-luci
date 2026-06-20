@@ -26,6 +26,7 @@
 				"luci.iloveluci": [
 					"adblock_fast_config_save",
 					"banip_config_save",
+					"banip_file_save",
 					"changes_apply",
 					"changes_revert",
 					"crontab_save",
