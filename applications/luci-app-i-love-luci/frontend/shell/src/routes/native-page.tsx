@@ -109,6 +109,35 @@ type SocketEntry = {
 	process: string;
 };
 
+type LogEntry = {
+	time: string;
+	facility: string;
+	level: string;
+	process: string;
+	message: string;
+};
+
+type DnsServerEntry = {
+	source: string;
+	server: string;
+};
+
+type RepoKeyEntry = {
+	path: string;
+	mode: string;
+	owner: string;
+	group: string;
+	size: string;
+	comment: string;
+	fingerprint: string;
+};
+
+type LedSysfsEntry = {
+	name: string;
+	trigger: string;
+	brightness: string;
+};
+
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
@@ -193,7 +222,15 @@ export function NativePage() {
 	const [data, setData] = useState<NativePageData | null>(null);
 	const loading = !data || data.page !== page;
 	const structuredCommands =
-		page === "status-routes" || page === "firewall-status" || page === "processes" || page === "connections";
+		page === "status-routes" ||
+		page === "firewall-status" ||
+		page === "logs" ||
+		page === "processes" ||
+		page === "connections" ||
+		page === "wireless" ||
+		page === "diagnostics" ||
+		page === "repokeys" ||
+		page === "leds";
 
 	useEffect(() => {
 		let cancelled = false;
@@ -215,8 +252,11 @@ export function NativePage() {
 
 			{page === "status-routes" && data ? <RoutingSummary data={data} /> : null}
 			{page === "firewall-status" && data ? <NftablesSummary data={data} /> : null}
+			{page === "logs" && data ? <LogSummary data={data} /> : null}
 			{page === "processes" && data ? <ProcessSummary data={data} /> : null}
 			{page === "connections" && data ? <ConnectionSummary data={data} /> : null}
+			{page === "wireless" && data ? <WirelessSummary data={data} /> : null}
+			{page === "diagnostics" && data ? <DiagnosticsSummary data={data} /> : null}
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" ? <PackageInventory lines={data?.lines ?? []} /> : null}
 			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
@@ -240,6 +280,8 @@ export function NativePage() {
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel /> : null}
 			{page === "flash" && data ? <FlashSummary data={data} /> : null}
+			{page === "repokeys" && data ? <RepoKeySummary data={data} /> : null}
+			{page === "leds" && data ? <LedSummary data={data} /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
 
 			<CommandPanels commands={structuredCommands ? [] : (data?.commands ?? [])} />
@@ -792,6 +834,276 @@ function ConnectionSummary({ data }: { data: NativePageData }) {
 			</div>
 			<SocketTable entries={sockets} />
 		</div>
+	);
+}
+
+function LogSummary({ data }: { data: NativePageData }) {
+	const systemLogs = parseSystemLogs(commandOutput(data.commands, "System log"));
+	const kernelLogs = parseKernelLogs(commandOutput(data.commands, "Kernel log"));
+	const levels = countBy([...systemLogs, ...kernelLogs].map((entry) => entry.level));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Entries" value={systemLogs.length + kernelLogs.length} />
+				<MetricBlock label="Errors" value={(levels.err ?? 0) + (levels.error ?? 0)} />
+				<MetricBlock label="Warnings" value={(levels.warn ?? 0) + (levels.warning ?? 0)} />
+			</div>
+			<LogTable entries={systemLogs} title="System log" />
+			<LogTable entries={kernelLogs} title="Kernel log" />
+		</div>
+	);
+}
+
+function DiagnosticsSummary({ data }: { data: NativePageData }) {
+	const routes = parseRoutes(commandOutput(data.commands, "Routing table"));
+	const dnsServers = parseDnsServers(commandOutput(data.commands, "DNS servers"));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Routes" value={routes.length} />
+				<MetricBlock label="DNS servers" value={dnsServers.length} />
+				<MetricBlock label="Diagnostics" value="ping / trace / DNS" />
+			</div>
+			<RouteTable entries={routes} title="Routing table" />
+			<DnsServerTable entries={dnsServers} />
+		</div>
+	);
+}
+
+function RepoKeySummary({ data }: { data: NativePageData }) {
+	const keys = parseRepoKeys(commandOutput(data.commands, "Repository public keys"));
+	const apkKeys = keys.filter((key) => key.path.includes("/apk/")).length;
+	const opkgKeys = keys.filter((key) => key.path.includes("/opkg/")).length;
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Keys" value={keys.length} />
+				<MetricBlock label="APK keys" value={apkKeys} />
+				<MetricBlock label="OPKG keys" value={opkgKeys} />
+			</div>
+			<RepoKeyTable entries={keys} />
+		</div>
+	);
+}
+
+function LedSummary({ data }: { data: NativePageData }) {
+	const leds = parseLeds(commandOutput(data.commands, "LED sysfs state"));
+	const triggers = countBy(leds.map((led) => led.trigger || "none"));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="LEDs" value={leds.length} />
+				<MetricBlock label="Netdev triggers" value={triggers.netdev ?? 0} />
+				<MetricBlock label="On" value={leds.filter((led) => Number(led.brightness) > 0).length} />
+			</div>
+			<LedSysfsTable entries={leds} />
+		</div>
+	);
+}
+
+function WirelessSummary({ data }: { data: NativePageData }) {
+	const iwOutput = commandOutput(data.commands, "Wireless devices");
+	const iwinfoOutput = commandOutput(data.commands, "Wireless interfaces");
+	const helpers = [
+		{ name: "iw", status: iwOutput.includes("not installed") ? "not installed" : iwOutput.trim() ? "available" : "no devices" },
+		{
+			name: "iwinfo",
+			status: iwinfoOutput.includes("not installed") ? "not installed" : iwinfoOutput.trim() ? "available" : "no interfaces",
+		},
+	];
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Wireless config" value={data.sections.length} />
+				<MetricBlock label="iw" value={helpers[0].status} />
+				<MetricBlock label="iwinfo" value={helpers[1].status} />
+			</div>
+			<HelperStatusTable entries={helpers} />
+		</div>
+	);
+}
+
+function LogTable({ entries, title }: { entries: LogEntry[]; title: string }) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[68rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Time</th>
+							<th className="px-3 py-2 font-medium">Level</th>
+							<th className="px-3 py-2 font-medium">Facility</th>
+							<th className="px-3 py-2 font-medium">Process</th>
+							<th className="px-3 py-2 font-medium">Message</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.slice(0, 250).map((entry, index) => (
+								<tr className="border-b align-top last:border-0" key={`${title}.${index}.${entry.time}.${entry.message}`}>
+									<td className="px-3 py-3 font-mono text-xs">{entry.time}</td>
+									<td className="px-3 py-3">
+										<Badge className={entry.level === "err" || entry.level === "error" ? "text-destructive" : ""}>
+											{entry.level || "info"}
+										</Badge>
+									</td>
+									<td className="px-3 py-3">{entry.facility || "system"}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.process || "none"}</td>
+									<td className="px-3 py-3">{entry.message}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+									No log entries found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function DnsServerTable({ entries }: { entries: DnsServerEntry[] }) {
+	return (
+		<Panel title="DNS servers" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[30rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Source</th>
+							<th className="px-3 py-2 font-medium">Server</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={`${entry.source}.${entry.server}`}>
+									<td className="px-3 py-3 font-medium">{entry.source}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.server}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={2}>
+									No DNS servers found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function RepoKeyTable({ entries }: { entries: RepoKeyEntry[] }) {
+	return (
+		<Panel title="Repository public keys" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Path</th>
+							<th className="px-3 py-2 font-medium">Mode</th>
+							<th className="px-3 py-2 font-medium">Owner</th>
+							<th className="px-3 py-2 font-medium">Size</th>
+							<th className="px-3 py-2 font-medium">Comment</th>
+							<th className="px-3 py-2 font-medium">Fingerprint</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b align-top last:border-0" key={entry.path}>
+									<td className="px-3 py-3 font-mono text-xs">{entry.path}</td>
+									<td className="px-3 py-3">{entry.mode}</td>
+									<td className="px-3 py-3">{entry.owner}:{entry.group}</td>
+									<td className="px-3 py-3">{entry.size}</td>
+									<td className="px-3 py-3">{entry.comment || "none"}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.fingerprint || "not available"}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+									No repository keys found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function LedSysfsTable({ entries }: { entries: LedSysfsEntry[] }) {
+	return (
+		<Panel title="LED sysfs state" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[34rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">LED</th>
+							<th className="px-3 py-2 font-medium">Trigger</th>
+							<th className="px-3 py-2 font-medium">Brightness</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={entry.name}>
+									<td className="px-3 py-3 font-medium">{entry.name}</td>
+									<td className="px-3 py-3">{entry.trigger}</td>
+									<td className="px-3 py-3">{entry.brightness}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+									No sysfs LEDs found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function HelperStatusTable({ entries }: { entries: Array<{ name: string; status: string }> }) {
+	return (
+		<Panel title="Wireless helpers" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[26rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Helper</th>
+							<th className="px-3 py-2 font-medium">Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.map((entry) => (
+							<tr className="border-b last:border-0" key={entry.name}>
+								<td className="px-3 py-3 font-medium">{entry.name}</td>
+								<td className="px-3 py-3">
+									<Badge className={entry.status === "available" ? "text-primary" : ""}>{entry.status}</Badge>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
 	);
 }
 
@@ -1404,6 +1716,187 @@ function parseSockets(output: string): SocketEntry[] {
 				process: parts.slice(6).join(" ") || "none",
 			};
 		});
+}
+
+function parseSystemLogs(output: string): LogEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const match = /^(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+([^.:\s]+)\.([^\s]+)\s+([^:]+):\s*(.*)$/.exec(
+				line,
+			);
+
+			if (!match) {
+				return {
+					time: "unknown",
+					facility: "system",
+					level: inferLogLevel(line),
+					process: "logread",
+					message: line,
+				};
+			}
+
+			return {
+				time: match[1],
+				facility: match[2],
+				level: match[3],
+				process: match[4],
+				message: match[5],
+			};
+		});
+}
+
+function parseKernelLogs(output: string): LogEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const match = /^\[\s*([^\]]+)\]\s*(.*)$/.exec(line);
+			const message = match?.[2] ?? line;
+
+			return {
+				time: match ? `[${match[1]}]` : "unknown",
+				facility: "kernel",
+				level: inferLogLevel(message),
+				process: "kernel",
+				message,
+			};
+		});
+}
+
+function parseDnsServers(output: string): DnsServerEntry[] {
+	const entries: DnsServerEntry[] = [];
+	let source = "system";
+
+	for (const rawLine of output.split("\n")) {
+		const line = rawLine.trim();
+
+		if (!line) {
+			continue;
+		}
+
+		const interfaceMatch = /^#\s+Interface\s+(.+)$/.exec(line);
+		if (interfaceMatch) {
+			source = interfaceMatch[1];
+			continue;
+		}
+
+		const serverMatch = /^nameserver\s+(.+)$/.exec(line);
+		if (serverMatch) {
+			entries.push({ source, server: serverMatch[1] });
+		}
+	}
+
+	return entries;
+}
+
+function parseRepoKeys(output: string): RepoKeyEntry[] {
+	const entries: RepoKeyEntry[] = [];
+	let current: RepoKeyEntry | null = null;
+
+	for (const rawLine of output.split("\n")) {
+		const line = rawLine.trim();
+		const pathMatch = /^===\s+(.+?)\s+===$/.exec(line);
+
+		if (pathMatch) {
+			current = {
+				path: pathMatch[1],
+				mode: "unknown",
+				owner: "unknown",
+				group: "unknown",
+				size: "unknown",
+				comment: "",
+				fingerprint: "",
+			};
+			entries.push(current);
+			continue;
+		}
+
+		if (!current || !line) {
+			continue;
+		}
+
+		const fileMatch = /^(\S+)\s+\d+\s+(\S+)\s+(\S+)\s+(\S+)\s+/.exec(line);
+		if (fileMatch) {
+			current.mode = fileMatch[1];
+			current.owner = fileMatch[2];
+			current.group = fileMatch[3];
+			current.size = fileMatch[4];
+			continue;
+		}
+
+		if (line.startsWith("untrusted comment:")) {
+			current.comment = line.replace(/^untrusted comment:\s*/, "");
+			continue;
+		}
+
+		if (!line.startsWith("-----")) {
+			current.fingerprint = shortFingerprint(line);
+		}
+	}
+
+	return entries;
+}
+
+function parseLeds(output: string): LedSysfsEntry[] {
+	const entries: LedSysfsEntry[] = [];
+	let current: LedSysfsEntry | null = null;
+
+	for (const rawLine of output.split("\n")) {
+		const line = rawLine.trim();
+		const ledMatch = /^===\s+(.+?)\s+===$/.exec(line);
+
+		if (ledMatch) {
+			current = { name: ledMatch[1], trigger: "unknown", brightness: "unknown" };
+			entries.push(current);
+			continue;
+		}
+
+		if (!current || !line) {
+			continue;
+		}
+
+		if (line.startsWith("brightness:")) {
+			current.brightness = line.replace(/^brightness:\s*/, "");
+			continue;
+		}
+
+		const triggerMatch = /\[([^\]]+)\]/.exec(line);
+		if (triggerMatch) {
+			current.trigger = triggerMatch[1];
+		}
+	}
+
+	return entries;
+}
+
+function inferLogLevel(message: string) {
+	const lower = message.toLowerCase();
+
+	if (lower.includes("error") || lower.includes("failed") || lower.includes("fail")) {
+		return "error";
+	}
+
+	if (lower.includes("warn")) {
+		return "warn";
+	}
+
+	if (lower.includes("debug")) {
+		return "debug";
+	}
+
+	return "info";
+}
+
+function shortFingerprint(value: string) {
+	if (!value) {
+		return "";
+	}
+
+	return value.length > 28 ? `${value.slice(0, 28)}...` : value;
 }
 
 function tokenAfter(parts: string[], token: string) {

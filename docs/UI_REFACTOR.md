@@ -299,6 +299,30 @@ Use LuCI menu metadata for:
 
 Native routes get priority. Unknown routes fall back to `LegacyFrame`.
 
+### Route and App Compatibility Audit
+
+Before any native route is made the default, run a full route audit against the installed LuCI menu tree and installed `luci-app-*` packages.
+
+Audit scope:
+
+- every visible LuCI menu route must resolve to one of: native route, guarded native preview, or LuCI compat route
+- every installed LuCI app must retain a functional compat path until its native route reaches parity
+- service apps such as banIP, AdBlock Fast, UPnP, uHTTPd, and future installed apps must be treated consistently through the generic adapter
+- native routes must be audited for functionality regressions, not only visual rendering
+- native routes must not ship as text-only command dumps when a structured table, chart, form, or status component is practical
+- installing a new LuCI app after I Love LuCI is installed must surface it in navigation/search and route it through LuCI compat automatically unless a native adapter explicitly supports it
+- native route migrations must be documented with the original LuCI route, replacement route, current parity level, and fallback behavior
+
+Required adapter behavior:
+
+- discover new LuCI menu JSON without hard-coding every future route
+- preserve ACL-aware menu visibility from LuCI/rpcd
+- default unknown app routes to legacy compat instead of hiding or breaking them
+- keep native preview routes opt-in when full edit/apply behavior is incomplete
+- expose route audit output in a repeatable script so regressions are caught before release
+
+The target outcome is that I Love LuCI can evolve native screens without losing functionality from current or future LuCI apps installed from OpenWrt feeds.
+
 ## Build Strategy
 
 Development:
@@ -528,27 +552,27 @@ Converted to native React/Vite surfaces:
 - `/admin/status` and `/admin/status/overview`: dashboard with bandwidth, CPU, memory, interfaces, and system facts.
 - `/admin/status/routes`: structured route tables, policy rules, and neighbour entries. Raw `ip route`/`ip rule`/`ip neigh` dumps are no longer rendered.
 - `/admin/status/nftables`: structured active nftables chain/rule summary. Raw `nft list ruleset` dumps are no longer rendered.
-- `/admin/status/logs`, `/admin/status/logs/syslog`, `/admin/status/logs/dmesg`: system and kernel logs.
+- `/admin/status/logs`, `/admin/status/logs/syslog`, `/admin/status/logs/dmesg`: structured system and kernel log tables with parsed time, level, facility, process, and message.
 - `/admin/status/processes`: structured process table with PID, user, memory size, state, and command.
 - `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
 - `/admin/status/realtime/connections`: structured active socket table with protocol, state, queues, local/peer endpoints, and process where available.
-- `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface; on the current router it validates the no-radio/no-`iw` case.
+- `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface with helper status; on the current router it validates the no-radio/no-`iw` case.
 - `/admin/network/network` and `/admin/network/routes`: modern read-only UCI summaries plus live interface/device status from `dashboard_status`, including protocol, link state, device mapping, addresses, and uptime.
 - `/admin/network/firewall` and firewall child routes: modern read-only firewall summaries for defaults, zones, forwardings, traffic rules, and redirects, with LuCI compat retained for advanced firewall forms.
 - `/admin/network/dhcp` and `/admin/network/dns`: modern read-only DHCP/DNS surface with dnsmasq/odhcpd service state, active DHCP leases, static DHCP hosts, DNS host records, and compact UCI summaries. Full edit/apply workflows remain LuCI compat.
 - `/admin/network/wireless`: guarded wireless configuration/status surface.
-- `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
+- `/admin/network/diagnostics`: structured route table, resolver view, and guarded ping/traceroute/DNS runner.
 - `/admin/system/system` and `/admin/system/admin`: modern read-only system summaries for hostname/timezone/logging, NTP, Dropbear, uHTTPd, LEDs, and certificate defaults.
 - `/admin/system/admin/dropbear`: Dropbear service status and UCI summary.
 - `/admin/system/admin/sshkeys`: Dropbear authorized keys editor.
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
-- `/admin/system/admin/repokeys`: installed package repository public keys.
+- `/admin/system/admin/repokeys`: structured installed package repository public key metadata without raw key dumps.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context, target metadata, upgrade helper status, build server configuration, and guardrail messaging. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
 - `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, client filter, and package family counts. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: guarded read-only firmware, overlay usage, mounted filesystem, and flash partition overview.
-- `/admin/system/leds`: LED trigger configuration and current sysfs LED state.
+- `/admin/system/leds`: LED trigger configuration and structured current sysfs LED trigger/brightness state.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
 - `/admin/system/commands` and children: modern custom command dashboard can list and execute configured LuCI commands by section id, with UCI summary. Auto mode still defaults to LuCI compat until command add/edit/delete and download/public-link parity are complete.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
@@ -580,6 +604,8 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/flash` on `172.16.172.1` with the `1.0.0-r4-native16` bundle and rendered firmware version, root usage, overlay free space, mounted filesystem table, and the target's no-MTD-partition state.
 - Browser smoke test loaded `#/native/attendedsysupgrade` on `172.16.172.1` with the `1.0.0-r4-native17` bundle and rendered firmware version, target, `auc` helper state, build server URL, and rollback-safe guardrail messaging.
 - Native route audit found text-only command dumps on routing, nftables firewall status, processes, and connections. Browser smoke tests loaded `#/native/status-routes`, `#/native/firewall-status`, `#/native/processes`, and `#/native/connections` with the `1.0.0-r4-native19` bundle and confirmed all four now render structured tables without the raw command dump panels.
+- Follow-up text-output audit found remaining raw command panels on logs, diagnostics, repository keys, LED sysfs state, and wireless helper status. Browser smoke tests loaded `#/native/logs`, `#/native/diagnostics`, `#/native/repokeys`, `#/native/leds`, and `#/native/wireless` with the `1.0.0-r4-native20` bundle and confirmed all five now render structured tables without raw command dump panels.
+- Route audit on `172.16.172.1` with `1.0.0-r4-native20` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 
 Remaining legacy or partial gaps:
 
@@ -592,7 +618,7 @@ Remaining legacy or partial gaps:
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
-- Native text-output debt remains for inherently textual surfaces and should be reduced next: logs need structured severity/time/source parsing, diagnostics output needs parsed result rows, repository keys need key metadata rows, LED sysfs state needs parsed trigger/brightness rows, and custom command output needs command-specific renderers where practical.
+- Native text-output debt remains for ad-hoc diagnostic runner results and custom command output. These should use command-specific renderers where practical, and fall back to compact text output only when the command shape is intentionally arbitrary.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Sysupgrade and Standalone Direction
