@@ -28,6 +28,7 @@
 					"changes_revert",
 					"crontab_save",
 					"custom_command_run",
+					"custom_commands_save",
 					"diagnostics_run",
 					"dhcp_domains_save",
 					"dhcp_hosts_save",

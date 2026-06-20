@@ -297,6 +297,14 @@ export type CustomCommandResult = {
 	binary: boolean;
 };
 
+export type CustomCommandsSaveResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	commands: CustomCommand[];
+	sections: ConfigSection[];
+};
+
 export type ServiceFile = {
 	title: string;
 	path: string;
@@ -1186,6 +1194,21 @@ export async function runCustomCommand(id: string, args: string): Promise<Custom
 			stderr: "",
 			exitcode: 1,
 			binary: false,
+		};
+	}
+}
+
+export async function saveCustomCommands(rows: CustomCommand[]): Promise<CustomCommandsSaveResult> {
+	try {
+		return await callBridge<CustomCommandsSaveResult>("custom_commands_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Custom commands save failed.",
+			changed: false,
+			commands: [],
+			sections: [],
 		};
 	}
 }

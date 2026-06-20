@@ -10,6 +10,7 @@ import {
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
+	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
 	saveUhttpdConfig,
@@ -497,23 +498,163 @@ function ServiceLogTables({ logs }: { logs: Record<string, string> }) {
 }
 
 function CustomCommandsPanel({ commands }: { commands: CustomCommand[] }) {
-	if (!commands.length) {
-		return (
-			<Panel title="Commands">
-				<p className="text-sm text-muted-foreground">No custom commands are configured.</p>
-			</Panel>
+	const [rows, setRows] = useState(() => commands.map(normalizeCustomCommand));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof CustomCommand, value: string | boolean) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
 		);
 	}
 
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				id: "",
+				name: "",
+				command: "",
+				param: false,
+				public: false,
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveCustomCommands(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.commands.map(normalizeCustomCommand);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+	}
+
 	return (
-		<Panel title="Commands">
+		<Panel title="Commands" flush>
 			<div className="grid gap-3">
-				{commands.map((command) => (
+				<form className="grid gap-3 px-3 pt-3" onSubmit={(event) => void submit(event)}>
+					<div className="overflow-x-auto">
+						<table className="w-full min-w-[62rem] text-left text-sm">
+							<thead className="border-b text-xs uppercase text-muted-foreground">
+								<tr>
+									<th className="px-3 py-2 font-medium">Name</th>
+									<th className="px-3 py-2 font-medium">Command</th>
+									<th className="px-3 py-2 font-medium">Arguments</th>
+									<th className="px-3 py-2 font-medium">Public</th>
+									<th className="px-3 py-2 text-right font-medium">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{rows.length ? (
+									rows.map((row, index) => (
+										<tr className="border-b align-top last:border-0" key={`${row.id || "new"}.${index}`}>
+											<td className="px-3 py-3">
+												<Input
+													aria-label="Command name"
+													onChange={(event) => updateRow(index, "name", event.target.value)}
+													value={row.name}
+												/>
+											</td>
+											<td className="px-3 py-3">
+												<Input
+													aria-label="Command"
+													onChange={(event) => updateRow(index, "command", event.target.value)}
+													value={row.command}
+												/>
+											</td>
+											<td className="px-3 py-3">
+												<input
+													aria-label="Accept arguments"
+													checked={row.param}
+													className="size-4"
+													onChange={(event) => updateRow(index, "param", event.target.checked)}
+													type="checkbox"
+												/>
+											</td>
+											<td className="px-3 py-3">
+												<input
+													aria-label="Public command"
+													checked={row.public}
+													className="size-4"
+													onChange={(event) => updateRow(index, "public", event.target.checked)}
+													type="checkbox"
+												/>
+											</td>
+											<td className="px-3 py-3 text-right">
+												<Button
+													aria-label={`Remove ${row.name || "command"}`}
+													onClick={() => removeRow(index)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<Trash2 className="size-4" />
+												</Button>
+											</td>
+										</tr>
+									))
+								) : (
+									<tr>
+										<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+											No custom commands are configured.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+					<div className="flex justify-between gap-2 pb-3">
+						<Button onClick={addRow} type="button" variant="outline">
+							<Plus className="size-4" />
+							Add command
+						</Button>
+						<div className="flex gap-2">
+							<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+								Cancel
+							</Button>
+							<Button disabled={!dirty || saving} type="submit">
+								Save
+							</Button>
+						</div>
+					</div>
+				</form>
+				{savedRows.filter((command) => command.id && command.command).map((command) => (
 					<CustomCommandRunner command={command} key={command.id} />
 				))}
 			</div>
 		</Panel>
 	);
+}
+
+function normalizeCustomCommand(command: CustomCommand): CustomCommand {
+	return {
+		id: command.id ?? "",
+		name: command.name ?? "",
+		command: command.command ?? "",
+		param: Boolean(command.param),
+		public: Boolean(command.public),
+	};
 }
 
 function CustomCommandRunner({ command }: { command: CustomCommand }) {

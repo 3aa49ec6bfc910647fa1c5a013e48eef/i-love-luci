@@ -2671,6 +2671,121 @@ function custom_command_section(id) {
 	return result;
 }
 
+function valid_custom_command_id(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_.-]/g, '') == value;
+}
+
+function clean_custom_command_value(value) {
+	value = trim('' + (value || ''));
+	return replace(value, /[\r\n]/g, '');
+}
+
+function valid_custom_command_text(value) {
+	return value == '' || replace(value, /[\r\n]/g, '') == value;
+}
+
+function save_custom_commands(rows) {
+	rows ||= [];
+	uci.load('luci');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+	let validated = [];
+
+	uci.foreach('luci', 'command', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = clean_custom_command_value(row?.id || '');
+		let is_existing = length(section) && uci.get('luci', section) == 'command';
+		let next = {
+			name: clean_custom_command_value(row?.name || section),
+			command: clean_custom_command_value(row?.command || ''),
+			param: row?.param ? '1' : '0',
+			public: row?.public ? '1' : '0'
+		};
+
+		if (length(section) && !valid_custom_command_id(section))
+			return {
+				saved: false,
+				message: 'Command id may contain only letters, numbers, dots, dashes, and underscores.',
+				changed: false,
+				commands: custom_command_entries(),
+				sections: collect_uci_config('luci', ['command'])
+			};
+
+		if (!length(next.name) || !length(next.command))
+			return {
+				saved: false,
+				message: 'Command name and command are required.',
+				changed: false,
+				commands: custom_command_entries(),
+				sections: collect_uci_config('luci', ['command'])
+			};
+
+		if (!valid_custom_command_text(next.name) || !valid_custom_command_text(next.command))
+			return {
+				saved: false,
+				message: 'Command fields may not contain newlines.',
+				changed: false,
+				commands: custom_command_entries(),
+				sections: collect_uci_config('luci', ['command'])
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('luci', 'command');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		for (let key, value in item.next) {
+			let current = uci.get('luci', section, key) || '';
+
+			if ((key == 'param' || key == 'public') && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'param' || key == 'public') && value == '0')
+					uci.delete('luci', section, key);
+				else
+					uci.set('luci', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('luci', section);
+			changed = true;
+		}
+	}
+
+	if (changed)
+		uci.commit('luci');
+
+	return {
+		saved: true,
+		message: changed ? 'Custom commands saved.' : 'Custom commands already up to date.',
+		changed,
+		commands: custom_command_entries(),
+		sections: collect_uci_config('luci', ['command'])
+	};
+}
+
 function run_custom_command(id, args) {
 	let section = custom_command_section(id);
 
@@ -4207,6 +4322,26 @@ const methods = {
 					changed: false,
 					redirects: firewall_redirect_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	custom_commands_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_custom_commands(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Custom commands save failed: ' + e,
+					changed: false,
+					commands: custom_command_entries(),
+					sections: collect_uci_config('luci', ['command'])
 				});
 			}
 		}
