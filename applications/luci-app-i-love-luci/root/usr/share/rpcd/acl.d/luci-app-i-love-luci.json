@@ -27,6 +27,7 @@
 					"crontab_save",
 					"diagnostics_run",
 					"service_action",
+					"ssh_keys_save",
 					"startup_action",
 					"route_mode_set",
 					"auth_mfa_begin_setup",

@@ -9,6 +9,7 @@ import { glob, open, popen, readfile, stat, writefile } from 'fs';
 const uci = cursor();
 const ubus = connect();
 const menuRoot = '/usr/share/luci/menu.d/*.json';
+const sshAuthorizedKeysPath = '/etc/dropbear/authorized_keys';
 const hiddenNavigation = {
 	'/admin': true,
 	'/admin/menu': true,
@@ -50,7 +51,7 @@ const nativeRoutes = {
 	'/admin/system/admin': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/password': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/dropbear': { status: 'partial', nativePath: '/native/service/dropbear' },
-	'/admin/system/admin/sshkeys': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/admin/sshkeys': { status: 'supported', nativePath: '/native/sshkeys' },
 	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
 	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
@@ -583,6 +584,23 @@ function save_crontab(text) {
 	};
 }
 
+function save_ssh_keys(text) {
+	text = '' + (text || '');
+
+	if (length(text) > 65535)
+		return {
+			saved: false,
+			message: 'SSH authorized keys file is too large.'
+		};
+
+	writefile(sshAuthorizedKeysPath, text);
+
+	return {
+		saved: true,
+		message: 'SSH keys saved.'
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -657,6 +675,9 @@ function native_page(page) {
 	}
 	else if (page == 'crontab') {
 		data.text = safe_read('/etc/crontabs/root');
+	}
+	else if (page == 'sshkeys') {
+		data.text = safe_read(sshAuthorizedKeysPath);
 	}
 	else if (page == 'flash') {
 		data.commands = [
@@ -901,6 +922,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_crontab(request.args.text || ''));
+		}
+	},
+
+	ssh_keys_save: {
+		args: {
+			text: ''
+		},
+		call: function(request) {
+			return respond(save_ssh_keys(request.args.text || ''));
 		}
 	},
 

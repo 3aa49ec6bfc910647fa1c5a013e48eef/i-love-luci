@@ -418,3 +418,15 @@ export async function saveCrontab(text: string): Promise<{ saved: boolean; messa
 		};
 	}
 }
+
+export async function saveSshKeys(text: string): Promise<{ saved: boolean; message: string }> {
+	try {
+		return await callBridge<{ saved: boolean; message: string }>("ssh_keys_save", { text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "SSH keys save failed.",
+		};
+	}
+}

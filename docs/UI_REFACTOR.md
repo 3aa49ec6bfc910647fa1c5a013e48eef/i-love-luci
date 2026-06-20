@@ -538,6 +538,7 @@ Converted to native React/Vite surfaces:
 - `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
 - `/admin/system/system`, `/admin/system/admin`, repo keys, and LED routes: modern read-only UCI summaries.
 - `/admin/system/admin/dropbear`: Dropbear service status and UCI summary.
+- `/admin/system/admin/sshkeys`: Dropbear authorized keys editor.
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
 - `/admin/system/package-manager`: installed package inventory. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
@@ -558,6 +559,7 @@ Validation on `172.16.172.1`:
 - All visible LuCI menu routes have either a native route or a LuCI compat route. Service/package LuCI apps with incomplete native parity default to `legacy` effective mode in `auto`, so full LuCI functionality remains available.
 - `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
 - `crontab_save` saved through the native bridge and reloaded cron on `172.16.172.1`; the test router had no existing root crontab entries.
+- `native_page` returned `sshkeys` successfully. The router currently has no `/etc/dropbear/authorized_keys`, so save was not exercised to avoid creating an empty file during validation.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
 - `service_action` and `startup_action` returned current state for `uhttpd` with non-mutating `status`; invalid init names are rejected.
 - Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
@@ -659,6 +661,59 @@ Audit decision:
 - banIP and AdBlock Fast are both third-party/service-style LuCI apps, so they must be handled through the same compatibility and adapter rules.
 - Bespoke rewrites are acceptable only for first-party I Love LuCI shell/dashboard/auth features or for adapter primitives that benefit multiple LuCI apps.
 - For every installed LuCI app, route availability is more important than native styling. If native parity is not proven, fallback to LuCI compat.
+
+## Full Route and Future App Audit Plan
+
+The compatibility layer needs a repeatable audit, not a one-time manual check. The audit should run against the router and later become a smoke-test script.
+
+Audit inputs:
+
+- Installed LuCI menu files: `/usr/share/luci/menu.d/*.json`.
+- Installed ACL files: `/usr/share/rpcd/acl.d/*.json`.
+- Installed packages matching `luci-app-*`, LuCI modules, themes, and packages with service/init scripts.
+- I Love LuCI route metadata: `nativeStatus`, `nativeAutoMode`, `configuredMode`, `effectiveMode`, `nativePath`, and legacy target.
+
+Audit checks:
+
+- Every visible LuCI route appears in I Love LuCI navigation/search.
+- Every visible route resolves to exactly one working target:
+  - native route when `effectiveMode=modern`
+  - LuCI compat route when `effectiveMode=legacy`
+  - hidden only when explicitly configured hidden or hidden by LuCI metadata
+- Every route with `nativeStatus=partial` and incomplete write/action parity defaults to LuCI compat in `auto`.
+- Every `luci-app-*` package has all of its menu children represented and defaults to LuCI compat unless a reusable native adapter proves parity.
+- Installing a new LuCI app after I Love LuCI is installed requires no manual migration step: the route scanner should pick it up after cache refresh or service reload.
+- Uninstalling a LuCI app removes its routes from navigation/search without leaving dead native links.
+- ACL-ineligible routes are not shown as usable routes.
+- Parent first-child routing uses the same target as the selected child, including legacy/native mode.
+- Search results use the same resolved target as the sidebar.
+- Settings route-mode overrides work both directions: explicit `modern` opens native preview when present, explicit `legacy` opens compat.
+
+Future app handling:
+
+- New LuCI apps should be treated as compatible by default, not unsupported.
+- Default path for unknown future apps: discover menu + ACL metadata, show route in navigation/search, open through LuCI compat frame.
+- Native support for future apps should come from adapter registration, not editing app-specific special cases into the shell.
+- Adapter registration should be data-driven where possible: package id, route prefixes, UCI packages/section types, init scripts, log filters, and whitelisted files.
+
+Required tooling:
+
+- Add a router-side or local script that calls `ubus call luci.iloveluci menu_tree`, compares it with installed LuCI menu files, and reports:
+  - missing routes
+  - dead legacy targets
+  - dead native targets
+  - partial routes that incorrectly default to modern
+  - LuCI app routes without compat fallback
+- Add browser smoke coverage for representative route types:
+  - supported native core route
+  - partial native preview forced to modern
+  - third-party LuCI app auto route opening compat
+  - search result opening same target as sidebar
+  - newly installed test LuCI app appearing after refresh
+
+Acceptance gate:
+
+- The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
 
 ## Login Conversion
 

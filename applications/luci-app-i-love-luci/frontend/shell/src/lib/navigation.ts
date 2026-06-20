@@ -52,7 +52,7 @@ export function nativePathFor(path: string) {
 		"/admin/system/admin": "/core/system",
 		"/admin/system/admin/password": "/core/system",
 		"/admin/system/admin/dropbear": "/native/service/dropbear",
-		"/admin/system/admin/sshkeys": "/core/system",
+		"/admin/system/admin/sshkeys": "/native/sshkeys",
 		"/admin/system/admin/uhttpd": "/native/service/uhttpd",
 		"/admin/system/admin/repokeys": "/core/system",
 		"/admin/system/package-manager": "/native/packages",

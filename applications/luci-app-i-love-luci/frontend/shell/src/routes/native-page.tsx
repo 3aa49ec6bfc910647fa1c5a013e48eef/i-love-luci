@@ -13,6 +13,7 @@ import {
 	runStartupAction,
 	runDiagnostics,
 	saveCrontab,
+	saveSshKeys,
 	type CommandBlock,
 	type ConfigSection,
 	type InitAction,
@@ -75,6 +76,10 @@ const pageMeta: Record<string, PageMeta> = {
 		title: "Scheduled tasks",
 		description: "Edit root scheduled tasks and reload cron from the modern shell.",
 	},
+	sshkeys: {
+		title: "SSH keys",
+		description: "Edit Dropbear authorized keys without leaving the modern shell.",
+	},
 	flash: {
 		title: "Backup / flash firmware",
 		description: "Storage and flash partition overview. Firmware write actions remain in legacy LuCI.",
@@ -120,7 +125,22 @@ export function NativePage() {
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" ? <LineList title="Installed packages" lines={data?.lines ?? []} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
-			{page === "crontab" && data?.page === "crontab" ? <CrontabEditor initialText={data.text || ""} /> : null}
+			{page === "crontab" && data?.page === "crontab" ? (
+				<TextFileEditor
+					helperText="Saving writes `/etc/crontabs/root` and reloads cron."
+					initialText={data.text || ""}
+					onSave={saveCrontab}
+					title="Root crontab"
+				/>
+			) : null}
+			{page === "sshkeys" && data?.page === "sshkeys" ? (
+				<TextFileEditor
+					helperText="Saving writes `/etc/dropbear/authorized_keys`. Existing SSH sessions are not interrupted."
+					initialText={data.text || ""}
+					onSave={saveSshKeys}
+					title="Authorized keys"
+				/>
+			) : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
@@ -477,7 +497,17 @@ function LineList({ title, lines }: { title: string; lines: string[] }) {
 	);
 }
 
-function CrontabEditor({ initialText }: { initialText: string }) {
+function TextFileEditor({
+	helperText,
+	initialText,
+	onSave,
+	title,
+}: {
+	helperText: string;
+	initialText: string;
+	onSave: (text: string) => Promise<{ saved: boolean; message: string }>;
+	title: string;
+}) {
 	const [text, setText] = useState(initialText);
 	const [savedText, setSavedText] = useState(initialText);
 	const [saving, setSaving] = useState(false);
@@ -485,7 +515,7 @@ function CrontabEditor({ initialText }: { initialText: string }) {
 
 	async function save() {
 		setSaving(true);
-		const result = await saveCrontab(text);
+		const result = await onSave(text);
 		setSaving(false);
 
 		if (!result.saved) {
@@ -501,7 +531,7 @@ function CrontabEditor({ initialText }: { initialText: string }) {
 		<Panel
 			title={
 				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<span>Root crontab</span>
+					<span>{title}</span>
 					<div className="flex gap-2">
 						<Button disabled={!dirty || saving} onClick={() => setText(savedText)} type="button" variant="outline">
 							Cancel
@@ -519,7 +549,7 @@ function CrontabEditor({ initialText }: { initialText: string }) {
 				spellCheck={false}
 				value={text}
 			/>
-			<p className="mt-2 text-xs text-muted-foreground">Saving writes `/etc/crontabs/root` and reloads cron.</p>
+			<p className="mt-2 text-xs text-muted-foreground">{helperText}</p>
 		</Panel>
 	);
 }
