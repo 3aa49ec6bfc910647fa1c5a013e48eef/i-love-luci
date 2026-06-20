@@ -59,6 +59,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: applications/luci-app-i-love-luci/src/shell/package-lock.json
+
       - name: Set package channel
         id: package-channel
         run: |
@@ -105,6 +112,7 @@ jobs:
           OPENWRT_VERSION: ${{ matrix.openwrt_version }}
           OPENWRT_TARGET: ${{ matrix.openwrt_target }}
           PACKAGE_FORMAT: ${{ matrix.package_format }}
+          PACKAGE_SPECS: luci-app-i-love-luci:applications/luci-app-i-love-luci
           PACKAGE_RELEASE: ${{ steps.package-channel.outputs.release }}
           JOBS: 1
         run: scripts/build-openwrt-package.sh
