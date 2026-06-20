@@ -79,6 +79,9 @@ for i in "${!package_names[@]}"; do
 						npm install
 					fi
 					npm run build
+					if [ -f "${package_dirs[$i]}/htdocs/luci-static/i-love-luci-app/assets/app.js" ]; then
+						node --check "${package_dirs[$i]}/htdocs/luci-static/i-love-luci-app/assets/app.js"
+					fi
 				)
 				;;
 			0|false|no)

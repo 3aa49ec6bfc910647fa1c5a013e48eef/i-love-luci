@@ -146,7 +146,7 @@ Rules:
 - Pull requests build artifacts only.
 - `main` builds stable artifacts and publishes the GitHub Pages package feed.
 - Pull requests into `main` must come from `dev` or `uat`.
-- Node.js 24 is used for the frontend build.
+- Node.js 22 LTS is used for the frontend build.
 
 Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed updates.
 
