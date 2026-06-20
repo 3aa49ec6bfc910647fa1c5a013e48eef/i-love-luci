@@ -60,6 +60,11 @@ echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
 ubus call luci.iloveluci firewall_includes_save
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
+echo '---ILOVELUCI-PACKAGE-FEEDS-NOOP---'
+ubus call luci.iloveluci native_page '{\"page\":\"packages\"}' >/tmp/i-love-luci-package-feeds.json
+feeds_payload=\$(jsonfilter -i /tmp/i-love-luci-package-feeds.json -e '@.data.packageFeeds' | sed 's/^/{\"rows\":/; s/\$/}/')
+ubus call luci.iloveluci package_feeds_save \"\$feeds_payload\"
+rm -f /tmp/i-love-luci-package-feeds.json
 echo '---ILOVELUCI-RELEASE---'
 cat /etc/openwrt_release 2>/dev/null || true
 rm -f /tmp/i-love-luci-native-audit.sh
@@ -349,6 +354,18 @@ else:
 		failures.append("package_search did not return package lines")
 	elif not package_data.get("lines"):
 		warnings.append("package_search returned no luci-app results")
+
+package_feed_save = json_after_marker("---ILOVELUCI-PACKAGE-FEEDS-NOOP---")
+if not package_feed_save or not package_feed_save.get("ok"):
+	failures.append("package_feeds_save no-op did not return ok")
+else:
+	feed_data = package_feed_save.get("data") or {}
+	if feed_data.get("saved") is not True:
+		failures.append("package_feeds_save no-op did not save cleanly")
+	if feed_data.get("changed") is not False:
+		failures.append("package_feeds_save no-op reported changes")
+	if not feed_data.get("feeds"):
+		failures.append("package_feeds_save no-op did not return feed rows")
 
 print("I Love LuCI native page audit")
 print(f"core_pages={len(expected_core_pages)} native_pages={len(expected_pages)} service_adapters={len(expected_services)}")
