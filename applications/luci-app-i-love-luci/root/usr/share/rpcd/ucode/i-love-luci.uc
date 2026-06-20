@@ -1125,6 +1125,149 @@ function save_dnsmasq_config(config) {
 	};
 }
 
+function network_route_rows() {
+	let routes = [];
+
+	try {
+		uci.load('network');
+	}
+	catch (e) {
+		return routes;
+	}
+
+	for (let section_type in ['route', 'route6']) {
+		uci.foreach('network', section_type, function(section) {
+			push(routes, {
+				section: section['.name'] || '',
+				family: section_type,
+				interface: section.interface || '',
+				target: section.target || '',
+				netmask: section.netmask || '',
+				gateway: section.gateway || '',
+				metric: section.metric || '',
+				table: section.table || '',
+				source: section.source || '',
+				mtu: section.mtu || '',
+				onlink: section.onlink || ''
+			});
+		});
+	}
+
+	return routes;
+}
+
+function valid_network_route_text(value) {
+	return value == '' || replace(value, /[^A-Za-z0-9:._/%-]/g, '') == value;
+}
+
+function valid_network_route_interface(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_.:-]/g, '') == value;
+}
+
+function save_network_routes(rows) {
+	rows ||= [];
+	uci.load('network');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	for (let section_type in ['route', 'route6']) {
+		uci.foreach('network', section_type, function(section) {
+			existing[section['.name']] = true;
+		});
+	}
+
+	for (let row in rows) {
+		let family = row?.family == 'route6' ? 'route6' : 'route';
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('network', section) == family;
+
+		if (!is_existing) {
+			section = uci.add('network', family);
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = {
+			interface: dhcp_clean_value(row?.interface || ''),
+			target: dhcp_clean_value(row?.target || ''),
+			netmask: family == 'route' ? dhcp_clean_value(row?.netmask || '') : '',
+			gateway: dhcp_clean_value(row?.gateway || ''),
+			metric: dhcp_clean_value(row?.metric || ''),
+			table: dhcp_clean_value(row?.table || ''),
+			source: dhcp_clean_value(row?.source || ''),
+			mtu: dhcp_clean_value(row?.mtu || ''),
+			onlink: dhcp_zero_one(row?.onlink)
+		};
+
+		if (!valid_network_route_interface(next.interface))
+			return {
+				saved: false,
+				message: 'Static route interface is required.',
+				changed: false,
+				routes: network_route_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		for (let key, value in next) {
+			if ((key == 'metric' || key == 'mtu') && value != '' && !dhcp_numeric_value(value))
+				return {
+					saved: false,
+					message: 'Static route metric and MTU must be numeric.',
+					changed: false,
+					routes: network_route_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+
+			if ((key == 'target' || key == 'netmask' || key == 'gateway' || key == 'table' || key == 'source') && !valid_network_route_text(value))
+				return {
+					saved: false,
+					message: 'Static route contains unsupported characters.',
+					changed: false,
+					routes: network_route_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+		}
+
+		for (let key, value in next) {
+			let current = uci.get('network', section, key) || '';
+
+			if (key == 'onlink' && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'onlink' && value == '0') || value == '')
+					uci.delete('network', section, key);
+				else
+					uci.set('network', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('network', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('network');
+		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Static routes saved and network reloaded.' : 'Static routes already up to date.',
+		changed,
+		routes: network_route_rows(),
+		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2097,6 +2240,7 @@ function build_core_settings(page) {
 		dhcpDomains: [],
 		dhcpPools: [],
 		dhcpStatus: {},
+		networkRoutes: [],
 		firewall: [],
 		system: []
 	};
@@ -2117,6 +2261,7 @@ function build_core_settings(page) {
 	}
 	else {
 		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
+		data.networkRoutes = network_route_rows();
 	}
 
 	return data;
@@ -2360,6 +2505,26 @@ const methods = {
 					changed: false,
 					section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	network_routes_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_network_routes(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Static routes save failed: ' + e,
+					changed: false,
+					routes: network_route_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				});
 			}
 		}

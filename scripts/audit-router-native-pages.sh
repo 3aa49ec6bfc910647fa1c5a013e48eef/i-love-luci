@@ -32,9 +32,14 @@ set pass $env(OPENWRT_PASSWORD)
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host "cat <<'REMOTE' >/tmp/i-love-luci-native-audit.sh
 #!/bin/sh
 pages='status-routes firewall-status logs processes connections wireless diagnostics attendedsysupgrade packages startup crontab sshkeys password repokeys leds flash services reboot'
+core_pages='network dhcp firewall system'
 services='adblock-fast banip upnpd commands uhttpd dropbear'
 echo '---ILOVELUCI-MENU---'
 ubus call luci.iloveluci menu_tree
+for page in \$core_pages; do
+	printf '%s\n' \"---ILOVELUCI-CORE-PAGE:\$page---\"
+	ubus call luci.iloveluci core_settings \"{\\\"page\\\":\\\"\$page\\\"}\"
+done
 for page in \$pages; do
 	printf '%s\n' \"---ILOVELUCI-NATIVE-PAGE:\$page---\"
 	ubus call luci.iloveluci native_page \"{\\\"page\\\":\\\"\$page\\\"}\"
@@ -85,6 +90,13 @@ expected_pages = {
 	"flash": {"commands": ["Mounted filesystems", "Flash partitions"]},
 	"services": {"services": True},
 	"reboot": {"commands": ["System uptime"]},
+}
+
+expected_core_pages = {
+	"network": {"sections": "network", "arrays": ["networkRoutes"]},
+	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
+	"firewall": {"sections": "firewall"},
+	"system": {"sections": "system"},
 }
 
 expected_services = {
@@ -144,6 +156,30 @@ warnings = []
 menu = json_after_marker("---ILOVELUCI-MENU---")
 if not menu or not menu.get("data", {}).get("items"):
 	failures.append("menu_tree did not return visible menu data")
+
+for page, rules in expected_core_pages.items():
+	payload = json_after_marker(f"---ILOVELUCI-CORE-PAGE:{page}---")
+	if not payload or not payload.get("ok"):
+		failures.append(f"{page}: core_settings did not return ok")
+		continue
+
+	data = payload.get("data") or {}
+	if data.get("page") != page:
+		failures.append(f"{page}: core_settings returned page={data.get('page')!r}")
+
+	sections_key = rules.get("sections")
+	if sections_key and not isinstance(data.get(sections_key), list):
+		failures.append(f"{page}: core_settings missing {sections_key} section list")
+	elif sections_key and not data.get(sections_key):
+		failures.append(f"{page}: core_settings returned empty {sections_key} section list")
+
+	for key in rules.get("arrays", []):
+		if not isinstance(data.get(key), list):
+			failures.append(f"{page}: core_settings missing {key} array")
+
+	for key in rules.get("objects", []):
+		if not isinstance(data.get(key), dict):
+			failures.append(f"{page}: core_settings missing {key} object")
 
 for page, rules in expected_pages.items():
 	payload = json_after_marker(f"---ILOVELUCI-NATIVE-PAGE:{page}---")
@@ -256,7 +292,7 @@ else:
 		warnings.append("package_search returned no luci-app results")
 
 print("I Love LuCI native page audit")
-print(f"native_pages={len(expected_pages)} service_adapters={len(expected_services)}")
+print(f"core_pages={len(expected_core_pages)} native_pages={len(expected_pages)} service_adapters={len(expected_services)}")
 
 if warnings:
 	print("\nWarnings:")

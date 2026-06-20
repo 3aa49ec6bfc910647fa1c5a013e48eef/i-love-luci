@@ -208,9 +208,24 @@ export type DhcpStatus = {
 	leaseCount?: number;
 };
 
+export type StaticRoute = {
+	section: string;
+	family: string;
+	interface: string;
+	target: string;
+	netmask: string;
+	gateway: string;
+	metric: string;
+	table: string;
+	source: string;
+	mtu: string;
+	onlink: string;
+};
+
 export type CoreSettings = {
 	page: string;
 	network: ConfigSection[];
+	networkRoutes?: StaticRoute[];
 	dhcp: ConfigSection[];
 	dhcpLeases?: DhcpLease[];
 	dhcpHosts?: DhcpHost[];
@@ -403,6 +418,14 @@ export type DnsmasqConfigResult = {
 	message: string;
 	changed: boolean;
 	section: ConfigSection | null;
+	sections: ConfigSection[];
+};
+
+export type StaticRoutesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	routes: StaticRoute[];
 	sections: ConfigSection[];
 };
 
@@ -804,6 +827,21 @@ export async function saveDnsmasqConfig(config: DnsmasqConfigInput): Promise<Dns
 			message: "DNS settings save failed.",
 			changed: false,
 			section: null,
+			sections: [],
+		};
+	}
+}
+
+export async function saveNetworkRoutes(rows: StaticRoute[]): Promise<StaticRoutesResult> {
+	try {
+		return await callBridge<StaticRoutesResult>("network_routes_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Static routes save failed.",
+			changed: false,
+			routes: [],
 			sections: [],
 		};
 	}

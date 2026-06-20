@@ -13,6 +13,7 @@ import {
 	saveDhcpHosts,
 	saveDhcpPools,
 	saveDnsmasqConfig,
+	saveNetworkRoutes,
 	saveSystemSettings,
 	type ConfigSection,
 	type CoreSettings,
@@ -24,6 +25,7 @@ import {
 	type DnsmasqConfigInput,
 	type NetworkInterfaceStatus,
 	type ServiceState,
+	type StaticRoute,
 	type SystemSettingsInput,
 } from "@/lib/rpc";
 
@@ -32,7 +34,7 @@ type CorePage = "network" | "dhcp" | "firewall" | "system";
 const pageMeta: Record<CorePage, { title: string; description: string; configKey: keyof CoreSettings }> = {
 	network: {
 		title: "Network interfaces",
-		description: "Modern read-only view of interface, device, route, and live link state.",
+		description: "Modern view of interface, device, static route, and live link state.",
 		configKey: "network",
 	},
 	dhcp: {
@@ -93,7 +95,13 @@ export function CoreSettingsPage() {
 				</div>
 			</header>
 
-			{page === "network" ? <NetworkSummary dashboard={dashboard} /> : null}
+			{page === "network" && settings ? (
+				<NetworkSummary
+					dashboard={dashboard}
+					onSettingsChange={(nextSettings) => setSettings(nextSettings)}
+					settings={settings}
+				/>
+			) : null}
 			{page === "dhcp" && settings ? <DhcpSummary onSettingsChange={setSettings} settings={settings} /> : null}
 			{page === "firewall" && settings ? <FirewallSummary settings={settings} /> : null}
 			{page === "system" && settings ? <SystemSummary settings={settings} dashboard={dashboard} /> : null}
@@ -1462,13 +1470,22 @@ function SimpleSectionTable({
 	);
 }
 
-function NetworkSummary({ dashboard }: { dashboard: DashboardStatus | null }) {
+function NetworkSummary({
+	dashboard,
+	onSettingsChange,
+	settings,
+}: {
+	dashboard: DashboardStatus | null;
+	onSettingsChange: (settings: CoreSettings) => void;
+	settings: CoreSettings;
+}) {
 	const interfaces = [...(dashboard?.interfaces ?? [])].sort(sortNetworkInterfaces);
 	const devices = Object.entries(dashboard?.devices ?? {})
 		.filter(([, device]) => device.present && device.devtype === "ethernet")
 		.sort(([a], [b]) => a.localeCompare(b));
+	const routes = settings.networkRoutes ?? [];
 
-	if (!interfaces.length && !devices.length) {
+	if (!interfaces.length && !devices.length && !settings.network.length) {
 		return null;
 	}
 
@@ -1476,7 +1493,234 @@ function NetworkSummary({ dashboard }: { dashboard: DashboardStatus | null }) {
 		<div className="grid gap-5">
 			{interfaces.length ? <InterfaceStatusTable interfaces={interfaces} /> : null}
 			{devices.length ? <DeviceStatusTable devices={devices} /> : null}
+			<StaticRouteEditor
+				onSaved={(nextRoutes, sections) =>
+					onSettingsChange({
+						...settings,
+						network: sections,
+						networkRoutes: nextRoutes,
+					})
+				}
+				routes={routes}
+			/>
 		</div>
+	);
+}
+
+function StaticRouteEditor({
+	onSaved,
+	routes,
+}: {
+	onSaved: (routes: StaticRoute[], sections: ConfigSection[]) => void;
+	routes: StaticRoute[];
+}) {
+	const [rows, setRows] = useState(() => routes.map(normalizeStaticRoute));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof StaticRoute, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				family: "route",
+				interface: "",
+				target: "",
+				netmask: "",
+				gateway: "",
+				metric: "",
+				table: "",
+				source: "",
+				mtu: "",
+				onlink: "0",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveNetworkRoutes(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.routes.map(normalizeStaticRoute);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">Static routes</h2>
+					<p className="text-sm text-muted-foreground">Configure IPv4 and IPv6 route entries managed by UCI.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add route
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[84rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Interface</th>
+								<th className="px-3 py-2 font-medium">Target</th>
+								<th className="px-3 py-2 font-medium">Netmask</th>
+								<th className="px-3 py-2 font-medium">Gateway</th>
+								<th className="px-3 py-2 font-medium">Metric</th>
+								<th className="px-3 py-2 font-medium">Table</th>
+								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">MTU</th>
+								<th className="px-3 py-2 font-medium">On-link</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((route, index) => (
+									<tr className="border-b align-top last:border-0" key={`${route.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`static-route-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["route", "IPv4"],
+													["route6", "IPv6"],
+												]}
+												value={route.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Interface"
+												onChange={(event) => updateRow(index, "interface", event.target.value)}
+												value={route.interface}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Target"
+												onChange={(event) => updateRow(index, "target", event.target.value)}
+												value={route.target}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Netmask"
+												disabled={route.family === "route6"}
+												onChange={(event) => updateRow(index, "netmask", event.target.value)}
+												value={route.family === "route6" ? "" : route.netmask}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Gateway"
+												onChange={(event) => updateRow(index, "gateway", event.target.value)}
+												value={route.gateway}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Metric"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "metric", event.target.value)}
+												value={route.metric}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Table"
+												onChange={(event) => updateRow(index, "table", event.target.value)}
+												value={route.table}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source"
+												onChange={(event) => updateRow(index, "source", event.target.value)}
+												value={route.source}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="MTU"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "mtu", event.target.value)}
+												value={route.mtu}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`static-route-onlink-${index}`}
+												onChange={(value) => updateRow(index, "onlink", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={route.onlink}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label="Remove route"
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+										No static routes configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
 }
 
@@ -1631,6 +1875,22 @@ function rawListValue(value: unknown) {
 
 	const text = rawValue(value);
 	return text ? [text] : [];
+}
+
+function normalizeStaticRoute(route: StaticRoute): StaticRoute {
+	return {
+		section: route.section ?? "",
+		family: route.family === "route6" ? "route6" : "route",
+		interface: route.interface ?? "",
+		target: route.target ?? "",
+		netmask: route.family === "route6" ? "" : (route.netmask ?? ""),
+		gateway: route.gateway ?? "",
+		metric: route.metric ?? "",
+		table: route.table ?? "",
+		source: route.source ?? "",
+		mtu: route.mtu ?? "",
+		onlink: route.onlink === "1" ? "1" : "0",
+	};
 }
 
 function valueText(value: ConfigSection["values"][string] | undefined) {
