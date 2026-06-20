@@ -50,7 +50,7 @@ applications/luci-app-i-love-luci/
     usr/share/luci/menu.d/luci-app-i-love-luci.json
     usr/share/rpcd/acl.d/luci-app-i-love-luci.json
     usr/share/rpcd/ucode/i-love-luci.uc
-  src/
+  frontend/
     shell/
       package.json
       vite.config.ts
@@ -304,7 +304,7 @@ Native routes get priority. Unknown routes fall back to `LegacyFrame`.
 Development:
 
 ```sh
-cd applications/luci-app-i-love-luci/src/shell
+cd applications/luci-app-i-love-luci/frontend/shell
 npm install
 npm run dev
 ```
@@ -345,7 +345,7 @@ The spike should use layered tests so most issues are caught before installing o
 
 ### Frontend Tests
 
-Run these in `applications/luci-app-i-love-luci/src/shell`:
+Run these in `applications/luci-app-i-love-luci/frontend/shell`:
 
 ```sh
 npm run lint

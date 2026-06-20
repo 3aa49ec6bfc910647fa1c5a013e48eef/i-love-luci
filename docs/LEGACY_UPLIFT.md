@@ -18,7 +18,7 @@ Audit sources used:
 
 - live router menu JSON from `/usr/share/luci/menu.d/*.json`
 - OpenWrt 25.12.4 SDK LuCI source under `build/sdk-ci/openwrt-sdk-25.12.4-*/feeds/luci/`
-- current app shell under `applications/luci-app-i-love-luci/src/shell/`
+- current app shell under `applications/luci-app-i-love-luci/frontend/shell/`
 
 Key upstream LuCI source paths:
 

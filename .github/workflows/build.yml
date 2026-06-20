@@ -64,7 +64,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: applications/luci-app-i-love-luci/src/shell/package-lock.json
+          cache-dependency-path: applications/luci-app-i-love-luci/frontend/shell/package-lock.json
 
       - name: Set package channel
         id: package-channel

@@ -83,14 +83,14 @@ applications/luci-app-i-love-luci/
   root/usr/share/luci/menu.d/luci-app-i-love-luci.json
   root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json
   root/usr/share/rpcd/ucode/i-love-luci.uc
-  src/shell/
+  frontend/shell/
   ucode/template/i-love-luci/app.ut
 ```
 
 ## Build Frontend
 
 ```sh
-cd applications/luci-app-i-love-luci/src/shell
+cd applications/luci-app-i-love-luci/frontend/shell
 npm ci
 npm run lint
 npm run typecheck

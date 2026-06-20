@@ -67,12 +67,12 @@ for package_spec in ${PACKAGE_SPECS}; do
 done
 
 for i in "${!package_names[@]}"; do
-	if [ -f "${package_dirs[$i]}/src/shell/package.json" ]; then
+	if [ -f "${package_dirs[$i]}/frontend/shell/package.json" ]; then
 		case "${BUILD_FRONTEND}" in
 			auto|1|true|yes)
 				echo "Building frontend assets for ${package_names[$i]}"
 				(
-					cd "${package_dirs[$i]}/src/shell"
+					cd "${package_dirs[$i]}/frontend/shell"
 					if [ -f package-lock.json ]; then
 						npm ci
 					else
