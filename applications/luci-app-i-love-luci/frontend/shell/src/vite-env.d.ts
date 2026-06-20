@@ -9,6 +9,9 @@ interface Window {
 		authUser?: string;
 		version?: string;
 		repositoryUrl?: string;
+		login?: boolean;
+		loginFailed?: boolean;
+		defaultUser?: string;
 	};
 	L?: {
 		env?: {

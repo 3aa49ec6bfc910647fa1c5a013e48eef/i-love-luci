@@ -4,7 +4,7 @@
 
 import { cursor } from 'uci';
 import { connect } from 'ubus';
-import { glob, open, stat } from 'fs';
+import { glob, open, popen, readfile, stat } from 'fs';
 
 const uci = cursor();
 const ubus = connect();
@@ -19,9 +19,20 @@ const hiddenNavigation = {
 const nativeRoutes = {
 	'/admin/status': { status: 'supported', nativePath: '/' },
 	'/admin/status/overview': { status: 'supported', nativePath: '/' },
+	'/admin/status/routes': { status: 'supported', nativePath: '/native/status-routes' },
+	'/admin/status/nftables': { status: 'supported', nativePath: '/native/firewall-status' },
+	'/admin/status/logs': { status: 'supported', nativePath: '/native/logs' },
+	'/admin/status/logs/syslog': { status: 'supported', nativePath: '/native/logs' },
+	'/admin/status/logs/dmesg': { status: 'supported', nativePath: '/native/logs' },
+	'/admin/status/processes': { status: 'supported', nativePath: '/native/processes' },
+	'/admin/status/realtime': { status: 'partial', nativePath: '/' },
+	'/admin/status/realtime/load': { status: 'supported', nativePath: '/' },
+	'/admin/status/realtime/bandwidth': { status: 'supported', nativePath: '/' },
+	'/admin/status/realtime/connections': { status: 'supported', nativePath: '/native/connections' },
 	'/admin/network': { status: 'partial', nativePath: '/core/network' },
 	'/admin/network/network': { status: 'partial', nativePath: '/core/network' },
 	'/admin/network/routes': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/diagnostics': { status: 'supported', nativePath: '/native/diagnostics' },
 	'/admin/network/dhcp': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/dns': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/firewall': { status: 'partial', nativePath: '/core/firewall' },
@@ -39,7 +50,34 @@ const nativeRoutes = {
 	'/admin/system/admin/sshkeys': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/leds': { status: 'partial', nativePath: '/core/system' }
+	'/admin/system/package-manager': { status: 'supported', nativePath: '/native/packages' },
+	'/admin/system/startup': { status: 'supported', nativePath: '/native/startup' },
+	'/admin/system/crontab': { status: 'supported', nativePath: '/native/crontab' },
+	'/admin/system/flash': { status: 'partial', nativePath: '/native/flash' },
+	'/admin/system/commands': { status: 'partial', nativePath: '/native/service/commands' },
+	'/admin/system/commands/dashboard': { status: 'partial', nativePath: '/native/service/commands' },
+	'/admin/system/commands/config': { status: 'partial', nativePath: '/native/service/commands' },
+	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
+	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
+	'/admin/system/leds': { status: 'partial', nativePath: '/core/system' },
+	'/admin/services': { status: 'partial', nativePath: '/native/services' },
+	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/allowlist': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/blocklist': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/feeds': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/setreport': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/firewall_log': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip' },
+	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast' },
+	'/admin/services/upnp': { status: 'partial', nativePath: '/native/service/upnpd' },
+	'/admin/services/uhttpd': { status: 'partial', nativePath: '/core/system' }
+};
+const servicePackages = {
+	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'] },
+	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'] },
+	commands: { package: 'luci-commands', init: null, title: 'Custom Commands', sections: ['command'] },
+	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'] }
 };
 const routeModes = {
 	auto: true,
@@ -282,13 +320,258 @@ function collect_uci_config(package_name, section_types) {
 		return sections;
 	}
 
-	for (let section_type in section_types) {
-		uci.foreach(package_name, section_type, function(section) {
+	if (length(section_types || [])) {
+		for (let section_type in section_types) {
+			uci.foreach(package_name, section_type, function(section) {
+				push(sections, clone_section(section));
+			});
+		}
+	}
+	else {
+		uci.foreach(package_name, function(section) {
 			push(sections, clone_section(section));
 		});
 	}
 
 	return sections;
+}
+
+function shell_output(command) {
+	let fd = popen(`${command} 2>&1`, 'r');
+
+	if (!fd)
+		return '';
+
+	let output = fd.read('all') || '';
+	fd.close();
+
+	return output;
+}
+
+function safe_read(path) {
+	try {
+		return readfile(path) || '';
+	}
+	catch (e) {
+		return '';
+	}
+}
+
+function command_exists(name) {
+	return system(`command -v ${name} >/dev/null 2>&1`) == 0;
+}
+
+function init_status(name) {
+	if (!name)
+		return null;
+
+	let script = `/etc/init.d/${name}`;
+
+	if (stat(script)?.type != 'file')
+		return null;
+
+	return {
+		name,
+		enabled: system(`${script} enabled >/dev/null 2>&1`) == 0,
+		running: system(`${script} running >/dev/null 2>&1`) == 0
+	};
+}
+
+function fast_service_state(name) {
+	if (!name)
+		return null;
+
+	let enabled = false;
+	let running = false;
+	let service_list = ubus.call('service', 'list', { name }) || {};
+
+	for (let path in glob('/etc/rc.d/S*')) {
+		let parts = split(path, '/');
+		let rc_name = replace(parts[length(parts) - 1], /^S[0-9]+/, '');
+
+		if (rc_name == name) {
+			enabled = true;
+			break;
+		}
+	}
+
+	for (let instance_name, instance in service_list[name]?.instances || {}) {
+		if (instance?.running) {
+			running = true;
+			break;
+		}
+	}
+
+	return {
+		name,
+		enabled,
+		running
+	};
+}
+
+function startup_entries() {
+	let entries = [];
+	let enabled = {};
+	let running = {};
+	let service_list = ubus.call('service', 'list') || {};
+
+	for (let path in glob('/etc/rc.d/S*')) {
+		let parts = split(path, '/');
+		let name = replace(parts[length(parts) - 1], /^S[0-9]+/, '');
+		enabled[name] = true;
+	}
+
+	for (let name, service in service_list) {
+		for (let instance_name, instance in service?.instances || {}) {
+			if (instance?.running) {
+				running[name] = true;
+				break;
+			}
+		}
+	}
+
+	for (let script in glob('/etc/init.d/*')) {
+		let parts = split(script, '/');
+		let name = parts[length(parts) - 1];
+
+		push(entries, {
+			name,
+			enabled: enabled[name] || false,
+			running: running[name] || false
+		});
+	}
+
+	sort(entries, function(a, b) {
+		return a.name > b.name ? 1 : -1;
+	});
+
+	return entries;
+}
+
+function service_overview() {
+	let services = [];
+
+	for (let id, meta in servicePackages) {
+		push(services, {
+			id,
+			title: meta.title,
+			package: meta.package,
+			init: fast_service_state(meta.init),
+			sections: collect_uci_config(meta.package, meta.sections || [])
+		});
+	}
+
+	return services;
+}
+
+function package_list() {
+	let output = command_exists('apk')
+		? shell_output('apk info -vv | sort | head -n 300')
+		: shell_output('opkg list-installed | sort | head -n 300');
+
+	return split(trim(output), '\n');
+}
+
+function service_detail(id) {
+	let meta = servicePackages[id] || null;
+
+	if (!meta)
+		return {
+			id,
+			title: id,
+			package: id,
+			init: null,
+			sections: [],
+			logs: {}
+		};
+
+	return {
+		id,
+		title: meta.title,
+		package: meta.package,
+		init: fast_service_state(meta.init),
+		sections: collect_uci_config(meta.package, meta.sections || []),
+		logs: {}
+	};
+}
+
+function native_page(page) {
+	const board = ubus.call('system', 'board') || {};
+	const system_info = ubus.call('system', 'info') || {};
+
+	let data = {
+		page,
+		board,
+		system: system_info,
+		commands: [],
+		sections: [],
+		services: [],
+		lines: [],
+		text: ''
+	};
+
+	if (page == 'status-routes') {
+		data.commands = [
+			{ title: 'IPv4 routes', output: shell_output('/sbin/ip -4 route show table all') },
+			{ title: 'IPv4 rules', output: shell_output('/sbin/ip -4 rule show') },
+			{ title: 'IPv4 neighbours', output: shell_output('/sbin/ip -4 neigh show') },
+			{ title: 'IPv6 routes', output: shell_output('/sbin/ip -6 route show table all') },
+			{ title: 'IPv6 rules', output: shell_output('/sbin/ip -6 rule show') },
+			{ title: 'IPv6 neighbours', output: shell_output('/sbin/ip -6 neigh show') }
+		];
+	}
+	else if (page == 'firewall-status') {
+		data.commands = [
+			{ title: 'nftables ruleset', output: shell_output('nft --terse list ruleset | head -n 500') }
+		];
+	}
+	else if (page == 'logs') {
+		data.commands = [
+			{ title: 'System log', output: shell_output('logread | tail -n 350') },
+			{ title: 'Kernel log', output: shell_output('dmesg | tail -n 350') }
+		];
+	}
+	else if (page == 'processes') {
+		data.commands = [
+			{ title: 'Processes', output: shell_output('ps w') }
+		];
+	}
+	else if (page == 'connections') {
+		data.commands = [
+			{ title: 'Active sockets', output: shell_output('ss -tunap | head -n 500') }
+		];
+	}
+	else if (page == 'diagnostics') {
+		data.commands = [
+			{ title: 'Routing table', output: shell_output('/sbin/ip route show') },
+			{ title: 'DNS servers', output: shell_output('cat /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null || cat /etc/resolv.conf') }
+		];
+	}
+	else if (page == 'packages') {
+		data.lines = package_list();
+	}
+	else if (page == 'startup') {
+		data.services = startup_entries();
+	}
+	else if (page == 'crontab') {
+		data.text = safe_read('/etc/crontabs/root');
+	}
+	else if (page == 'flash') {
+		data.commands = [
+			{ title: 'Mounted filesystems', output: shell_output('df -h') },
+			{ title: 'Flash partitions', output: shell_output('cat /proc/mtd 2>/dev/null || true') }
+		];
+	}
+	else if (page == 'reboot') {
+		data.commands = [
+			{ title: 'System uptime', output: shell_output('uptime') }
+		];
+	}
+	else if (page == 'services') {
+		data.services = service_overview();
+	}
+
+	return data;
 }
 
 function build_core_settings(page) {
@@ -468,6 +751,50 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(build_core_settings(request.args.page || 'network'));
+		}
+	},
+
+	native_page: {
+		args: {
+			page: ''
+		},
+		call: function(request) {
+			return respond(native_page(request.args.page || 'status-routes'));
+		}
+	},
+
+	service_detail: {
+		args: {
+			id: ''
+		},
+		call: function(request) {
+			return respond(service_detail(request.args.id || ''));
+		}
+	},
+
+	diagnostics_run: {
+		args: {
+			tool: '',
+			target: ''
+		},
+		call: function(request) {
+			let target = replace(request.args.target || '', /[^A-Za-z0-9_.:-]/g, '');
+			let tool = request.args.tool || 'ping';
+			let command = null;
+
+			if (!length(target))
+				return respond({ output: 'Target is required.' });
+
+			if (tool == 'ping')
+				command = `ping -c 4 ${target}`;
+			else if (tool == 'traceroute')
+				command = `traceroute ${target}`;
+			else if (tool == 'nslookup')
+				command = `nslookup ${target}`;
+
+			return respond({
+				output: command ? shell_output(command) : 'Unsupported diagnostic tool.'
+			});
 		}
 	},
 

@@ -519,6 +519,83 @@ Pull requests should pass:
 - OpenWrt package build for supported targets
 - optional Playwright mock-backend smoke test
 
+## Current Native Route Coverage
+
+Router test target: `172.16.172.1`, OpenWrt `25.12.4`, `rockchip/armv8`.
+
+Converted to native React/Vite surfaces:
+
+- `/admin/status` and `/admin/status/overview`: dashboard with bandwidth, CPU, memory, interfaces, and system facts.
+- `/admin/status/routes`: route tables, rules, and neighbour entries.
+- `/admin/status/nftables`: active nftables ruleset summary.
+- `/admin/status/logs`, `/admin/status/logs/syslog`, `/admin/status/logs/dmesg`: system and kernel logs.
+- `/admin/status/processes`: process list.
+- `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
+- `/admin/status/realtime/connections`: active sockets.
+- `/admin/network/network`, `/admin/network/routes`, `/admin/network/dhcp`, `/admin/network/dns`, `/admin/network/firewall` and firewall child routes: modern read-only UCI summaries, with live interface status where available.
+- `/admin/network/diagnostics`: ping, traceroute, DNS lookup, route table, and resolver view.
+- `/admin/system/system`, `/admin/system/admin`, SSH, uHTTPd, repo keys, and LED routes: modern read-only UCI summaries.
+- `/admin/system/package-manager`: installed package inventory.
+- `/admin/system/startup`: init script enabled/running state.
+- `/admin/system/crontab`: root crontab view.
+- `/admin/system/flash`: read-only filesystem and flash partition overview.
+- `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
+- `/admin/system/commands` and children: modern read-only UCI summary for custom commands.
+- `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
+- `/admin/services`: service overview.
+- `/admin/services/banip` and child routes: service status and UCI summary.
+- `/admin/services/adblock-fast`: service status and UCI summary.
+- `/admin/services/upnp`: service status and UCI summary.
+- `/admin/services/uhttpd`: covered by the core system/uHTTPd view.
+
+Validation on `172.16.172.1`:
+
+- `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `diagnostics`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
+- `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, and `commands`.
+- Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
+
+Remaining legacy or partial gaps:
+
+- Wireless-specific pages (`/admin/network/wireless`, `/admin/status/channel_analysis`, `/admin/status/realtime/wireless`) remain legacy. The current test router has no active wireless stack, so native validation would be weak.
+- Attended sysupgrade remains legacy. It needs careful firmware compatibility checks and rollback UX before native replacement.
+- Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
+- Package install/remove/update remains legacy. Current native package screen is inventory-only.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, and custom commands remain read-only UCI summaries. Native write forms should be added per service after pending-change/apply flow is complete.
+- Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
+
+## Login Conversion
+
+`sysauth.ut` is overridden by this package and now loads the same React/Vite bundle as the app shell in `login` mode. LuCI prefers the active theme login template, so the package also installs `themes/i-love-luci/sysauth.ut`; this is the path validated on the router. The login template exposes `data-iloveluci-login="true"` on `body` so the external bundle can detect login mode even if LuCI or browser policy prevents the inline configuration script from persisting.
+
+The React login form posts the standard LuCI fields:
+
+- `luci_username`
+- `luci_password`
+
+The server remains the source of truth for authentication. The React form does not create sessions client-side. Password focus is applied automatically when the username is already populated. Browser validation confirmed the React login renders, focuses the password field, submits to LuCI, and loads the app dashboard after authentication.
+
+## Console Access Strategy
+
+Current implementation:
+
+- `ttyd` is installed as a package dependency and configured by `90_luci-app-i-love-luci`.
+- The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
+- `console_status` reads the generated ttyd credential from UCI and the header opens the terminal URL with embedded basic-auth credentials.
+- This means the user does not need to manually provide credentials again.
+
+Security gap:
+
+- The ttyd helper credential is long-lived while stored in UCI, and embedding it in a URL can expose it in browser history or logs.
+
+Preferred future helper:
+
+- Bind ttyd to localhost or a private interface.
+- Add a small LuCI-session-protected websocket proxy or helper service that validates the LuCI session cookie and forwards to ttyd.
+- Issue short-lived one-time console tokens through `rpcd`; the browser opens `/cgi-bin/luci/admin/i-love-luci/console/<token>` without basic-auth credentials.
+- Rotate or expire tokens after first use and log console opens through syslog.
+
+Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be documented as a convenience bridge, not a hardened remote console.
+
 Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
 
 ## Initial Spike Deliverables

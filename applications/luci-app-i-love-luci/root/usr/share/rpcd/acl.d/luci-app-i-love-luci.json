@@ -7,6 +7,8 @@
 					"session_info",
 					"menu_tree",
 					"dashboard_status",
+					"native_page",
+					"service_detail",
 					"changes_list",
 					"console_status",
 					"auth_mfa_status"
@@ -22,6 +24,7 @@
 				"luci.iloveluci": [
 					"changes_apply",
 					"changes_revert",
+					"diagnostics_run",
 					"route_mode_set",
 					"auth_mfa_begin_setup",
 					"auth_mfa_verify_setup",

@@ -146,6 +146,40 @@ export type CoreSettings = {
 	system: ConfigSection[];
 };
 
+export type CommandBlock = {
+	title: string;
+	output: string;
+};
+
+export type ServiceState = {
+	name: string;
+	enabled: boolean;
+	running: boolean;
+};
+
+export type NativeService = {
+	id?: string;
+	name?: string;
+	title: string;
+	package?: string;
+	init?: ServiceState | null;
+	sections?: ConfigSection[];
+	logs?: Record<string, string>;
+	enabled?: boolean;
+	running?: boolean;
+};
+
+export type NativePageData = {
+	page: string;
+	board: BoardInfo;
+	system: SystemInfo;
+	commands: CommandBlock[];
+	sections: ConfigSection[];
+	services: NativeService[];
+	lines: string[];
+	text: string;
+};
+
 type BridgeResponse<T> = {
 	ok: boolean;
 	data: T;
@@ -293,5 +327,47 @@ export async function getCoreSettings(page: string): Promise<CoreSettings> {
 			firewall: [],
 			system: [],
 		};
+	}
+}
+
+export async function getNativePage(page: string): Promise<NativePageData> {
+	try {
+		return await callBridge<NativePageData>("native_page", { page });
+	}
+	catch {
+		return {
+			page,
+			board: {},
+			system: {},
+			commands: [],
+			sections: [],
+			services: [],
+			lines: [],
+			text: "",
+		};
+	}
+}
+
+export async function getServiceDetail(id: string): Promise<NativeService> {
+	try {
+		return await callBridge<NativeService>("service_detail", { id });
+	}
+	catch {
+		return {
+			id,
+			title: id,
+			sections: [],
+			logs: {},
+		};
+	}
+}
+
+export async function runDiagnostics(tool: string, target: string): Promise<string> {
+	try {
+		const data = await callBridge<{ output: string }>("diagnostics_run", { tool, target });
+		return data.output;
+	}
+	catch {
+		return "Diagnostic command failed.";
 	}
 }
