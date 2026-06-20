@@ -320,6 +320,8 @@ Required adapter behavior:
 - default unknown app routes to legacy compat instead of hiding or breaking them
 - keep native preview routes opt-in when full edit/apply behavior is incomplete
 - expose route audit output in a repeatable script so regressions are caught before release
+- regenerate route inventory after LuCI app install, upgrade, remove, and reinstall events so future app changes are reflected without a new I Love LuCI release
+- require every native I Love LuCI route to have a recorded LuCI source route/workflow, parity status, mobile status, write/apply status, and compat fallback decision before it can become the default renderer
 
 The target outcome is that I Love LuCI can evolve native screens without losing functionality from current or future LuCI apps installed from OpenWrt feeds.
 
@@ -334,6 +336,8 @@ Route audit must be treated as a release gate, not an optional validation step. 
 - partial native routes keep LuCI compat as their default until edit/save/apply parity is proven
 - newly installed LuCI apps appear automatically after menu/cache refresh and work through compat without a package-specific code change
 - future LuCI apps installed through standard OpenWrt package tooling are expected to work through the adapter/compat path without a new I Love LuCI release
+- current and future installed LuCI apps are tested through the same adapter contract: route discovery, ACL visibility, sidebar/search presence, direct route loading, child-route handling, query-string preservation, session recovery, and compat rendering
+- native route migrations are audited as product routes, not cosmetic replacements: each migrated screen must prove data parity, interaction parity, responsive layout, pending-change behavior where relevant, and a maintained fallback path
 
 ## Build Strategy
 
