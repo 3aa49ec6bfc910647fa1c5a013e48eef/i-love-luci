@@ -1,0 +1,177 @@
+name: Build OpenWrt packages
+
+on:
+  push:
+    branches:
+      - dev
+      - uat
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate-main-pr-source:
+    name: Validate main PR source
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+
+    steps:
+      - name: Require dev or uat source branch
+        run: |
+          case "${GITHUB_HEAD_REF}" in
+            dev|uat)
+              echo "Main PR source branch is ${GITHUB_HEAD_REF}"
+              ;;
+            *)
+              echo "Pull requests into main must come from dev or uat, got ${GITHUB_HEAD_REF}" >&2
+              exit 1
+              ;;
+          esac
+
+  build:
+    name: OpenWrt ${{ matrix.openwrt_version }} ${{ matrix.package_format }}
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - openwrt_version: 24.10.7
+            openwrt_target: rockchip/armv8
+            target_slug: rockchip-armv8
+            package_format: ipk
+          - openwrt_version: 25.12.4
+            openwrt_target: rockchip/armv8
+            target_slug: rockchip-armv8
+            package_format: apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set package channel
+        id: package-channel
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "release=1" >> "$GITHUB_OUTPUT"
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            echo "channel=test" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            curl \
+            file \
+            gawk \
+            gettext \
+            git \
+            libncurses5-dev \
+            libncursesw5-dev \
+            libssl-dev \
+            python3 \
+            python3-distutils \
+            rsync \
+            unzip \
+            wget \
+            zlib1g-dev \
+            zstd
+
+      - name: Cache OpenWrt SDK archive
+        uses: actions/cache@v5
+        with:
+          path: build/sdk-ci/*.tar.zst
+          key: openwrt-sdk-${{ matrix.openwrt_version }}-${{ matrix.target_slug }}
+
+      - name: Build package
+        env:
+          OPENWRT_VERSION: ${{ matrix.openwrt_version }}
+          OPENWRT_TARGET: ${{ matrix.openwrt_target }}
+          PACKAGE_FORMAT: ${{ matrix.package_format }}
+          PACKAGE_RELEASE: ${{ steps.package-channel.outputs.release }}
+          JOBS: 1
+        run: scripts/build-openwrt-package.sh
+
+      - name: Upload package feed artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: i-love-luci-${{ steps.package-channel.outputs.channel }}-${{ matrix.openwrt_version }}-${{ matrix.package_format }}
+          path: dist/openwrt/${{ matrix.openwrt_version }}/${{ matrix.target_slug }}/
+          if-no-files-found: error
+
+  publish-pages:
+    name: Publish package feed
+    runs-on: ubuntu-22.04
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Download package feed artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: page-artifacts
+          pattern: i-love-luci-stable-*
+
+      - name: Prepare public feed site
+        run: |
+          set -euo pipefail
+
+          mkdir -p public/openwrt/24.10.7/rockchip-armv8
+          mkdir -p public/openwrt/25.12.4/rockchip-armv8
+
+          rsync -a page-artifacts/i-love-luci-stable-24.10.7-ipk/ public/openwrt/24.10.7/rockchip-armv8/
+          rsync -a page-artifacts/i-love-luci-stable-25.12.4-apk/ public/openwrt/25.12.4/rockchip-armv8/
+
+          touch public/.nojekyll
+          cat > public/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>I Love LuCI package feed</title>
+          </head>
+          <body>
+            <h1>I Love LuCI package feed</h1>
+            <ul>
+              <li><a href="openwrt/24.10.7/rockchip-armv8/">OpenWrt 24.10.7 rockchip/armv8 opkg feed</a></li>
+              <li><a href="openwrt/25.12.4/rockchip-armv8/">OpenWrt 25.12.4 rockchip/armv8 apk feed</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
+          find public -type f -print | sort
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

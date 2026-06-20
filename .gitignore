@@ -1,0 +1,37 @@
+.env
+.env.*
+!.env.example
+
+# Local build and package output
+build/
+dist/
+bundle/
+bundles/
+bin/
+dl/
+feeds/
+build_dir/
+staging_dir/
+tmp/
+logs/
+openwrt-sdk-*/
+openwrt-sdk-*.tar.*
+openwrt-*/
+*.buildinfo
+*.manifest
+*.sha256sums
+*.ipk
+*.apk
+packages.adb
+Packages
+Packages.gz
+Packages.sig
+*.tar
+*.tar.gz
+*.zip
+.config
+.config.old
+key-build*
+
+# Local editor/system files
+.DS_Store
