@@ -10,6 +10,7 @@ import {
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
+	saveDropbearConfig,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -22,6 +23,7 @@ import {
 	type ConfigSection,
 	type CustomCommand,
 	type CustomCommandResult,
+	type DropbearConfigInput,
 	type InitAction,
 	type NativePageData,
 	type NativeService,
@@ -900,19 +902,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	if (service.id === "dropbear") {
 		const config = firstSection(sections, "dropbear");
 
-		return (
-			<SimpleValueTable
-				columns={["Setting", "Value"]}
-				empty="No Dropbear configuration found."
-				rows={[
-					["Enabled", enabledText(configValue(config, "enable"))],
-					["Port", configValue(config, "Port") || "22"],
-					["Password auth", configValue(config, "PasswordAuth") || "unknown"],
-					["Root password auth", configValue(config, "RootPasswordAuth") || "unknown"],
-				]}
-				title="SSH access"
-			/>
-		);
+		return <DropbearAccessPanel config={config} />;
 	}
 
 	if (service.id === "uhttpd") {
@@ -945,6 +935,129 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	return null;
+}
+
+function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) {
+	const initial = useMemo(() => dropbearFormValues(config), [config]);
+	const [values, setValues] = useState(initial);
+	const [savedValues, setSavedValues] = useState(initial);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function update<K extends keyof DropbearConfigInput>(key: K, value: DropbearConfigInput[K]) {
+		setValues((current) => ({ ...current, [key]: value }));
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveDropbearConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = dropbearFormValues(result.section ?? config);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel title="SSH access">
+			<div className="grid max-w-3xl gap-4">
+				<div className="grid gap-3 sm:grid-cols-2">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Enabled</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("enable", event.target.value)}
+							value={values.enable}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Port</span>
+						<Input
+							inputMode="numeric"
+							max={65535}
+							min={1}
+							onChange={(event) => update("Port", event.target.value)}
+							type="number"
+							value={values.Port}
+						/>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Password authentication</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("PasswordAuth", event.target.value)}
+							value={values.PasswordAuth}
+						>
+							<option value="on">enabled</option>
+							<option value="off">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Root password login</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("RootPasswordAuth", event.target.value)}
+							value={values.RootPasswordAuth}
+						>
+							<option value="on">enabled</option>
+							<option value="off">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Gateway ports</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("GatewayPorts", event.target.value)}
+							value={values.GatewayPorts}
+						>
+							<option value="off">disabled</option>
+							<option value="on">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm sm:col-span-2">
+						<span className="font-medium">Listen interface</span>
+						<Input
+							onChange={(event) => update("Interface", event.target.value)}
+							placeholder="All interfaces"
+							value={values.Interface}
+						/>
+					</label>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+		</Panel>
+	);
+}
+
+function dropbearFormValues(config: ConfigSection | undefined): DropbearConfigInput {
+	return {
+		enable: configValue(config, "enable") === "0" ? "0" : "1",
+		Port: configValue(config, "Port") || "22",
+		PasswordAuth: dropbearOnOff(configValue(config, "PasswordAuth") || "on"),
+		RootPasswordAuth: dropbearOnOff(configValue(config, "RootPasswordAuth") || "on"),
+		GatewayPorts: dropbearOnOff(configValue(config, "GatewayPorts") || "off"),
+		Interface: configValue(config, "Interface"),
+	};
+}
+
+function dropbearOnOff(value: string) {
+	return value === "0" || value === "false" || value === "off" || value === "no" ? "off" : "on";
 }
 
 function SimpleValueTable({

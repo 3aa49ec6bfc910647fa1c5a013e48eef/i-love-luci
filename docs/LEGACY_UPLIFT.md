@@ -124,7 +124,7 @@ To match default Overview fully, add:
 | `/admin/system/system` | System | view `system/system` | UCI `system`, UCI `luci`, timezones, `luci.getUnixtime`, `luci.setLocaltime`, `rc list/init sysntpd` | Settings page with tabs for identity, time, language/theme, NTP | P1 |
 | `/admin/system/admin` | Administration | firstchild | no page of its own | Parent route resolves to native router password form | Done |
 | `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Implemented native password form with strength/confirmation and success/error toast | Done |
-| `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native table/form for SSH listeners and interface binding | P2 |
+| `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native main-instance SSH editor implemented; add/remove instance parity remains | Partial |
 | `/admin/system/admin/sshkeys` | SSH-Keys | view `system/sshkeys` | `/etc/dropbear/authorized_keys` read/write | Key list with add/import/delete and fingerprint display | P2 |
 | `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native uHTTPd listener/TLS settings after config schema exists | P3 |
 | `/admin/system/admin/repokeys` | Repo Public Keys | view `system/repokeys` | `/etc/apk/keys/*`, `/etc/opkg/keys/*` read/write | Key manager with package-manager tie-in | P3 |
@@ -140,7 +140,7 @@ To match default Overview fully, add:
 System routes mix low-risk UCI forms and high-risk command flows. Modern migration should start with read/write UCI screens that have obvious rollback through normal LuCI apply:
 
 1. System settings
-2. Dropbear SSH
+2. Dropbear SSH multiple-instance parity
 
 Delay flash, mounts, and uHTTPd until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
 
@@ -381,7 +381,7 @@ Deliver:
 
 - system identity/time/theme/language/NTP
 - router password completed through a native `luci.setPassword` bridge
-- SSH access and SSH keys
+- SSH access main-instance editor and SSH keys completed; Dropbear add/remove instance parity remains
 - startup services and rc.local completed through native init actions and editor
 - crontab editor
 - reboot dialog

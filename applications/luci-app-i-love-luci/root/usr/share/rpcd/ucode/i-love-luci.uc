@@ -1107,6 +1107,83 @@ function save_rc_local(text) {
 	};
 }
 
+function on_off(value) {
+	value = '' + (value || '');
+	return (value == '1' || value == 'true' || value == 'on' || value == 'yes') ? 'on' : 'off';
+}
+
+function zero_one(value) {
+	value = '' + (value || '');
+	return (value == '1' || value == 'true' || value == 'on' || value == 'yes') ? '1' : '0';
+}
+
+function first_uci_section(package_name, section_type) {
+	let section = null;
+
+	uci.load(package_name);
+	uci.foreach(package_name, section_type, function(s) {
+		section ??= s['.name'];
+	});
+
+	return section;
+}
+
+function set_uci_option(package_name, section, option, value) {
+	if (value == null || value == '')
+		uci.delete(package_name, section, option);
+	else
+		uci.set(package_name, section, option, value);
+}
+
+function save_dropbear_config(config) {
+	config ||= {};
+
+	let section = first_uci_section('dropbear', 'dropbear') || uci.add('dropbear', 'dropbear');
+	let port = int(config.Port || config.port || 22);
+
+	if (port < 1 || port > 65535)
+		return {
+			saved: false,
+			message: 'SSH port must be between 1 and 65535.',
+			changed: false,
+			section: null
+		};
+
+	let next = {
+		enable: zero_one(config.enable),
+		Port: '' + port,
+		PasswordAuth: on_off(config.PasswordAuth),
+		RootPasswordAuth: on_off(config.RootPasswordAuth),
+		GatewayPorts: on_off(config.GatewayPorts) == 'on' ? 'on' : '',
+		Interface: trim('' + (config.Interface || ''))
+	};
+	let current = {};
+
+	for (let key, value in next)
+		current[key] = uci.get('dropbear', section, key) || '';
+
+	let changed = false;
+	for (let key, value in next)
+		if (current[key] != value)
+			changed = true;
+
+	if (changed) {
+		for (let key, value in next)
+			set_uci_option('dropbear', section, key, value);
+
+		uci.commit('dropbear');
+		system('/etc/init.d/dropbear reload >/dev/null 2>&1 || /etc/init.d/dropbear restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'SSH access saved and reloaded.' : 'SSH access already up to date.',
+		changed,
+		section: (collect_uci_config('dropbear', ['dropbear']) || [])[0] || null,
+		init: fast_service_state('dropbear')
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -1564,6 +1641,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_rc_local(request.args.text || ''));
+		}
+	},
+
+	dropbear_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			return respond(save_dropbear_config(request.args.config || {}));
 		}
 	},
 

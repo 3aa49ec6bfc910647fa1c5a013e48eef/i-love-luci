@@ -98,7 +98,7 @@ expected_services = {
 	"upnpd": {"sections": True},
 	"commands": {"customCommands": True},
 	"uhttpd": {"sections": True},
-	"dropbear": {"sections": True},
+	"dropbear": {"sections": True, "required_options": ["Port", "PasswordAuth", "RootPasswordAuth"]},
 }
 
 def json_after_marker(marker):
@@ -181,6 +181,15 @@ for service, rules in expected_services.items():
 
 	if rules.get("sections") and not data.get("sections"):
 		failures.append(f"{service}: expected UCI sections")
+
+	required_options = set(rules.get("required_options", []))
+	if required_options:
+		options = set()
+		for section in data.get("sections") or []:
+			options.update((section.get("values") or {}).keys())
+		for option in required_options:
+			if option not in options:
+				failures.append(f"{service}: expected UCI option {option!r}")
 
 	if rules.get("files") and not data.get("files"):
 		failures.append(f"{service}: expected service file summaries")

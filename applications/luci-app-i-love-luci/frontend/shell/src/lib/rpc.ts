@@ -274,6 +274,23 @@ export type NativeService = {
 	running?: boolean;
 };
 
+export type DropbearConfigInput = {
+	enable: string;
+	Port: string;
+	PasswordAuth: string;
+	RootPasswordAuth: string;
+	GatewayPorts: string;
+	Interface?: string;
+};
+
+export type DropbearConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	init: ServiceState | null;
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -554,6 +571,21 @@ export async function runStartupAction(name: string, action: InitAction): Promis
 			ok: false,
 			message: "Startup action failed.",
 			state: null,
+		};
+	}
+}
+
+export async function saveDropbearConfig(config: DropbearConfigInput): Promise<DropbearConfigResult> {
+	try {
+		return await callBridge<DropbearConfigResult>("dropbear_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "SSH access save failed.",
+			changed: false,
+			section: null,
+			init: null,
 		};
 	}
 }

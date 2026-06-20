@@ -29,6 +29,7 @@
 					"crontab_save",
 					"custom_command_run",
 					"diagnostics_run",
+					"dropbear_config_save",
 					"password_set",
 					"rc_local_save",
 					"service_action",
@@ -41,6 +42,7 @@
 				]
 			},
 			"uci": [
+				"dropbear",
 				"luci",
 				"i-love-luci"
 			]
