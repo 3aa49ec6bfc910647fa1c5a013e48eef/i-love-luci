@@ -24,6 +24,7 @@ export type MenuItem = {
 
 export type MenuTree = {
 	items: MenuItem[];
+	routes?: MenuItem[];
 	tree: MenuItem[];
 };
 
@@ -157,6 +158,7 @@ const fallbackMenu: MenuTree = {
 		{ title: "DHCP and DNS", path: "/admin/network/dhcp", legacy: true },
 		{ title: "Settings", path: "/settings", legacy: false },
 	],
+	routes: [],
 };
 
 const fallbackDashboard: DashboardStatus = {
@@ -165,7 +167,7 @@ const fallbackDashboard: DashboardStatus = {
 	devices: {},
 };
 
-async function callBridge<T>(method: string): Promise<T> {
+async function callBridge<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
 	const config = getShellConfig();
 
 	if (!config.sessionId) {
@@ -181,7 +183,7 @@ async function callBridge<T>(method: string): Promise<T> {
 			jsonrpc: "2.0",
 			id: method,
 			method: "call",
-			params: [config.sessionId, "luci.iloveluci", method, {}],
+			params: [config.sessionId, "luci.iloveluci", method, args],
 		}),
 	});
 
@@ -213,11 +215,22 @@ export async function getMenuTree(): Promise<MenuTree> {
 		const data = await callBridge<MenuTree>("menu_tree");
 		return {
 			items: data.items ?? [],
+			routes: data.routes ?? data.items ?? [],
 			tree: data.tree ?? data.items ?? [],
 		};
 	}
 	catch {
 		return fallbackMenu;
+	}
+}
+
+export async function setRouteMode(path: string, mode: NonNullable<MenuItem["configuredMode"]>): Promise<boolean> {
+	try {
+		const data = await callBridge<{ saved: boolean }>("route_mode_set", { path, mode });
+		return data.saved;
+	}
+	catch {
+		return false;
 	}
 }
 

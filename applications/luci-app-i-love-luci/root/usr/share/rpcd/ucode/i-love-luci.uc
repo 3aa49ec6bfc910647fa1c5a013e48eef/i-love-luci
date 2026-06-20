@@ -19,6 +19,12 @@ const hiddenNavigation = {
 const nativeRoutes = {
 	'/admin/status/overview': 'supported'
 };
+const routeModes = {
+	auto: true,
+	modern: true,
+	legacy: true,
+	hidden: true
+};
 
 function respond(data) {
 	return {
@@ -200,8 +206,34 @@ function build_menu_tree(items) {
 	return roots;
 }
 
+function load_route_modes() {
+	let modes = {};
+
+	uci.load('i-love-luci');
+	uci.foreach('i-love-luci', 'route', function(s) {
+		if (s.path && routeModes[s.mode])
+			modes[s.path] = s.mode;
+	});
+
+	return modes;
+}
+
+function effective_mode(configuredMode, nativeStatus) {
+	if (configuredMode == 'hidden')
+		return 'hidden';
+
+	if (configuredMode == 'legacy')
+		return 'legacy';
+
+	if (configuredMode == 'modern')
+		return nativeStatus == 'supported' ? 'modern' : 'legacy';
+
+	return nativeStatus == 'supported' ? 'modern' : 'legacy';
+}
+
 function build_menu() {
 	let raw = {};
+	let modes = load_route_modes();
 
 	for (let file in glob(menuRoot)) {
 		let data = read_jsonfile(file, {});
@@ -221,7 +253,8 @@ function build_menu() {
 		let action = action_type(spec);
 		let parts = split(trim(path, '/'), '/');
 		let nativeStatus = nativeRoutes[path] || 'unsupported';
-		let mode = nativeStatus == 'supported' ? 'modern' : 'legacy';
+		let configuredMode = modes[path] || 'auto';
+		let mode = effective_mode(configuredMode, nativeStatus);
 		let entry = {
 			id: route_id(path),
 			title: spec.title || basename_path(path),
@@ -237,9 +270,9 @@ function build_menu() {
 			eligible: depends_satisfied(spec.depends),
 			hidden: is_hidden_path(path) || spec.title == null,
 			hasChildren: false,
-			legacy: nativeStatus != 'supported',
+			legacy: mode != 'modern',
 			nativeStatus,
-			configuredMode: 'auto',
+			configuredMode,
 			effectiveMode: mode,
 			nativePath: nativeStatus == 'supported' ? '/' : null,
 			resolvedPath: path
@@ -262,7 +295,8 @@ function build_menu() {
 		if (entry.actionType == 'firstchild' && !entry.firstChildPath)
 			entry.hidden = true;
 
-	let visible = filter(entries, entry => entry.eligible && !entry.hidden && (entry.title != null));
+	let routes = filter(entries, entry => entry.eligible && !entry.hidden && (entry.title != null));
+	let visible = filter(routes, entry => entry.effectiveMode != 'hidden');
 
 	sort(visible, function(a, b) {
 		return a.depth == b.depth ? (a.order == b.order ? (a.title > b.title ? 1 : -1) : a.order - b.order) : a.depth - b.depth;
@@ -270,8 +304,32 @@ function build_menu() {
 
 	return {
 		items: visible,
+		routes,
 		tree: build_menu_tree(visible)
 	};
+}
+
+function set_route_mode(path, mode) {
+	if (!routeModes[mode])
+		return false;
+
+	uci.load('i-love-luci');
+
+	let section = null;
+
+	uci.foreach('i-love-luci', 'route', function(s) {
+		if (s.path == path)
+			section ??= s['.name'];
+	});
+
+	if (!section)
+		section = uci.add('i-love-luci', 'route');
+
+	uci.set('i-love-luci', section, 'path', path);
+	uci.set('i-love-luci', section, 'mode', mode);
+	uci.commit('i-love-luci');
+
+	return true;
 }
 
 const methods = {
@@ -291,6 +349,23 @@ const methods = {
 	menu_tree: {
 		call: function() {
 			return respond(build_menu());
+		}
+	},
+
+	route_mode_set: {
+		args: {
+			path: '',
+			mode: 'auto'
+		},
+		call: function(request) {
+			const path = normalize_path(request.args.path);
+			const mode = request.args.mode || 'auto';
+
+			return respond({
+				saved: set_route_mode(path, mode),
+				path,
+				mode
+			});
 		}
 	},
 

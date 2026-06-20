@@ -13,7 +13,8 @@
 				]
 			},
 			"uci": [
-				"luci"
+				"luci",
+				"i-love-luci"
 			]
 		},
 		"write": {
@@ -21,13 +22,15 @@
 				"luci.iloveluci": [
 					"changes_apply",
 					"changes_revert",
+					"route_mode_set",
 					"auth_mfa_begin_setup",
 					"auth_mfa_verify_setup",
 					"auth_mfa_verify_login"
 				]
 			},
 			"uci": [
-				"luci"
+				"luci",
+				"i-love-luci"
 			]
 		}
 	}
