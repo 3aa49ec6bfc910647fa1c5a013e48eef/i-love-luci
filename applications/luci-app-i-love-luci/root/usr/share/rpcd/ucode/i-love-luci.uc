@@ -2558,6 +2558,178 @@ function save_firewall_redirects(rows) {
 	};
 }
 
+function firewall_include_file_allowed(path) {
+	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
+
+	if (path == '/etc/firewall.user')
+		return true;
+
+	let prefix = '/etc/nftables.d/';
+
+	if (substr(path, 0, length(prefix)) != prefix)
+		return false;
+
+	let name = substr(path, length(prefix));
+
+	if (length(name) < 5 || index(name, '/') >= 0 || index(name, '..') >= 0)
+		return false;
+
+	if (substr(name, length(name) - 4) != '.nft')
+		return false;
+
+	return replace(name, /[^A-Za-z0-9_.-]/g, '') == name;
+}
+
+function firewall_include_rows() {
+	let includes = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return includes;
+	}
+
+	uci.foreach('firewall', 'include', function(section) {
+		let path = section.path || '';
+
+		push(includes, {
+			section: section['.name'] || '',
+			path,
+			type: section.type || '',
+			enabled: section.enabled == '0' ? '0' : '1',
+			reload: section.reload == '1' ? '1' : '0',
+			editable: firewall_include_file_allowed(path)
+		});
+	});
+
+	return includes;
+}
+
+function firewall_include_type(value) {
+	value = dhcp_clean_value(value || 'nftables');
+
+	if (value == '' || value == 'nftables' || value == 'script')
+		return value || 'nftables';
+
+	return null;
+}
+
+function save_firewall_includes(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let editable_existing = {};
+	let paths = {};
+
+	uci.foreach('firewall', 'include', function(section) {
+		let name = section['.name'] || '';
+
+		if (firewall_include_file_allowed(section.path || ''))
+			editable_existing[name] = true;
+	});
+
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'include' && editable_existing[section];
+		let path = replace(trim('' + (row?.path || '')), /[\r\n]/g, '');
+		let include_type = firewall_include_type(row?.type || 'nftables');
+		let enabled = dhcp_zero_one(row?.enabled);
+		let reload = dhcp_zero_one(row?.reload);
+
+		if (!firewall_include_file_allowed(path))
+			return {
+				saved: false,
+				message: 'Firewall include path must be /etc/nftables.d/*.nft or existing /etc/firewall.user.',
+				changed: false,
+				includes: firewall_include_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (include_type == null)
+			return {
+				saved: false,
+				message: 'Firewall include type must be nftables or script.',
+				changed: false,
+				includes: firewall_include_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (paths[path])
+			return {
+				saved: false,
+				message: 'Firewall include paths must be unique.',
+				changed: false,
+				includes: firewall_include_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		paths[path] = true;
+		push(validated, { section, is_existing, path, type: include_type, enabled, reload });
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'include');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = {
+			path: item.path,
+			type: item.type,
+			enabled: item.enabled,
+			reload: item.reload
+		};
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if (key == 'enabled' && value == '1' && current == '')
+				continue;
+
+			if (key == 'reload' && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+
+				if ((key == 'enabled' && value == '1') || (key == 'reload' && value == '0') || value == '')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+	}
+
+	for (let section in editable_existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall includes saved and firewall reloaded.' : 'Firewall includes already up to date.',
+		changed,
+		includes: firewall_include_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function firewall_file_allowed(path) {
 	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
 
@@ -5166,6 +5338,26 @@ const methods = {
 					message: 'Firewall rules save failed: ' + e,
 					changed: false,
 					rules: firewall_rule_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_includes_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_includes(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall includes save failed: ' + e,
+					changed: false,
+					includes: firewall_include_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}

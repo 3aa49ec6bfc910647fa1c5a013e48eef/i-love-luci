@@ -776,6 +776,23 @@ export type FirewallRedirectsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallInclude = {
+	section: string;
+	path: string;
+	type: string;
+	enabled: string;
+	reload: string;
+	editable?: boolean;
+};
+
+export type FirewallIncludesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	includes: FirewallInclude[];
+	sections: ConfigSection[];
+};
+
 export type FirewallFileResult = {
 	saved: boolean;
 	message: string;
@@ -1424,6 +1441,21 @@ export async function saveFirewallRedirects(rows: FirewallRedirect[]): Promise<F
 			message: "Firewall redirects save failed.",
 			changed: false,
 			redirects: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallIncludes(rows: FirewallInclude[]): Promise<FirewallIncludesResult> {
+	try {
+		return await callBridge<FirewallIncludesResult>("firewall_includes_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall includes save failed.",
+			changed: false,
+			includes: [],
 			sections: [],
 		};
 	}

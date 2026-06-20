@@ -56,6 +56,8 @@ echo '---ILOVELUCI-REBOOT-REJECT---'
 ubus call luci.iloveluci reboot_confirm \"{\\\"confirm\\\":\\\"__audit_do_not_reboot__\\\"}\"
 echo '---ILOVELUCI-CONFIG-BACKUP-DRY-RUN---'
 ubus call luci.iloveluci config_backup_create \"{\\\"dry_run\\\":true}\"
+echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
+ubus call luci.iloveluci firewall_includes_save
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-RELEASE---'
@@ -319,6 +321,14 @@ elif backup_dry_run.get("data", {}).get("ok") is not True:
 	failures.append("config_backup_create dry-run did not report helper availability")
 elif backup_dry_run.get("data", {}).get("data"):
 	failures.append("config_backup_create dry-run returned backup data")
+
+firewall_include_reject = json_after_marker("---ILOVELUCI-FIREWALL-INCLUDE-NOOP---")
+if not firewall_include_reject or not firewall_include_reject.get("ok"):
+	failures.append("firewall_includes_save empty no-op check did not return ok")
+elif firewall_include_reject.get("data", {}).get("saved") is not True:
+	failures.append("firewall_includes_save empty no-op did not save cleanly")
+elif firewall_include_reject.get("data", {}).get("changed") is not False:
+	failures.append("firewall_includes_save empty no-op reported changes")
 
 package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
 if not package_search or not package_search.get("ok"):

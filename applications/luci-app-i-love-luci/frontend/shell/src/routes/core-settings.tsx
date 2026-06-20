@@ -12,6 +12,7 @@ import {
 	saveFirewallDefaults,
 	saveFirewallFile,
 	saveFirewallForwardings,
+	saveFirewallIncludes,
 	saveFirewallRedirects,
 	saveFirewallRules,
 	saveFirewallZones,
@@ -35,6 +36,7 @@ import {
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
+	type FirewallInclude,
 	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
@@ -1008,6 +1010,7 @@ function FirewallSummary({
 	const forwardings = settings.firewall.filter((section) => section.type === "forwarding");
 	const rules = settings.firewall.filter((section) => section.type === "rule");
 	const redirects = settings.firewall.filter((section) => section.type === "redirect");
+	const includes = settings.firewall.filter((section) => section.type === "include");
 	const firstDefaults = defaults[0] ?? null;
 
 	return (
@@ -1080,9 +1083,180 @@ function FirewallSummary({
 				redirects={redirects}
 			/>
 
+			<FirewallIncludeEditor
+				includes={includes}
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
+			/>
+
 			<FirewallFilesEditor files={settings.firewallFiles ?? []} />
 		</div>
 	);
+}
+
+function FirewallIncludeEditor({
+	includes,
+	onSaved,
+}: {
+	includes: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const initial = useMemo(() => includes.map(firewallIncludeValues).filter((row) => row.editable), [includes]);
+	const readonly = useMemo(() => includes.map(firewallIncludeValues).filter((row) => !row.editable), [includes]);
+	const [rows, setRows] = useState(initial);
+	const [savedRows, setSavedRows] = useState(initial);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				path: "/etc/nftables.d/10-custom-filter-chains.nft",
+				type: "nftables",
+				enabled: "1",
+				reload: "0",
+				editable: true,
+			},
+		]);
+	}
+
+	function updateRow(index: number, key: keyof FirewallInclude, value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)));
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveFirewallIncludes(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.includes.filter((row) => row.editable);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+		toast.success(result.message);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<div>
+					<h2 className="text-base font-semibold">Firewall include sections</h2>
+					<p className="text-xs text-muted-foreground">Manage UCI include entries for whitelisted nftables files.</p>
+				</div>
+				<Button onClick={addRow} size="sm" type="button" variant="outline">
+					<Plus className="size-4" />
+					Add include
+				</Button>
+			</div>
+			<div className="overflow-x-auto rounded-md border bg-card">
+				<table className="w-full min-w-[56rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Path</th>
+							<th className="px-3 py-2 font-medium">Type</th>
+							<th className="px-3 py-2 font-medium">Enabled</th>
+							<th className="px-3 py-2 font-medium">Reload</th>
+							<th className="px-3 py-2 font-medium text-right">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{rows.length ? (
+							rows.map((row, index) => (
+								<tr className="border-b align-top last:border-0" key={`${row.section}.${index}`}>
+									<td className="px-3 py-3">
+										<Input onChange={(event) => updateRow(index, "path", event.target.value)} value={row.path} />
+									</td>
+									<td className="px-3 py-3">
+										<select className="h-9 w-full rounded-md border bg-background px-2 text-sm" onChange={(event) => updateRow(index, "type", event.target.value)} value={row.type || "nftables"}>
+											<option value="nftables">nftables</option>
+											<option value="script">script</option>
+										</select>
+									</td>
+									<td className="px-3 py-3">
+										<select className="h-9 w-full rounded-md border bg-background px-2 text-sm" onChange={(event) => updateRow(index, "enabled", event.target.value)} value={row.enabled}>
+											<option value="1">enabled</option>
+											<option value="0">disabled</option>
+										</select>
+									</td>
+									<td className="px-3 py-3">
+										<select className="h-9 w-full rounded-md border bg-background px-2 text-sm" onChange={(event) => updateRow(index, "reload", event.target.value)} value={row.reload}>
+											<option value="0">no</option>
+											<option value="1">yes</option>
+										</select>
+									</td>
+									<td className="px-3 py-3 text-right">
+										<Button onClick={() => removeRow(index)} size="icon" type="button" variant="ghost">
+											<Trash2 className="size-4" />
+										</Button>
+									</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+									No managed firewall include sections configured.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+			{readonly.length ? (
+				<div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+					{readonly.length} non-whitelisted include sections are preserved in LuCI compat.
+				</div>
+			) : null}
+			<div className="flex justify-end gap-2">
+				<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+					Cancel
+				</Button>
+				<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+					Save
+				</Button>
+			</div>
+		</section>
+	);
+}
+
+function firewallIncludeValues(section: ConfigSection): FirewallInclude {
+	const path = rawValue(section.values.path);
+
+	return {
+		section: section.name,
+		path,
+		type: rawValue(section.values.type || "nftables"),
+		enabled: rawValue(section.values.enabled || "1") === "0" ? "0" : "1",
+		reload: rawValue(section.values.reload || "0") === "1" ? "1" : "0",
+		editable: firewallIncludePathAllowed(path),
+	};
+}
+
+function firewallIncludePathAllowed(path: string) {
+	if (path === "/etc/firewall.user") {
+		return true;
+	}
+
+	if (!path.startsWith("/etc/nftables.d/") || !path.endsWith(".nft")) {
+		return false;
+	}
+
+	const name = path.slice("/etc/nftables.d/".length);
+	return Boolean(name) && !name.includes("/") && !name.includes("..") && /^[A-Za-z0-9_.-]+$/.test(name);
 }
 
 function FirewallFilesEditor({ files }: { files: ServiceFile[] }) {

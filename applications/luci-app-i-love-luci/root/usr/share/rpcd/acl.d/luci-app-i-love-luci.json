@@ -43,6 +43,7 @@
 					"firewall_defaults_save",
 					"firewall_file_save",
 					"firewall_forwardings_save",
+					"firewall_includes_save",
 					"firewall_redirects_save",
 					"firewall_rules_save",
 					"firewall_zones_save",
