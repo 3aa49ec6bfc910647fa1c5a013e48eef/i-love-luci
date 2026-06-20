@@ -1492,18 +1492,12 @@ function save_network_routes(rows) {
 		});
 	}
 
+	let validated = [];
+
 	for (let row in rows) {
 		let family = row?.family == 'route6' ? 'route6' : 'route';
 		let section = dhcp_clean_value(row?.section || '');
 		let is_existing = length(section) && uci.get('network', section) == family;
-
-		if (!is_existing) {
-			section = uci.add('network', family);
-			changed = true;
-		}
-
-		keep[section] = true;
-
 		let next = {
 			interface: dhcp_clean_value(row?.interface || ''),
 			target: dhcp_clean_value(row?.target || ''),
@@ -1544,6 +1538,26 @@ function save_network_routes(rows) {
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
 		}
+
+		push(validated, {
+			section,
+			family,
+			is_existing,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('network', item.family);
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('network', section, key) || '';
@@ -1632,18 +1646,12 @@ function save_network_rules(rows) {
 		});
 	}
 
+	let validated = [];
+
 	for (let row in rows) {
 		let family = row?.family == 'rule6' ? 'rule6' : 'rule';
 		let section = dhcp_clean_value(row?.section || '');
 		let is_existing = length(section) && uci.get('network', section) == family;
-
-		if (!is_existing) {
-			section = uci.add('network', family);
-			changed = true;
-		}
-
-		keep[section] = true;
-
 		let next = {
 			in: dhcp_clean_value(row?.in || ''),
 			out: dhcp_clean_value(row?.out || ''),
@@ -1685,6 +1693,26 @@ function save_network_rules(rows) {
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
 		}
+
+		push(validated, {
+			section,
+			family,
+			is_existing,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('network', item.family);
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('network', section, key) || '';
