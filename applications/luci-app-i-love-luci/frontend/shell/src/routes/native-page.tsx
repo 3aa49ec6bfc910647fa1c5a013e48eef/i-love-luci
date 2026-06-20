@@ -13,6 +13,7 @@ import {
 	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
+	saveUpnpdConfig,
 	saveUhttpdConfig,
 	runServiceAction,
 	runStartupAction,
@@ -33,6 +34,8 @@ import {
 	type NativeService,
 	type PackageSearchResult,
 	type ServiceFile,
+	type UpnpdConfigInput,
+	type UpnpdRule,
 	type UhttpdConfigInput,
 } from "@/lib/rpc";
 
@@ -1028,18 +1031,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="Interface" value={configValue(config, "internal_iface") || "unknown"} />
 					<MetricBlock label="Permission rules" value={rules.length} />
 				</div>
-				<SimpleValueTable
-					columns={["Rule", "Action", "External ports", "Internal address", "Internal ports"]}
-					empty="No UPnP permission rules configured."
-					rows={rules.map((rule) => [
-						configValue(rule, "comment") || rule.name,
-						configValue(rule, "action") || "unknown",
-						configValue(rule, "ext_ports") || "none",
-						configValue(rule, "int_addr") || "none",
-						configValue(rule, "int_ports") || "none",
-					])}
-					title="UPnP permission rules"
-				/>
+				<UpnpdAccessPanel config={config} rules={rules} />
 			</div>
 		);
 	}
@@ -1067,6 +1059,188 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	return null;
+}
+
+function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined; rules: ConfigSection[] }) {
+	const initialConfig = useMemo(() => upnpdConfigValues(config), [config]);
+	const initialRules = useMemo(() => rules.map(upnpdRuleValues), [rules]);
+	const [values, setValues] = useState(initialConfig);
+	const [savedValues, setSavedValues] = useState(initialConfig);
+	const [ruleRows, setRuleRows] = useState(initialRules);
+	const [savedRuleRows, setSavedRuleRows] = useState(initialRules);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues) || JSON.stringify(ruleRows) !== JSON.stringify(savedRuleRows);
+
+	function update<K extends keyof UpnpdConfigInput>(key: K, value: UpnpdConfigInput[K]) {
+		setValues((current) => ({ ...current, [key]: value }));
+	}
+
+	function updateRule(index: number, field: keyof UpnpdRule, value: string) {
+		setRuleRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRule() {
+		setRuleRows((current) => [
+			...current,
+			{
+				section: "",
+				action: "allow",
+				ext_ports: "1024-65535",
+				int_addr: "0.0.0.0/0",
+				int_ports: "1024-65535",
+				comment: "",
+			},
+		]);
+	}
+
+	function removeRule(index: number) {
+		setRuleRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	function reset() {
+		setValues(savedValues);
+		setRuleRows(savedRuleRows);
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveUpnpdConfig(values, ruleRows.map(normalizeUpnpdRule));
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = upnpdConfigValues(result.config ?? config);
+		const nextRules = result.rules.map(normalizeUpnpdRule);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		setRuleRows(nextRules);
+		setSavedRuleRows(nextRules);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel title="UPnP settings">
+			<div className="grid gap-5">
+				<div className="grid gap-3 md:grid-cols-3">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Enabled</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("enabled", event.target.value)}
+							value={values.enabled}
+						>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Internal interface</span>
+						<Input onChange={(event) => update("internal_iface", event.target.value)} value={values.internal_iface} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Port</span>
+						<Input inputMode="numeric" onChange={(event) => update("port", event.target.value)} value={values.port} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Download kbit/s</span>
+						<Input inputMode="numeric" onChange={(event) => update("download", event.target.value)} value={values.download} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Upload kbit/s</span>
+						<Input inputMode="numeric" onChange={(event) => update("upload", event.target.value)} value={values.upload} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">IGDv1 compatibility</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("igdv1", event.target.value)}
+							value={values.igdv1}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+				</div>
+
+				<div className="grid gap-3">
+					<div className="flex items-center justify-between gap-3">
+						<h3 className="text-sm font-medium">Permission rules</h3>
+						<Button onClick={addRule} size="sm" type="button" variant="outline">
+							<Plus className="mr-1.5 size-3.5" />
+							Add rule
+						</Button>
+					</div>
+					<div className="overflow-x-auto rounded-md border">
+						<table className="w-full min-w-[46rem] text-left text-sm">
+							<thead className="border-b bg-muted/30 text-xs uppercase text-muted-foreground">
+								<tr>
+									<th className="px-3 py-2 font-medium">Action</th>
+									<th className="px-3 py-2 font-medium">External ports</th>
+									<th className="px-3 py-2 font-medium">Internal address</th>
+									<th className="px-3 py-2 font-medium">Internal ports</th>
+									<th className="px-3 py-2 font-medium">Comment</th>
+									<th className="w-12 px-3 py-2" />
+								</tr>
+							</thead>
+							<tbody>
+								{ruleRows.length ? (
+									ruleRows.map((rule, index) => (
+										<tr className="border-b last:border-0" key={`${rule.section || "new"}.${index}`}>
+											<td className="px-3 py-2">
+												<select
+													className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+													onChange={(event) => updateRule(index, "action", event.target.value)}
+													value={rule.action}
+												>
+													<option value="allow">allow</option>
+													<option value="deny">deny</option>
+												</select>
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateRule(index, "ext_ports", event.target.value)} value={rule.ext_ports} />
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateRule(index, "int_addr", event.target.value)} value={rule.int_addr} />
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateRule(index, "int_ports", event.target.value)} value={rule.int_ports} />
+											</td>
+											<td className="px-3 py-2">
+												<Input onChange={(event) => updateRule(index, "comment", event.target.value)} value={rule.comment} />
+											</td>
+											<td className="px-3 py-2 text-right">
+												<Button aria-label="Remove rule" onClick={() => removeRule(index)} size="icon" type="button" variant="ghost">
+													<Trash2 className="size-4" />
+												</Button>
+											</td>
+										</tr>
+									))
+								) : (
+									<tr>
+										<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+											No UPnP permission rules configured.
+										</td>
+									</tr>
+								)}
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={reset} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+		</Panel>
+	);
 }
 
 function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) {
@@ -1353,6 +1527,39 @@ function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput 
 		http_keepalive: configValue(config, "http_keepalive"),
 		tcp_keepalive: configValue(config, "tcp_keepalive") === "0" ? "0" : "1",
 		ubus_prefix: configValue(config, "ubus_prefix"),
+	};
+}
+
+function upnpdConfigValues(config: ConfigSection | undefined): UpnpdConfigInput {
+	return {
+		enabled: configValue(config, "enabled") === "1" ? "1" : "0",
+		download: configValue(config, "download") || "1024",
+		upload: configValue(config, "upload") || "512",
+		internal_iface: configValue(config, "internal_iface") || "lan",
+		port: configValue(config, "port") || "5000",
+		igdv1: configValue(config, "igdv1") === "0" ? "0" : "1",
+	};
+}
+
+function upnpdRuleValues(rule: ConfigSection): UpnpdRule {
+	return normalizeUpnpdRule({
+		section: rule.name,
+		action: configValue(rule, "action") || "allow",
+		ext_ports: configValue(rule, "ext_ports"),
+		int_addr: configValue(rule, "int_addr"),
+		int_ports: configValue(rule, "int_ports"),
+		comment: configValue(rule, "comment"),
+	});
+}
+
+function normalizeUpnpdRule(rule: UpnpdRule): UpnpdRule {
+	return {
+		section: rule.section || "",
+		action: rule.action === "deny" ? "deny" : "allow",
+		ext_ports: rule.ext_ports || "",
+		int_addr: rule.int_addr || "",
+		int_ports: rule.int_ports || "",
+		comment: rule.comment || "",
 	};
 }
 

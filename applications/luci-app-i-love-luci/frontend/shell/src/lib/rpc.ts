@@ -388,6 +388,33 @@ export type UhttpdConfigResult = {
 	init: ServiceState | null;
 };
 
+export type UpnpdConfigInput = {
+	enabled: string;
+	download: string;
+	upload: string;
+	internal_iface: string;
+	port: string;
+	igdv1: string;
+};
+
+export type UpnpdRule = {
+	section: string;
+	action: string;
+	ext_ports: string;
+	int_addr: string;
+	int_ports: string;
+	comment: string;
+};
+
+export type UpnpdConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	config: ConfigSection | null;
+	rules: UpnpdRule[];
+	sections: ConfigSection[];
+};
+
 export type UhttpdCertDefaultsInput = {
 	section: string;
 	days: string;
@@ -958,6 +985,22 @@ export async function saveUhttpdConfig(config: UhttpdConfigInput): Promise<Uhttp
 			changed: false,
 			section: null,
 			init: null,
+		};
+	}
+}
+
+export async function saveUpnpdConfig(config: UpnpdConfigInput, rules: UpnpdRule[]): Promise<UpnpdConfigResult> {
+	try {
+		return await callBridge<UpnpdConfigResult>("upnpd_config_save", { config, rules });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "UPnP settings save failed.",
+			changed: false,
+			config: null,
+			rules: [],
+			sections: [],
 		};
 	}
 }

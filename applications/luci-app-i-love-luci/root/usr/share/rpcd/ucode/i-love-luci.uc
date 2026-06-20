@@ -3615,6 +3615,174 @@ function save_uhttpd_cert_defaults(config) {
 	};
 }
 
+function upnpd_rule_rows() {
+	let rows = [];
+
+	try {
+		uci.load('upnpd');
+	}
+	catch (e) {
+		return rows;
+	}
+
+	uci.foreach('upnpd', 'perm_rule', function(section) {
+		push(rows, {
+			section: section['.name'] || '',
+			action: section.action || 'allow',
+			ext_ports: section.ext_ports || '',
+			int_addr: section.int_addr || '',
+			int_ports: section.int_ports || '',
+			comment: section.comment || ''
+		});
+	});
+
+	return rows;
+}
+
+function save_upnpd_config(config, rows) {
+	config ||= {};
+	rows ||= [];
+	uci.load('upnpd');
+
+	let config_section = first_uci_section('upnpd', 'upnpd') || uci.add('upnpd', 'upnpd');
+	let next_config = {
+		enabled: zero_one(config.enabled),
+		download: clean_uci_value(config.download || ''),
+		upload: clean_uci_value(config.upload || ''),
+		internal_iface: clean_uci_value(config.internal_iface || ''),
+		port: clean_uci_value(config.port || ''),
+		igdv1: zero_one(config.igdv1)
+	};
+
+	if (!valid_numeric_value(next_config.download) || !valid_numeric_value(next_config.upload) || !valid_numeric_value(next_config.port))
+		return {
+			saved: false,
+			message: 'UPnP bandwidth and port values must be numeric.',
+			changed: false,
+			config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+			rules: upnpd_rule_rows(),
+			sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+		};
+
+	if (!length(next_config.internal_iface) || replace(next_config.internal_iface, /[^A-Za-z0-9_.:-]/g, '') != next_config.internal_iface)
+		return {
+			saved: false,
+			message: 'UPnP internal interface is required.',
+			changed: false,
+			config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+			rules: upnpd_rule_rows(),
+			sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+		};
+
+	let existing = {};
+	uci.foreach('upnpd', 'perm_rule', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let keep = {};
+	let validated = [];
+
+	for (let row in rows) {
+		let section = clean_uci_value(row?.section || '');
+		let is_existing = length(section) && existing[section] == true;
+		let next = {
+			action: row?.action == 'deny' ? 'deny' : 'allow',
+			ext_ports: clean_uci_value(row?.ext_ports || ''),
+			int_addr: clean_uci_value(row?.int_addr || ''),
+			int_ports: clean_uci_value(row?.int_ports || ''),
+			comment: clean_uci_value(row?.comment || '')
+		};
+
+		if (length(section) && !is_existing)
+			return {
+				saved: false,
+				message: 'UPnP permission rule no longer exists. Refresh and try again.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+
+		if (!length(next.ext_ports) || !length(next.int_addr) || !length(next.int_ports))
+			return {
+				saved: false,
+				message: 'UPnP permission ports and internal address are required.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+
+		if (replace(next.ext_ports, /[^0-9:-]/g, '') != next.ext_ports || replace(next.int_ports, /[^0-9:-]/g, '') != next.int_ports || replace(next.int_addr, /[^A-Za-z0-9:._/%-]/g, '') != next.int_addr)
+			return {
+				saved: false,
+				message: 'UPnP permission rule fields contain unsupported characters.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			next
+		});
+	}
+
+	let changed = false;
+
+	for (let key, value in next_config) {
+		let current = uci.get('upnpd', config_section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('upnpd', config_section, key, value);
+		}
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('upnpd', 'perm_rule');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		for (let key, value in item.next) {
+			let current = uci.get('upnpd', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				set_uci_option('upnpd', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('upnpd', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('upnpd');
+		system('/etc/init.d/miniupnpd reload >/dev/null 2>&1 || /etc/init.d/miniupnpd restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'UPnP settings saved and reloaded.' : 'UPnP settings already up to date.',
+		changed,
+		config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+		rules: upnpd_rule_rows(),
+		sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -4356,6 +4524,28 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_uhttpd_config(request.args.config || {}));
+		}
+	},
+
+	upnpd_config_save: {
+		args: {
+			config: {},
+			rules: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_upnpd_config(request.args.config || {}, request.args.rules || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'UPnP settings save failed: ' + e,
+					changed: false,
+					config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+					rules: upnpd_rule_rows(),
+					sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+				});
+			}
 		}
 	},
 

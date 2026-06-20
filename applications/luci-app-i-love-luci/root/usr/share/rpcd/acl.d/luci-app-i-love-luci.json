@@ -53,6 +53,7 @@
 					"system_settings_save",
 					"uhttpd_cert_defaults_save",
 					"uhttpd_config_save",
+					"upnpd_config_save",
 					"route_mode_set",
 					"auth_mfa_begin_setup",
 					"auth_mfa_verify_setup",
@@ -67,7 +68,8 @@
 				"i-love-luci",
 				"network",
 				"system",
-				"uhttpd"
+				"uhttpd",
+				"upnpd"
 			]
 		}
 	}
