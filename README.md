@@ -56,6 +56,10 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 | --- |
 | ![I Love LuCI mobile search popover](docs/assets/app-mobile-search.png) |
 
+| Route settings | Console bridge |
+| --- | --- |
+| ![I Love LuCI route compatibility settings](docs/assets/app-desktop-settings.png) | ![I Love LuCI router console dialog](docs/assets/app-desktop-console.png) |
+
 ## Features
 
 - Native React dashboard for bandwidth, CPU, and memory telemetry.
