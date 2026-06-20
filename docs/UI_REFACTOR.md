@@ -625,6 +625,7 @@ Validation on `172.16.172.1`:
 - Generic service adapters now include service activity from `logread` where a known init/service pattern exists. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native28` bundle loaded `#/native/service/adblock-fast`, confirmed the activity log renders as a structured log table, and confirmed the old generic output panel is not used for that service log.
 - Service file adapters now expose read-only summaries and previews for whitelisted service files. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native29` bundle loaded `#/native/service/banip`, confirmed allowlist/blocklist/runtime files render as structured tables, and confirmed no `<pre>` output is used.
 - Service file summaries now use line-count and preview commands instead of reading whole files into rpcd memory. Browser smoke on `172.16.172.1` confirmed the AdBlock Fast generated dnsmasq server file reports `471530` lines, renders a preview row, and uses no `<pre>` output.
+- Wireless helper status now reads the correct native `Wireless status` command payload. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native30` bundle confirmed both `iw` and `iwinfo` show `not installed` on the no-radio test router and no `<pre>` output is used.
 
 Remaining legacy or partial gaps:
 

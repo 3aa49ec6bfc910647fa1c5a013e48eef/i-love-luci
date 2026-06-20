@@ -1399,7 +1399,7 @@ function LedSummary({ data }: { data: NativePageData }) {
 
 function WirelessSummary({ data }: { data: NativePageData }) {
 	const iwOutput = commandOutput(data.commands, "Wireless devices");
-	const iwinfoOutput = commandOutput(data.commands, "Wireless interfaces");
+	const iwinfoOutput = commandOutput(data.commands, "Wireless status");
 	const helpers = [
 		{ name: "iw", status: iwOutput.includes("not installed") ? "not installed" : iwOutput.trim() ? "available" : "no devices" },
 		{
