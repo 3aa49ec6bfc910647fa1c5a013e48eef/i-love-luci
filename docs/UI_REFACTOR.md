@@ -568,7 +568,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
 - `/admin/system/admin/repokeys`: structured installed package repository public key metadata without raw key dumps.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context, target metadata, upgrade helper status, build server configuration, and guardrail messaging. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
-- `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, client filter, and package family counts. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
+- `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, available-upgrades table, client filter, and package family counts. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: guarded read-only firmware, overlay usage, mounted filesystem, and flash partition overview.
@@ -607,7 +607,8 @@ Validation on `172.16.172.1`:
 - Follow-up text-output audit found remaining raw command panels on logs, diagnostics, repository keys, LED sysfs state, and wireless helper status. Browser smoke tests loaded `#/native/logs`, `#/native/diagnostics`, `#/native/repokeys`, `#/native/leds`, and `#/native/wireless` with the `1.0.0-r4-native20` bundle and confirmed all five now render structured tables without raw command dump panels.
 - Diagnostics runner output now renders command-aware result tables. Browser smoke test ran ping from `#/native/diagnostics` with the `1.0.0-r4-native22` bundle and confirmed IPv6 replies render as a `Ping replies` table with transmitted/received/loss metrics and no raw `<pre>` output.
 - Custom command and fallback text output now render as stream/line/text tables instead of raw preformatted command dumps.
-- Route audit on `172.16.172.1` with `1.0.0-r4-native22` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
+- Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native24` bundle and rendered available upgrades from `apk version -l '<'` as package/installed/available rows without raw package-manager warnings or `<pre>` output.
+- Route audit on `172.16.172.1` with `1.0.0-r4-native24` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 
 Remaining legacy or partial gaps:
 
@@ -618,7 +619,7 @@ Remaining legacy or partial gaps:
 - System administration is native read-only for summary views. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
 - Attended sysupgrade has a structured native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, flash handoff, and rollback checks still need dedicated RPCs before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
-- Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
+- Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory plus available-upgrades visibility with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Native text-output debt remains only where output shape is intentionally arbitrary, such as custom commands from user configuration. These now render in a structured line table; future work should add command-specific renderers for commonly configured commands where practical.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.

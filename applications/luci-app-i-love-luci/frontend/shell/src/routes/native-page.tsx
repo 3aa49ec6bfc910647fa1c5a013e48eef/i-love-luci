@@ -37,6 +37,12 @@ type PackageEntry = {
 	line: string;
 };
 
+type PackageUpgradeEntry = {
+	name: string;
+	installed: string;
+	available: string;
+};
+
 type FilesystemEntry = {
 	filesystem: string;
 	size: string;
@@ -265,6 +271,7 @@ export function NativePage() {
 		page === "connections" ||
 		page === "wireless" ||
 		page === "diagnostics" ||
+		page === "packages" ||
 		page === "repokeys" ||
 		page === "leds";
 
@@ -294,7 +301,7 @@ export function NativePage() {
 			{page === "wireless" && data ? <WirelessSummary data={data} /> : null}
 			{page === "diagnostics" && data ? <DiagnosticsSummary data={data} /> : null}
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
-			{page === "packages" ? <PackageInventory lines={data?.lines ?? []} /> : null}
+			{page === "packages" && data ? <PackageInventory data={data} /> : null}
 			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
 			{page === "crontab" && data?.page === "crontab" ? (
@@ -765,9 +772,10 @@ function ConfigTable({ sections }: { sections: ConfigSection[] }) {
 	);
 }
 
-function PackageInventory({ lines }: { lines: string[] }) {
+function PackageInventory({ data }: { data: NativePageData }) {
 	const [query, setQuery] = useState("");
-	const packages = useMemo(() => lines.map(parsePackageLine), [lines]);
+	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
+	const upgrades = useMemo(() => parsePackageUpgrades(commandOutput(data.commands, "Available upgrades")), [data.commands]);
 	const filtered = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 		return packages.filter(
@@ -788,6 +796,7 @@ function PackageInventory({ lines }: { lines: string[] }) {
 				<MetricBlock label="LuCI packages" value={luciCount} />
 				<MetricBlock label="Kernel modules" value={kernelCount} />
 			</div>
+			<PackageUpgradeTable entries={upgrades} />
 			<Panel
 				title={
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -835,6 +844,41 @@ function PackageInventory({ lines }: { lines: string[] }) {
 				</div>
 			</Panel>
 		</div>
+	);
+}
+
+function PackageUpgradeTable({ entries }: { entries: PackageUpgradeEntry[] }) {
+	return (
+		<Panel title="Available upgrades" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[42rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Package</th>
+							<th className="px-3 py-2 font-medium">Installed</th>
+							<th className="px-3 py-2 font-medium">Available</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={`${entry.name}.${entry.installed}.${entry.available}`}>
+									<td className="px-3 py-3 font-medium">{entry.name}</td>
+									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{entry.installed}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.available}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+									No package upgrades reported by the package manager.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
 	);
 }
 
@@ -1746,6 +1790,36 @@ function parsePackageLine(line: string): PackageEntry {
 		description: match[3],
 		line,
 	};
+}
+
+function parsePackageUpgrades(output: string): PackageUpgradeEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line && !line.startsWith("WARNING:") && !line.startsWith("Installed:"))
+		.map((line) => {
+			const apkMatch = /^(.+?)-([0-9][^\s]*)\s+<\s+(.+)$/.exec(line);
+			const opkgMatch = /^(.+?)\s+-\s+(.+?)\s+-\s+(.+)$/.exec(line);
+
+			if (apkMatch) {
+				return {
+					name: apkMatch[1],
+					installed: apkMatch[2],
+					available: apkMatch[3].trim(),
+				};
+			}
+
+			if (opkgMatch) {
+				return {
+					name: opkgMatch[1],
+					installed: opkgMatch[2],
+					available: opkgMatch[3],
+				};
+			}
+
+			return null;
+		})
+		.filter((entry): entry is PackageUpgradeEntry => entry != null);
 }
 
 function commandOutput(commands: CommandBlock[], title: string) {

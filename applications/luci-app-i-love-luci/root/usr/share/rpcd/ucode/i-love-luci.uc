@@ -825,6 +825,13 @@ function package_list() {
 	return split(trim(output), '\n');
 }
 
+function package_upgrades() {
+	if (command_exists('apk'))
+		return shell_output('apk version -l "<" 2>&1 | sed -n "1,160p"');
+
+	return shell_output('opkg list-upgradable 2>&1 | sed -n "1,160p"');
+}
+
 function service_detail(id) {
 	let meta = servicePackages[id] || null;
 
@@ -966,6 +973,9 @@ function native_page(page) {
 	}
 	else if (page == 'packages') {
 		data.lines = package_list();
+		data.commands = [
+			{ title: 'Available upgrades', output: package_upgrades() }
+		];
 	}
 	else if (page == 'startup') {
 		data.services = startup_entries();
