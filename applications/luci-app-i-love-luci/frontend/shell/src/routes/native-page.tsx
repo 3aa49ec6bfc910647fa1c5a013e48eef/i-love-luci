@@ -1,4 +1,4 @@
-import { Play, Power, Search } from "lucide-react";
+import { Play, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -1550,6 +1550,26 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 		setRows((current) => current.map((row) => (row.section === section ? { ...row, [key]: value } : row)));
 	}
 
+	function addRow() {
+		const sysfs = ledNames[0] ?? "";
+		setRows((current) => [
+			...current,
+			{
+				section: `new-${Date.now()}`,
+				name: "New LED action",
+				sysfs,
+				trigger: "none",
+				dev: "",
+				mode: "",
+				interval: "",
+			},
+		]);
+	}
+
+	function removeRow(section: string) {
+		setRows((current) => current.filter((row) => row.section !== section));
+	}
+
 	async function save() {
 		setSaving(true);
 		const result = await saveLedConfig(rows);
@@ -1567,9 +1587,20 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 	}
 
 	return (
-		<Panel title="LED actions" flush>
+		<Panel
+			flush
+			title={
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<span>LED actions</span>
+					<Button disabled={saving} onClick={addRow} size="sm" type="button" variant="outline">
+						<Plus className="size-4" />
+						Add action
+					</Button>
+				</div>
+			}
+		>
 			<div className="overflow-x-auto">
-				<table className="w-full min-w-[58rem] text-left text-sm">
+				<table className="w-full min-w-[62rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Name</th>
@@ -1578,6 +1609,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Mode</th>
 							<th className="px-3 py-2 font-medium">Interval</th>
+							<th className="px-3 py-2 text-right font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1613,11 +1645,16 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 									<td className="px-3 py-2">
 										<Input inputMode="numeric" onChange={(event) => update(row.section, "interval", event.target.value)} value={row.interval} />
 									</td>
+									<td className="px-3 py-2 text-right">
+										<Button aria-label={`Remove ${row.name}`} onClick={() => removeRow(row.section)} size="icon" type="button" variant="ghost">
+											<Trash2 className="size-4" />
+										</Button>
+									</td>
 								</tr>
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
 									No LED actions configured.
 								</td>
 							</tr>
@@ -1629,7 +1666,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 				<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
 					Cancel
 				</Button>
-				<Button disabled={!dirty || saving || rows.length === 0} onClick={() => void save()} type="button">
+				<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
 					Save
 				</Button>
 			</div>

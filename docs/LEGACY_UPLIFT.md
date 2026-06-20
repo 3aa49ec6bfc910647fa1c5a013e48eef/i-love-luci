@@ -131,7 +131,7 @@ To match default Overview fully, add:
 | `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Implemented native init script actions and `/etc/rc.local` editor | Done |
 | `/admin/system/crontab` | Scheduled Tasks | view `system/crontab` | `/etc/crontabs/root` read/write, cron reload | Cron editor with validation and reload toast | P2 |
 | `/admin/system/mounts` | Mount Points | view `system/mounts` | UCI `fstab`, block devices, mount points, block detect, mount/umount | Storage manager; legacy until block operations are wrapped safely | P3 |
-| `/admin/system/leds` | LED Configuration | view `system/leds` | UCI `system`, `luci.getLEDs`, LED trigger modules | Native existing-row LED editor implemented; add/remove and plugin-specific trigger forms remain | Partial |
+| `/admin/system/leds` | LED Configuration | view `system/leds` | UCI `system`, `luci.getLEDs`, LED trigger modules | Native LED action add/edit/remove implemented; sortable order and plugin-specific trigger forms remain | Partial |
 | `/admin/system/flash` | Backup / Flash Firmware | view `system/flash` | backup download/upload, sysupgrade validate/test/run, `/etc/sysupgrade.conf` | Native upgrade wizard only after extensive safety testing | P4 |
 | `/admin/system/reboot` | Reboot | view `system/reboot` | UCI changes, `system.reboot` or `/sbin/reboot` | Native confirmation dialog showing pending changes | P2 |
 
@@ -383,7 +383,7 @@ Deliver:
 - router password completed through a native `luci.setPassword` bridge
 - SSH access main-instance editor and SSH keys completed; Dropbear add/remove instance parity remains
 - startup services and rc.local completed through native init actions and editor
-- existing LED action edit completed; add/remove and plugin-specific LED trigger forms remain
+- LED action add/edit/remove completed; sortable order and plugin-specific LED trigger forms remain
 - crontab editor
 - reboot dialog
 

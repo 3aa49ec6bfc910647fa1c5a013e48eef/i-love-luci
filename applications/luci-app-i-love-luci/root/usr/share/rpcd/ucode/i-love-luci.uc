@@ -1194,17 +1194,23 @@ function save_led_config(rows) {
 	uci.load('system');
 
 	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('system', 'led', function(section) {
+		existing[section['.name']] = true;
+	});
 
 	for (let row in rows) {
 		let section = clean_uci_value(row?.section || '');
+		let is_existing = length(section) && uci.get('system', section) == 'led';
 
-		if (!length(section) || uci.get('system', section) != 'led')
-			return {
-				saved: false,
-				message: 'LED section was not found.',
-				changed: false,
-				sections: collect_uci_config('system', ['led'])
-			};
+		if (!is_existing) {
+			section = uci.add('system', 'led');
+			changed = true;
+		}
+
+		keep[section] = true;
 
 		let next = {
 			name: clean_uci_value(row?.name || section),
@@ -1230,6 +1236,13 @@ function save_led_config(rows) {
 				changed = true;
 				set_uci_option('system', section, key, value);
 			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('system', section);
+			changed = true;
 		}
 	}
 
