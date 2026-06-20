@@ -77,9 +77,7 @@ export function HeaderSearch() {
 								</span>
 								<span>
 									<span className="block text-xs font-medium sm:text-sm">{item.title}</span>
-									<span className="block text-xs text-muted-foreground">
-										{item.legacy ? "Legacy LuCI bridge" : "Native route"} · {item.resolvedPath ?? item.path}
-									</span>
+									<span className="block text-xs text-muted-foreground">{item.resolvedPath ?? item.path}</span>
 								</span>
 							</button>
 						))}
