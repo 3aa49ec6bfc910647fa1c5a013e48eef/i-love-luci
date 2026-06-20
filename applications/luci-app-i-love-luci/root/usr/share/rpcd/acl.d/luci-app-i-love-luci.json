@@ -1,0 +1,37 @@
+{
+	"luci-app-i-love-luci": {
+		"description": "Grant access to the I Love LuCI modern shell bridge",
+		"read": {
+			"ubus": {
+				"luci.iloveluci": [
+					"session_info",
+					"menu_tree",
+					"dashboard_status",
+					"changes_list",
+					"console_status",
+					"auth_mfa_status"
+				]
+			},
+			"uci": [
+				"luci",
+				"i-love-luci"
+			]
+		},
+		"write": {
+			"ubus": {
+				"luci.iloveluci": [
+					"changes_apply",
+					"changes_revert",
+					"route_mode_set",
+					"auth_mfa_begin_setup",
+					"auth_mfa_verify_setup",
+					"auth_mfa_verify_login"
+				]
+			},
+			"uci": [
+				"luci",
+				"i-love-luci"
+			]
+		}
+	}
+}

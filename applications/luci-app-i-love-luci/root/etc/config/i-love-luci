@@ -1,0 +1,3 @@
+config route
+	option path '/admin/status/overview'
+	option mode 'auto'
