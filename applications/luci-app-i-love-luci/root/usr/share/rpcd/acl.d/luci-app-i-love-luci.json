@@ -40,6 +40,8 @@
 					"firewall_rules_save",
 					"firewall_zones_save",
 					"led_config_save",
+					"network_devices_save",
+					"network_interfaces_save",
 					"network_rules_save",
 					"network_routes_save",
 					"password_set",

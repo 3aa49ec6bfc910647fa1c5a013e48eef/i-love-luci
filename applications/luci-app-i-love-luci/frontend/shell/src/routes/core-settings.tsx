@@ -18,6 +18,8 @@ import {
 	saveDhcpHosts,
 	saveDhcpPools,
 	saveDnsmasqConfig,
+	saveNetworkDevices,
+	saveNetworkInterfaces,
 	saveNetworkRules,
 	saveNetworkRoutes,
 	saveSystemSettings,
@@ -34,6 +36,8 @@ import {
 	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
+	type NetworkDeviceConfig,
+	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
 	type ServiceState,
@@ -46,7 +50,7 @@ type CorePage = "network" | "dhcp" | "firewall" | "system";
 const pageMeta: Record<CorePage, { title: string; description: string; configKey: keyof CoreSettings }> = {
 	network: {
 		title: "Network interfaces",
-		description: "Modern view of interface, device, static route, and live link state.",
+		description: "Modern network view with interface, device, static route, policy rule, and live link state.",
 		configKey: "network",
 	},
 	dhcp: {
@@ -2508,6 +2512,8 @@ function NetworkSummary({
 		.sort(([a], [b]) => a.localeCompare(b));
 	const routes = settings.networkRoutes ?? [];
 	const rules = settings.networkRules ?? [];
+	const configInterfaces = settings.network.filter((section) => section.type === "interface");
+	const configDevices = settings.network.filter((section) => section.type === "device");
 
 	if (!interfaces.length && !devices.length && !settings.network.length) {
 		return null;
@@ -2515,6 +2521,28 @@ function NetworkSummary({
 
 	return (
 		<div className="grid gap-5">
+			{configInterfaces.length ? (
+				<NetworkInterfaceEditor
+					interfaces={configInterfaces}
+					onSaved={(sections) =>
+						onSettingsChange({
+							...settings,
+							network: sections,
+						})
+					}
+				/>
+			) : null}
+			{configDevices.length ? (
+				<NetworkDeviceEditor
+					devices={configDevices}
+					onSaved={(sections) =>
+						onSettingsChange({
+							...settings,
+							network: sections,
+						})
+					}
+				/>
+			) : null}
 			{interfaces.length ? <InterfaceStatusTable interfaces={interfaces} /> : null}
 			{devices.length ? <DeviceStatusTable devices={devices} /> : null}
 			<StaticRouteEditor
@@ -2538,6 +2566,272 @@ function NetworkSummary({
 				rules={rules}
 			/>
 		</div>
+	);
+}
+
+function NetworkInterfaceEditor({
+	interfaces,
+	onSaved,
+}: {
+	interfaces: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => interfaces.map(networkInterfaceValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof NetworkInterfaceConfig, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveNetworkInterfaces(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.interfaces.map(normalizeNetworkInterface);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex items-center justify-between gap-3">
+				<div>
+					<h2 className="text-base font-semibold">Interface configuration</h2>
+					<p className="text-sm text-muted-foreground">Edit common UCI interface fields while preserving advanced options.</p>
+				</div>
+				<span className="text-xs text-muted-foreground">{rows.length} interfaces</span>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[92rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Interface</th>
+								<th className="px-3 py-2 font-medium">Protocol</th>
+								<th className="px-3 py-2 font-medium">Device</th>
+								<th className="px-3 py-2 font-medium">IPv4 address</th>
+								<th className="px-3 py-2 font-medium">Netmask</th>
+								<th className="px-3 py-2 font-medium">Gateway</th>
+								<th className="px-3 py-2 font-medium">IPv6 assign</th>
+								<th className="px-3 py-2 font-medium">DNS</th>
+								<th className="px-3 py-2 font-medium">Peer DNS</th>
+								<th className="px-3 py-2 font-medium">Delegate</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((row, index) => (
+								<tr className="border-b align-top last:border-0" key={row.section}>
+									<td className="px-3 py-3 font-medium">{row.section}</td>
+									<td className="px-3 py-3">
+										<Input aria-label="Protocol" onChange={(event) => updateRow(index, "proto", event.target.value)} value={row.proto} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="Device" onChange={(event) => updateRow(index, "device", event.target.value)} value={row.device} />
+									</td>
+									<td className="px-3 py-3">
+										<textarea
+											aria-label="IPv4 address"
+											className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+											onChange={(event) => updateRow(index, "ipaddr", event.target.value)}
+											spellCheck={false}
+											value={row.ipaddr}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="Netmask" onChange={(event) => updateRow(index, "netmask", event.target.value)} value={row.netmask} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="Gateway" onChange={(event) => updateRow(index, "gateway", event.target.value)} value={row.gateway} />
+									</td>
+									<td className="px-3 py-3">
+										<Input
+											aria-label="IPv6 assignment length"
+											inputMode="numeric"
+											onChange={(event) => updateRow(index, "ip6assign", event.target.value)}
+											value={row.ip6assign}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<textarea
+											aria-label="DNS servers"
+											className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+											onChange={(event) => updateRow(index, "dns", event.target.value)}
+											spellCheck={false}
+											value={row.dns}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-peerdns-${index}`}
+											onChange={(value) => updateRow(index, "peerdns", value)}
+											options={[
+												["1", "Yes"],
+												["0", "No"],
+											]}
+											value={row.peerdns}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-delegate-${index}`}
+											onChange={(value) => updateRow(index, "delegate", value)}
+											options={[
+												["1", "Yes"],
+												["0", "No"],
+											]}
+											value={row.delegate}
+										/>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function NetworkDeviceEditor({
+	devices,
+	onSaved,
+}: {
+	devices: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => devices.map(networkDeviceValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof NetworkDeviceConfig, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveNetworkDevices(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.devices.map(normalizeNetworkDevice);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex items-center justify-between gap-3">
+				<div>
+					<h2 className="text-base font-semibold">Device configuration</h2>
+					<p className="text-sm text-muted-foreground">Edit common UCI device fields while preserving advanced options.</p>
+				</div>
+				<span className="text-xs text-muted-foreground">{rows.length} devices</span>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[58rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Type</th>
+								<th className="px-3 py-2 font-medium">Ports</th>
+								<th className="px-3 py-2 font-medium">MAC address</th>
+								<th className="px-3 py-2 font-medium">MTU</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((row, index) => (
+								<tr className="border-b align-top last:border-0" key={row.section}>
+									<td className="px-3 py-3">
+										<Input aria-label="Device name" onChange={(event) => updateRow(index, "name", event.target.value)} value={row.name} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="Device type" onChange={(event) => updateRow(index, "type", event.target.value)} value={row.type} />
+									</td>
+									<td className="px-3 py-3">
+										<textarea
+											aria-label="Ports"
+											className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+											onChange={(event) => updateRow(index, "ports", event.target.value)}
+											spellCheck={false}
+											value={row.ports}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input
+											aria-label="MAC address"
+											onChange={(event) => updateRow(index, "macaddr", event.target.value)}
+											value={row.macaddr}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input
+											aria-label="MTU"
+											inputMode="numeric"
+											onChange={(event) => updateRow(index, "mtu", event.target.value)}
+											value={row.mtu}
+										/>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
 }
 
@@ -3113,6 +3407,58 @@ function rawListValue(value: unknown) {
 
 	const text = rawValue(value);
 	return text ? [text] : [];
+}
+
+function networkInterfaceValues(section: ConfigSection): NetworkInterfaceConfig {
+	return normalizeNetworkInterface({
+		section: section.name,
+		proto: rawValue(section.values.proto),
+		device: rawValue(section.values.device || section.values.ifname),
+		ipaddr: rawListValue(section.values.ipaddr).join("\n"),
+		netmask: rawValue(section.values.netmask),
+		gateway: rawValue(section.values.gateway),
+		ip6assign: rawValue(section.values.ip6assign),
+		dns: rawListValue(section.values.dns).join("\n"),
+		peerdns: isEnabledValue(section.values.peerdns) ? "1" : "0",
+		delegate: isEnabledValue(section.values.delegate) ? "1" : "0",
+	});
+}
+
+function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfaceConfig {
+	return {
+		section: row.section ?? "",
+		proto: row.proto ?? "",
+		device: row.device ?? "",
+		ipaddr: row.ipaddr ?? "",
+		netmask: row.netmask ?? "",
+		gateway: row.gateway ?? "",
+		ip6assign: row.ip6assign ?? "",
+		dns: row.dns ?? "",
+		peerdns: row.peerdns === "0" ? "0" : "1",
+		delegate: row.delegate === "0" ? "0" : "1",
+	};
+}
+
+function networkDeviceValues(section: ConfigSection): NetworkDeviceConfig {
+	return normalizeNetworkDevice({
+		section: section.name,
+		name: rawValue(section.values.name),
+		type: rawValue(section.values.type),
+		ports: rawListValue(section.values.ports).join("\n"),
+		macaddr: rawValue(section.values.macaddr),
+		mtu: rawValue(section.values.mtu),
+	});
+}
+
+function normalizeNetworkDevice(row: NetworkDeviceConfig): NetworkDeviceConfig {
+	return {
+		section: row.section ?? "",
+		name: row.name ?? "",
+		type: row.type ?? "",
+		ports: row.ports ?? "",
+		macaddr: row.macaddr ?? "",
+		mtu: row.mtu ?? "",
+	};
 }
 
 function normalizeStaticRoute(route: StaticRoute): StaticRoute {

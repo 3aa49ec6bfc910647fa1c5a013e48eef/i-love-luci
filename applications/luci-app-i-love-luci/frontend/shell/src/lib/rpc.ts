@@ -453,6 +453,44 @@ export type PolicyRulesResult = {
 	sections: ConfigSection[];
 };
 
+export type NetworkInterfaceConfig = {
+	section: string;
+	proto: string;
+	device: string;
+	ipaddr: string;
+	netmask: string;
+	gateway: string;
+	ip6assign: string;
+	dns: string;
+	peerdns: string;
+	delegate: string;
+};
+
+export type NetworkInterfacesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	interfaces: NetworkInterfaceConfig[];
+	sections: ConfigSection[];
+};
+
+export type NetworkDeviceConfig = {
+	section: string;
+	name: string;
+	type: string;
+	ports: string;
+	macaddr: string;
+	mtu: string;
+};
+
+export type NetworkDevicesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	devices: NetworkDeviceConfig[];
+	sections: ConfigSection[];
+};
+
 export type FirewallDefaultsInput = {
 	input: string;
 	output: string;
@@ -980,6 +1018,36 @@ export async function saveNetworkRules(rows: PolicyRule[]): Promise<PolicyRulesR
 			message: "Policy rules save failed.",
 			changed: false,
 			rules: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveNetworkInterfaces(rows: NetworkInterfaceConfig[]): Promise<NetworkInterfacesResult> {
+	try {
+		return await callBridge<NetworkInterfacesResult>("network_interfaces_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Network interfaces save failed.",
+			changed: false,
+			interfaces: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveNetworkDevices(rows: NetworkDeviceConfig[]): Promise<NetworkDevicesResult> {
+	try {
+		return await callBridge<NetworkDevicesResult>("network_devices_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Network devices save failed.",
+			changed: false,
+			devices: [],
 			sections: [],
 		};
 	}

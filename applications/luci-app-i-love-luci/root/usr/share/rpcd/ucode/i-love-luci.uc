@@ -1160,8 +1160,322 @@ function valid_network_route_text(value) {
 	return value == '' || replace(value, /[^A-Za-z0-9:._/%-]/g, '') == value;
 }
 
+function valid_network_route_list(values) {
+	for (let value in values)
+		if (!valid_network_route_text(value))
+			return false;
+
+	return true;
+}
+
 function valid_network_route_interface(value) {
 	return length(value) && replace(value, /[^A-Za-z0-9_.:-]/g, '') == value;
+}
+
+function network_interface_rows() {
+	let interfaces = [];
+
+	try {
+		uci.load('network');
+	}
+	catch (e) {
+		return interfaces;
+	}
+
+	uci.foreach('network', 'interface', function(section) {
+		push(interfaces, {
+			section: section['.name'] || '',
+			proto: section.proto || '',
+			device: section.device || section.ifname || '',
+			ipaddr: join('\n', dhcp_normalize_list(section.ipaddr)),
+			netmask: section.netmask || '',
+			gateway: section.gateway || '',
+			ip6assign: section.ip6assign || '',
+			dns: join('\n', dhcp_normalize_list(section.dns)),
+			peerdns: section.peerdns == '0' ? '0' : '1',
+			delegate: section.delegate == '0' ? '0' : '1'
+		});
+	});
+
+	return interfaces;
+}
+
+function save_network_interfaces(rows) {
+	rows ||= [];
+	uci.load('network');
+
+	let changed = false;
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+
+		if (!length(section) || uci.get('network', section) != 'interface')
+			return {
+				saved: false,
+				message: 'Network interface section was not found.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		let ipaddr = split_dhcp_list(row?.ipaddr || '');
+		let dns = split_dhcp_list(row?.dns || '');
+		let next = {
+			proto: dhcp_clean_value(row?.proto || ''),
+			device: dhcp_clean_value(row?.device || ''),
+			netmask: dhcp_clean_value(row?.netmask || ''),
+			gateway: dhcp_clean_value(row?.gateway || ''),
+			ip6assign: dhcp_clean_value(row?.ip6assign || ''),
+			peerdns: dhcp_zero_one(row?.peerdns),
+			delegate: dhcp_zero_one(row?.delegate)
+		};
+
+		if (!valid_network_route_interface(next.proto))
+			return {
+				saved: false,
+				message: 'Network interface protocol is required.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (next.device != '' && !valid_network_route_interface(next.device))
+			return {
+				saved: false,
+				message: 'Network interface device contains unsupported characters.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		for (let key, value in next) {
+			if ((key == 'ip6assign') && value != '' && !dhcp_numeric_value(value))
+				return {
+					saved: false,
+					message: 'Network interface IPv6 assignment length must be numeric.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+
+			if ((key == 'netmask' || key == 'gateway') && !valid_network_route_text(value))
+				return {
+					saved: false,
+					message: 'Network interface address fields contain unsupported characters.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+		}
+
+		if (!valid_network_route_list(ipaddr) || !valid_network_route_list(dns))
+			return {
+				saved: false,
+				message: 'Network interface IP address and DNS fields contain unsupported characters.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		push(validated, {
+			section,
+			ipaddr,
+			dns,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('network', section, key) || '';
+
+			if ((key == 'peerdns' || key == 'delegate') && value == '1' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if (((key == 'peerdns' || key == 'delegate') && value == '1') || value == '')
+					uci.delete('network', section, key);
+				else
+					uci.set('network', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('network', section, 'ipaddr') || [], item.ipaddr)) {
+			changed = true;
+			if (length(item.ipaddr))
+				uci.set('network', section, 'ipaddr', length(item.ipaddr) == 1 ? item.ipaddr[0] : item.ipaddr);
+			else
+				uci.delete('network', section, 'ipaddr');
+		}
+
+		if (!same_dhcp_list(uci.get('network', section, 'dns') || [], item.dns)) {
+			changed = true;
+			if (length(item.dns))
+				uci.set('network', section, 'dns', length(item.dns) == 1 ? item.dns[0] : item.dns);
+			else
+				uci.delete('network', section, 'dns');
+		}
+	}
+
+	if (changed) {
+		uci.commit('network');
+		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Network interfaces saved and network reloaded.' : 'Network interfaces already up to date.',
+		changed,
+		interfaces: network_interface_rows(),
+		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+	};
+}
+
+function network_device_rows() {
+	let devices = [];
+
+	try {
+		uci.load('network');
+	}
+	catch (e) {
+		return devices;
+	}
+
+	uci.foreach('network', 'device', function(section) {
+		push(devices, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			type: section.type || '',
+			ports: join('\n', dhcp_normalize_list(section.ports)),
+			macaddr: section.macaddr || '',
+			mtu: section.mtu || ''
+		});
+	});
+
+	return devices;
+}
+
+function save_network_devices(rows) {
+	rows ||= [];
+	uci.load('network');
+
+	let changed = false;
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+
+		if (!length(section) || uci.get('network', section) != 'device')
+			return {
+				saved: false,
+				message: 'Network device section was not found.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		let ports = split_dhcp_list(row?.ports || '');
+		let next = {
+			name: dhcp_clean_value(row?.name || ''),
+			type: dhcp_clean_value(row?.type || ''),
+			macaddr: dhcp_clean_value(row?.macaddr || ''),
+			mtu: dhcp_clean_value(row?.mtu || '')
+		};
+
+		if (!valid_network_route_interface(next.name))
+			return {
+				saved: false,
+				message: 'Network device name is required.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (next.type != '' && !valid_network_route_interface(next.type))
+			return {
+				saved: false,
+				message: 'Network device type contains unsupported characters.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (next.macaddr != '' && !valid_network_route_text(next.macaddr))
+			return {
+				saved: false,
+				message: 'Network device MAC address contains unsupported characters.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (next.mtu != '' && !dhcp_numeric_value(next.mtu))
+			return {
+				saved: false,
+				message: 'Network device MTU must be numeric.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (!valid_network_route_list(ports))
+			return {
+				saved: false,
+				message: 'Network device ports contain unsupported characters.',
+				changed: false,
+				devices: network_device_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		push(validated, {
+			section,
+			ports,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('network', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				if (value == '')
+					uci.delete('network', section, key);
+				else
+					uci.set('network', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('network', section, 'ports') || [], item.ports)) {
+			changed = true;
+			if (length(item.ports))
+				uci.set('network', section, 'ports', length(item.ports) == 1 ? item.ports[0] : item.ports);
+			else
+				uci.delete('network', section, 'ports');
+		}
+	}
+
+	if (changed) {
+		uci.commit('network');
+		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Network devices saved and network reloaded.' : 'Network devices already up to date.',
+		changed,
+		devices: network_device_rows(),
+		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+	};
 }
 
 function save_network_routes(rows) {
@@ -3435,6 +3749,46 @@ const methods = {
 					changed: false,
 					section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	network_interfaces_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_network_interfaces(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Network interfaces save failed: ' + e,
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				});
+			}
+		}
+	},
+
+	network_devices_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_network_devices(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Network devices save failed: ' + e,
+					changed: false,
+					devices: network_device_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				});
 			}
 		}
