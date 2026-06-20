@@ -605,7 +605,9 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/attendedsysupgrade` on `172.16.172.1` with the `1.0.0-r4-native17` bundle and rendered firmware version, target, `auc` helper state, build server URL, and rollback-safe guardrail messaging.
 - Native route audit found text-only command dumps on routing, nftables firewall status, processes, and connections. Browser smoke tests loaded `#/native/status-routes`, `#/native/firewall-status`, `#/native/processes`, and `#/native/connections` with the `1.0.0-r4-native19` bundle and confirmed all four now render structured tables without the raw command dump panels.
 - Follow-up text-output audit found remaining raw command panels on logs, diagnostics, repository keys, LED sysfs state, and wireless helper status. Browser smoke tests loaded `#/native/logs`, `#/native/diagnostics`, `#/native/repokeys`, `#/native/leds`, and `#/native/wireless` with the `1.0.0-r4-native20` bundle and confirmed all five now render structured tables without raw command dump panels.
-- Route audit on `172.16.172.1` with `1.0.0-r4-native20` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
+- Diagnostics runner output now renders command-aware result tables. Browser smoke test ran ping from `#/native/diagnostics` with the `1.0.0-r4-native22` bundle and confirmed IPv6 replies render as a `Ping replies` table with transmitted/received/loss metrics and no raw `<pre>` output.
+- Custom command and fallback text output now render as stream/line/text tables instead of raw preformatted command dumps.
+- Route audit on `172.16.172.1` with `1.0.0-r4-native22` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
 
 Remaining legacy or partial gaps:
 
@@ -618,7 +620,7 @@ Remaining legacy or partial gaps:
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
-- Native text-output debt remains for ad-hoc diagnostic runner results and custom command output. These should use command-specific renderers where practical, and fall back to compact text output only when the command shape is intentionally arbitrary.
+- Native text-output debt remains only where output shape is intentionally arbitrary, such as custom commands from user configuration. These now render in a structured line table; future work should add command-specific renderers for commonly configured commands where practical.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Sysupgrade and Standalone Direction

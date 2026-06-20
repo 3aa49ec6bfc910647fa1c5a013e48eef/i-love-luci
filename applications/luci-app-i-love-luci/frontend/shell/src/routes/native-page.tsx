@@ -138,6 +138,42 @@ type LedSysfsEntry = {
 	brightness: string;
 };
 
+type DiagnosticTool = "ping" | "traceroute" | "nslookup";
+
+type DiagnosticRunResult = {
+	tool: DiagnosticTool;
+	output: string;
+};
+
+type PingReply = {
+	host: string;
+	seq: string;
+	ttl: string;
+	time: string;
+};
+
+type PingSummary = {
+	transmitted: string;
+	received: string;
+	loss: string;
+};
+
+type TraceHop = {
+	hop: string;
+	result: string;
+};
+
+type NslookupEntry = {
+	field: string;
+	value: string;
+};
+
+type OutputLine = {
+	stream: string;
+	number: number;
+	text: string;
+};
+
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
@@ -406,8 +442,14 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 						<span className="break-all font-mono">{result.command}</span>
 					</div>
 					{result.binary ? <p className="text-sm text-muted-foreground">Binary output hidden.</p> : null}
-					{result.stdout ? <Preformatted text={result.stdout} /> : null}
-					{result.stderr ? <Preformatted text={result.stderr} /> : null}
+					<OutputLinesTable
+						empty="Command produced no text output."
+						lines={parseOutputLines([
+							{ stream: "stdout", text: result.stdout },
+							{ stream: "stderr", text: result.stderr },
+						])}
+						title="Command output"
+					/>
 				</div>
 			) : null}
 		</div>
@@ -427,16 +469,16 @@ function PageHeader({ meta, loading }: { meta: PageMeta; loading: boolean }) {
 }
 
 function DiagnosticsRunner() {
-	const [tool, setTool] = useState("ping");
+	const [tool, setTool] = useState<DiagnosticTool>("ping");
 	const [target, setTarget] = useState("openwrt.org");
-	const [output, setOutput] = useState("");
+	const [result, setResult] = useState<DiagnosticRunResult | null>(null);
 	const [running, setRunning] = useState(false);
 
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setRunning(true);
-		const result = await runDiagnostics(tool, target);
-		setOutput(result);
+		const output = await runDiagnostics(tool, target);
+		setResult({ tool, output });
 		setRunning(false);
 		toast.success("Diagnostic complete");
 	}
@@ -448,7 +490,7 @@ function DiagnosticsRunner() {
 					<select
 						className="h-9 rounded-md border bg-card px-3 text-sm"
 						value={tool}
-						onChange={(event) => setTool(event.target.value)}
+						onChange={(event) => setTool(event.target.value as DiagnosticTool)}
 					>
 						<option value="ping">Ping</option>
 						<option value="traceroute">Traceroute</option>
@@ -460,9 +502,44 @@ function DiagnosticsRunner() {
 						Run
 					</Button>
 				</form>
-				{output ? <Preformatted text={output} /> : null}
+				{result ? <DiagnosticResultView result={result} /> : null}
 			</div>
 		</Panel>
+	);
+}
+
+function DiagnosticResultView({ result }: { result: DiagnosticRunResult }) {
+	if (result.tool === "ping") {
+		const replies = parsePingReplies(result.output);
+		const summary = parsePingSummary(result.output);
+
+		if (replies.length) {
+			return <PingResultTable replies={replies} summary={summary} />;
+		}
+	}
+
+	if (result.tool === "traceroute") {
+		const hops = parseTraceHops(result.output);
+
+		if (hops.length) {
+			return <TraceResultTable hops={hops} />;
+		}
+	}
+
+	if (result.tool === "nslookup") {
+		const entries = parseNslookupEntries(result.output);
+
+		if (entries.length) {
+			return <NslookupResultTable entries={entries} />;
+		}
+	}
+
+	return (
+		<OutputLinesTable
+			empty="Diagnostic produced no output."
+			lines={parseOutputLines([{ stream: result.tool, text: result.output }])}
+			title="Diagnostic output"
+		/>
 	);
 }
 
@@ -1100,6 +1177,131 @@ function HelperStatusTable({ entries }: { entries: Array<{ name: string; status:
 								</td>
 							</tr>
 						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function PingResultTable({ replies, summary }: { replies: PingReply[]; summary: PingSummary | null }) {
+	return (
+		<div className="grid gap-3">
+			{summary ? (
+				<div className="grid gap-3 sm:grid-cols-3">
+					<MetricBlock label="Transmitted" value={summary.transmitted} />
+					<MetricBlock label="Received" value={summary.received} />
+					<MetricBlock label="Packet loss" value={summary.loss} />
+				</div>
+			) : null}
+			<Panel title="Ping replies" flush>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[34rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Host</th>
+								<th className="px-3 py-2 font-medium">Seq</th>
+								<th className="px-3 py-2 font-medium">TTL</th>
+								<th className="px-3 py-2 font-medium">Time</th>
+							</tr>
+						</thead>
+						<tbody>
+							{replies.map((reply) => (
+								<tr className="border-b last:border-0" key={`${reply.host}.${reply.seq}.${reply.time}`}>
+									<td className="px-3 py-3 font-mono text-xs">{reply.host}</td>
+									<td className="px-3 py-3">{reply.seq}</td>
+									<td className="px-3 py-3">{reply.ttl}</td>
+									<td className="px-3 py-3">{reply.time} ms</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</Panel>
+		</div>
+	);
+}
+
+function TraceResultTable({ hops }: { hops: TraceHop[] }) {
+	return (
+		<Panel title="Traceroute hops" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[40rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Hop</th>
+							<th className="px-3 py-2 font-medium">Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						{hops.map((hop) => (
+							<tr className="border-b last:border-0" key={`${hop.hop}.${hop.result}`}>
+								<td className="px-3 py-3 font-medium">{hop.hop}</td>
+								<td className="px-3 py-3 font-mono text-xs">{hop.result}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function NslookupResultTable({ entries }: { entries: NslookupEntry[] }) {
+	return (
+		<Panel title="DNS lookup result" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[34rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Field</th>
+							<th className="px-3 py-2 font-medium">Value</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.map((entry, index) => (
+							<tr className="border-b last:border-0" key={`${index}.${entry.field}.${entry.value}`}>
+								<td className="px-3 py-3 font-medium">{entry.field}</td>
+								<td className="px-3 py-3 font-mono text-xs">{entry.value}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function OutputLinesTable({ empty, lines, title }: { empty: string; lines: OutputLine[]; title: string }) {
+	return (
+		<Panel title={title} flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[42rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Stream</th>
+							<th className="px-3 py-2 font-medium">Line</th>
+							<th className="px-3 py-2 font-medium">Text</th>
+						</tr>
+					</thead>
+					<tbody>
+						{lines.length ? (
+							lines.slice(0, 300).map((line) => (
+								<tr className="border-b align-top last:border-0" key={`${line.stream}.${line.number}.${line.text}`}>
+									<td className="px-3 py-3">
+										<Badge className={line.stream === "stderr" ? "text-destructive" : ""}>{line.stream}</Badge>
+									</td>
+									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{line.number}</td>
+									<td className="px-3 py-3 font-mono text-xs">{line.text}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+									{empty}
+								</td>
+							</tr>
+						)}
 					</tbody>
 				</table>
 			</div>
@@ -1899,6 +2101,104 @@ function shortFingerprint(value: string) {
 	return value.length > 28 ? `${value.slice(0, 28)}...` : value;
 }
 
+function parsePingReplies(output: string): PingReply[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.map((line) => {
+			const match = /bytes from\s+(.+):\s+seq=(\d+)\s+ttl=(\d+)\s+time=([0-9.]+)/.exec(line);
+
+			if (!match) {
+				return null;
+			}
+
+			return {
+				host: match[1],
+				seq: match[2],
+				ttl: match[3],
+				time: match[4],
+			};
+		})
+		.filter((entry): entry is PingReply => entry != null);
+}
+
+function parsePingSummary(output: string): PingSummary | null {
+	for (const line of output.split("\n")) {
+		const match = /(\d+)\s+packets transmitted,\s+(\d+)\s+packets received,\s+([0-9.]+%)\s+packet loss/.exec(line);
+
+		if (match) {
+			return {
+				transmitted: match[1],
+				received: match[2],
+				loss: match[3],
+			};
+		}
+	}
+
+	return null;
+}
+
+function parseTraceHops(output: string): TraceHop[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.map((line) => {
+			const match = /^(\d+)\s+(.+)$/.exec(line);
+
+			if (!match) {
+				return null;
+			}
+
+			return {
+				hop: match[1],
+				result: match[2],
+			};
+		})
+		.filter((entry): entry is TraceHop => entry != null);
+}
+
+function parseNslookupEntries(output: string): NslookupEntry[] {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const match = /^([^:]+):\s*(.+)$/.exec(line);
+
+			if (!match) {
+				return {
+					field: "message",
+					value: line,
+				};
+			}
+
+			return {
+				field: match[1],
+				value: match[2],
+			};
+		});
+}
+
+function parseOutputLines(streams: Array<{ stream: string; text: string }>): OutputLine[] {
+	const lines: OutputLine[] = [];
+
+	for (const stream of streams) {
+		stream.text
+			.split("\n")
+			.map((line) => line.trimEnd())
+			.filter(Boolean)
+			.forEach((text, index) => {
+				lines.push({
+					stream: stream.stream,
+					number: index + 1,
+					text,
+				});
+			});
+	}
+
+	return lines;
+}
+
 function tokenAfter(parts: string[], token: string) {
 	const index = parts.indexOf(token);
 	return index >= 0 ? (parts[index + 1] ?? "none") : "none";
@@ -2078,9 +2378,11 @@ function TextPanel({ title, text }: { title: string; text: string }) {
 				</span>
 			}
 		>
-			<div>
-				<Preformatted text={text} />
-			</div>
+			<OutputLinesTable
+				empty="No output."
+				lines={parseOutputLines([{ stream: "output", text }])}
+				title="Output"
+			/>
 		</Panel>
 	);
 }
@@ -2099,14 +2401,6 @@ function Panel({
 			<h2 className="text-base font-semibold">{title}</h2>
 			<div className={flush ? "min-w-0" : "min-w-0"}>{children}</div>
 		</section>
-	);
-}
-
-function Preformatted({ text }: { text: string }) {
-	return (
-		<pre className="max-h-[32rem] overflow-auto rounded-md bg-secondary p-3 text-xs leading-relaxed text-foreground">
-			{text}
-		</pre>
 	);
 }
 
