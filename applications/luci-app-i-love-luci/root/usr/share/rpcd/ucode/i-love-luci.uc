@@ -3338,6 +3338,86 @@ function save_uhttpd_config(config) {
 	};
 }
 
+function save_uhttpd_cert_defaults(config) {
+	config ||= {};
+	uci.load('uhttpd');
+
+	let section = clean_uci_value(config.section || first_uci_section('uhttpd', 'cert') || '');
+
+	if (!length(section) || uci.get('uhttpd', section) != 'cert')
+		section = uci.add('uhttpd', 'cert');
+
+	let next = {
+		days: clean_uci_value(config.days || ''),
+		key_type: clean_uci_value(config.key_type || 'ec'),
+		bits: clean_uci_value(config.bits || ''),
+		ec_curve: clean_uci_value(config.ec_curve || ''),
+		country: clean_uci_value(config.country || ''),
+		state: clean_uci_value(config.state || ''),
+		location: clean_uci_value(config.location || ''),
+		commonname: clean_uci_value(config.commonname || '')
+	};
+
+	if (!valid_numeric_value(next.days) || !valid_numeric_value(next.bits))
+		return {
+			saved: false,
+			message: 'Certificate days and bits must be numeric.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	if (next.key_type != 'ec' && next.key_type != 'rsa')
+		return {
+			saved: false,
+			message: 'Certificate key type must be EC or RSA.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	if (length(next.country) > 2 || replace(next.country, /[^A-Za-z]/g, '') != next.country)
+		return {
+			saved: false,
+			message: 'Certificate country must be a two-letter code.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	for (let key in ['ec_curve', 'state', 'location', 'commonname']) {
+		let value = next[key];
+
+		if (replace(value, /[^A-Za-z0-9 .,:_@/+()-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'Certificate text fields contain unsupported characters.',
+				changed: false,
+				sections: collect_system_settings_sections()
+			};
+	}
+
+	let changed = false;
+
+	for (let key, value in next) {
+		let current = uci.get('uhttpd', section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('uhttpd', section, key, value);
+		}
+	}
+
+	if (changed) {
+		uci.commit('uhttpd');
+		system('/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Certificate defaults saved and web server reloaded.' : 'Certificate defaults already up to date.',
+		changed,
+		sections: collect_system_settings_sections()
+	};
+}
+
 function set_router_password(username, password, confirm) {
 	username = trim('' + (username || 'root'));
 	password = '' + (password || '');
@@ -4079,6 +4159,25 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_uhttpd_config(request.args.config || {}));
+		}
+	},
+
+	uhttpd_cert_defaults_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_uhttpd_cert_defaults(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Certificate defaults save failed: ' + e,
+					changed: false,
+					sections: collect_system_settings_sections()
+				});
+			}
 		}
 	},
 

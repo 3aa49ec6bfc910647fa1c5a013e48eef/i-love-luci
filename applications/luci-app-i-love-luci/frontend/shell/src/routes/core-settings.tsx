@@ -23,6 +23,7 @@ import {
 	saveNetworkRules,
 	saveNetworkRoutes,
 	saveSystemSettings,
+	saveUhttpdCertDefaults,
 	type ConfigSection,
 	type CoreSettings,
 	type DashboardStatus,
@@ -43,6 +44,7 @@ import {
 	type ServiceState,
 	type StaticRoute,
 	type SystemSettingsInput,
+	type UhttpdCertDefaultsInput,
 } from "@/lib/rpc";
 
 type CorePage = "network" | "dhcp" | "firewall" | "system";
@@ -2210,22 +2212,91 @@ function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashbo
 				title="LEDs"
 			/>
 
-			{certs.length ? (
-				<SimpleSectionTable
-					columns={["Section", "Days", "Key type", "Bits", "Curve", "Common name"]}
-					empty="No certificate defaults configured."
-					rows={certs.map((section) => [
-						section.name,
-						valueText(section.values.days),
-						valueText(section.values.key_type),
-						valueText(section.values.bits),
-						valueText(section.values.ec_curve),
-						valueText(section.values.commonname),
-					])}
-					title="Certificate defaults"
-				/>
-			) : null}
+			{certs.length ? <CertDefaultsEditor certs={certs} onSaved={setSystemSections} /> : null}
 		</div>
+	);
+}
+
+function CertDefaultsEditor({ certs, onSaved }: { certs: ConfigSection[]; onSaved: (sections: ConfigSection[]) => void }) {
+	const [values, setValues] = useState(() => certDefaultsValues(certs[0]));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof UhttpdCertDefaultsInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveUhttpdCertDefaults(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+		onSaved(result.sections);
+		setSavedValues(values);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-1">
+				<h2 className="text-base font-semibold">Certificate defaults</h2>
+				<p className="text-sm text-muted-foreground">Configure defaults used when uHTTPd self-signed certificates are generated.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Field label="Days" target="cert-days">
+						<Input id="cert-days" inputMode="numeric" onChange={(event) => updateField("days", event.target.value)} value={values.days} />
+					</Field>
+					<Field label="Key type" target="cert-key-type">
+						<SelectField
+							id="cert-key-type"
+							onChange={(value) => updateField("key_type", value)}
+							options={[
+								["ec", "EC"],
+								["rsa", "RSA"],
+							]}
+							value={values.key_type}
+						/>
+					</Field>
+					<Field label="Bits" target="cert-bits">
+						<Input id="cert-bits" inputMode="numeric" onChange={(event) => updateField("bits", event.target.value)} value={values.bits} />
+					</Field>
+					<Field label="EC curve" target="cert-curve">
+						<Input id="cert-curve" onChange={(event) => updateField("ec_curve", event.target.value)} value={values.ec_curve} />
+					</Field>
+					<Field label="Country" target="cert-country">
+						<Input id="cert-country" maxLength={2} onChange={(event) => updateField("country", event.target.value)} value={values.country} />
+					</Field>
+					<Field label="State" target="cert-state">
+						<Input id="cert-state" onChange={(event) => updateField("state", event.target.value)} value={values.state} />
+					</Field>
+					<Field label="Location" target="cert-location">
+						<Input id="cert-location" onChange={(event) => updateField("location", event.target.value)} value={values.location} />
+					</Field>
+					<Field label="Common name" target="cert-common-name">
+						<Input id="cert-common-name" onChange={(event) => updateField("commonname", event.target.value)} value={values.commonname} />
+					</Field>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
 }
 
@@ -2457,6 +2528,20 @@ function systemSettingsValues(sections: ConfigSection[], dashboard: DashboardSta
 		ntp_enabled: rawValue(ntp?.values.enabled || "1") === "0" ? "0" : "1",
 		ntp_use_dhcp: rawValue(ntp?.values.use_dhcp || "1") === "0" ? "0" : "1",
 		ntp_servers: rawListValue(ntp?.values.server).join("\n"),
+	};
+}
+
+function certDefaultsValues(section: ConfigSection): UhttpdCertDefaultsInput {
+	return {
+		section: section.name,
+		days: rawValue(section.values.days),
+		key_type: rawValue(section.values.key_type || "ec"),
+		bits: rawValue(section.values.bits),
+		ec_curve: rawValue(section.values.ec_curve),
+		country: rawValue(section.values.country),
+		state: rawValue(section.values.state),
+		location: rawValue(section.values.location),
+		commonname: rawValue(section.values.commonname),
 	};
 }
 

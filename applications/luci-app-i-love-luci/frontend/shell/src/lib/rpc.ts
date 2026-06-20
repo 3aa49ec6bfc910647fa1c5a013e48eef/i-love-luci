@@ -366,6 +366,25 @@ export type UhttpdConfigResult = {
 	init: ServiceState | null;
 };
 
+export type UhttpdCertDefaultsInput = {
+	section: string;
+	days: string;
+	key_type: string;
+	bits: string;
+	ec_curve: string;
+	country: string;
+	state: string;
+	location: string;
+	commonname: string;
+};
+
+export type UhttpdCertDefaultsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	sections: ConfigSection[];
+};
+
 export type SystemSettingsInput = {
 	hostname: string;
 	description: string;
@@ -929,6 +948,20 @@ export async function saveSystemSettings(config: SystemSettingsInput): Promise<S
 		return {
 			saved: false,
 			message: "System settings save failed.",
+			changed: false,
+			sections: [],
+		};
+	}
+}
+
+export async function saveUhttpdCertDefaults(config: UhttpdCertDefaultsInput): Promise<UhttpdCertDefaultsResult> {
+	try {
+		return await callBridge<UhttpdCertDefaultsResult>("uhttpd_cert_defaults_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Certificate defaults save failed.",
 			changed: false,
 			sections: [],
 		};
