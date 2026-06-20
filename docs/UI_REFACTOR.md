@@ -781,6 +781,11 @@ The compatibility layer needs a repeatable audit, not a one-time manual check. T
 Mandatory workstream:
 
 - Perform a full route audit across every installed LuCI route before release.
+- Audit every installed LuCI app route, not only top-level app entries, and confirm each route has an explicit I Love LuCI outcome: native route with parity evidence, partial native route with LuCI compat fallback, legacy compat route, or intentionally hidden by ACL/menu metadata.
+- Confirm compat is configured and exercised successfully for all current LuCI apps before any route is considered supported.
+- Confirm all routes migrated to native I Love LuCI screens are tracked as native migrations, mapped back to their original LuCI route or workflow, and covered by route-level render, data, save/apply, mobile, and fallback tests.
+- Treat the LuCI app adapter as part of the public platform: it must robustly handle current apps, future installed apps, package upgrades, package removals, route nesting changes, ACL changes, query strings, and session recovery without requiring app-specific code for basic compatibility.
+- Verify future LuCI app installs through standard OpenWrt tooling are seamless: install app, refresh menu/cache state, see it in sidebar/search, open it through compat, then remove/reinstall it without stale or broken routes.
 - Generate a route inventory artifact from the live router and keep it as the authoritative map from LuCI route to I Love LuCI route handling.
 - Confirm compat is configured and working for every current LuCI app, including all child routes exposed by those apps.
 - Confirm every route migrated to a native I Love LuCI screen is recorded in the route inventory, mapped back to its LuCI source route or workflow, and covered by native route tests.
