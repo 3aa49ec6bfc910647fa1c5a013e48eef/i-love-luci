@@ -142,7 +142,7 @@ const barOptions: ChartOptions<"bar"> = {
 	},
 };
 
-export function DashboardPage() {
+export function DashboardPage({ description, title = "Dashboard" }: { description?: string; title?: string }) {
 	const [status, setStatus] = useState<DashboardStatus>(emptyStatus);
 	const [samples, setSamples] = useState<BandwidthSample[]>([]);
 	const [rates, setRates] = useState<DeviceRate[]>([]);
@@ -274,9 +274,9 @@ export function DashboardPage() {
 		<div className="mx-auto grid w-full max-w-7xl min-w-0 gap-5">
 			<div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 				<div className="min-w-0">
-					<h1 className="text-2xl font-semibold">Dashboard</h1>
+					<h1 className="text-2xl font-semibold">{title}</h1>
 					<p className="break-words text-sm text-muted-foreground">
-						{status.board.hostname ?? "Router"} · {status.board.model ?? "OpenWrt"}
+						{description ?? `${status.board.hostname ?? "Router"} · ${status.board.model ?? "OpenWrt"}`}
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">

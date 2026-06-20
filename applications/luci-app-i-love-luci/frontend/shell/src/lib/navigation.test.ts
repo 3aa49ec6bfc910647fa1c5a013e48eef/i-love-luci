@@ -46,4 +46,16 @@ describe("itemTarget", () => {
 			}),
 		).toBe("/native/crontab");
 	});
+
+	it("routes LuCI realtime graphs to the dedicated realtime surface", () => {
+		expect(
+			itemTarget({
+				title: "Realtime graphs",
+				path: "/admin/status/realtime",
+				effectiveMode: "modern",
+				configuredMode: "auto",
+				legacy: false,
+			}),
+		).toBe("/realtime");
+	});
 });

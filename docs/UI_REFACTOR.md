@@ -565,7 +565,7 @@ Converted to native React/Vite surfaces:
 - `/admin/status/nftables`: structured active nftables chain/rule summary. Raw `nft list ruleset` dumps are no longer rendered.
 - `/admin/status/logs`, `/admin/status/logs/syslog`, `/admin/status/logs/dmesg`: structured system and kernel log tables with parsed time, level, facility, process, and message.
 - `/admin/status/processes`: structured process table with PID, user, memory size, state, and command.
-- `/admin/status/realtime/load` and `/admin/status/realtime/bandwidth`: covered by the dashboard charts.
+- `/admin/status/realtime`, `/admin/status/realtime/load`, and `/admin/status/realtime/bandwidth`: dedicated native realtime chart route using the same LuCI/rpcd dashboard data source as the dashboard.
 - `/admin/status/realtime/connections`: structured active socket table with protocol, state, queues, local/peer endpoints, and process where available.
 - `/admin/status/realtime/wireless` and `/admin/status/channel_analysis`: guarded wireless status surface with helper status; on the current router it validates the no-radio/no-`iw` case.
 - `/admin/network/network` and `/admin/network/routes`: modern read-only UCI summaries plus live interface/device status from `dashboard_status`, including protocol, link state, device mapping, addresses, and uptime.
@@ -632,6 +632,7 @@ Validation on `172.16.172.1`:
 - Guarded native pages now suppress duplicate generic command output panels when a structured summary exists. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native31` bundle confirmed `#/native/attendedsysupgrade`, `#/native/flash`, and `#/native/reboot` render without generic output panels or `<pre>` elements; reboot uptime now appears in a structured context table.
 - Native pages no longer render a generic raw command-output fallback. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native32` bundle confirmed `#/native/crontab`, `#/native/sshkeys`, `#/native/startup`, `#/native/status-routes`, and `#/native/firewall-status` render purpose-built controls/tables without generic output headings or `<pre>` elements. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - Route headers no longer render mode/status chips such as `modern`, `legacy`, `partial modern`, `read-only`, or `guarded`. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native33` bundle confirmed route header chips are absent from `#/native/status-routes`, `#/native/packages`, `#/native/wireless`, and `#/native/service/banip`. Route audit, native page audit, and HTTP route smoke all passed after deploy.
+- Realtime graph routes now resolve to a dedicated `#/realtime` native route instead of the dashboard root. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native34` bundle confirmed `#/realtime` renders bandwidth, memory, CPU load, interface, and system sections with 3 Chart.js canvases and no `<pre>` elements; `#/native/connections` still renders the structured sockets table. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 
 Remaining legacy or partial gaps:
 

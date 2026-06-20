@@ -34,6 +34,15 @@ export function App() {
 					}
 				>
 					<Route index element={<DashboardPage />} />
+					<Route
+						path="realtime"
+						element={
+							<DashboardPage
+								description="Live bandwidth, CPU load, memory, and active interface rates from the router."
+								title="Realtime graphs"
+							/>
+						}
+					/>
 					<Route path="core/:page" element={<CoreSettingsPage />} />
 					<Route path="native/:page" element={<NativePage />} />
 					<Route path="native/service/:service" element={<NativeServicePage />} />
