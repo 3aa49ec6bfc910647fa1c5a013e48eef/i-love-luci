@@ -10,6 +10,7 @@ import {
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
+	runPackageAction,
 	saveAdblockFastConfig,
 	saveBanipConfig,
 	saveBanipFile,
@@ -39,6 +40,7 @@ import {
 	type NativePageData,
 	type NativeService,
 	type PackageSearchResult,
+	type PackageActionResult,
 	type ServiceFile,
 	type UpnpdConfigInput,
 	type UpnpdRule,
@@ -2210,6 +2212,8 @@ function ConfigTable({ sections }: { sections: ConfigSection[] }) {
 
 function PackageInventory({ data }: { data: NativePageData }) {
 	const [query, setQuery] = useState("");
+	const [actionResult, setActionResult] = useState<PackageActionResult | null>(null);
+	const [actionBusy, setActionBusy] = useState<string | null>(null);
 	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
 	const upgrades = useMemo(() => parsePackageUpgrades(commandOutput(data.commands, "Available upgrades")), [data.commands]);
 	const filtered = useMemo(() => {
@@ -2225,6 +2229,25 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
 	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
+	async function runAction(action: "install" | "remove" | "update", name = "", simulate = true) {
+		if (!simulate && action !== "update" && !window.confirm(`${action === "install" ? "Install" : "Remove"} ${name}?`)) {
+			return;
+		}
+
+		const key = `${action}:${name}:${simulate ? "plan" : "apply"}`;
+		setActionBusy(key);
+		const result = await runPackageAction(action, name, simulate);
+		setActionResult(result);
+		setActionBusy(null);
+
+		if (result.ok) {
+			toast.success(result.message);
+		}
+		else {
+			toast.error(result.message);
+		}
+	}
+
 	return (
 		<div className="grid gap-4">
 			<div className="grid gap-3 sm:grid-cols-3">
@@ -2233,11 +2256,17 @@ function PackageInventory({ data }: { data: NativePageData }) {
 				<MetricBlock label="Kernel modules" value={kernelCount} />
 			</div>
 			<PackageUpgradeTable entries={upgrades} />
-			<AvailablePackageSearch />
+			<PackageActionOutput result={actionResult} />
+			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
 			<Panel
 				title={
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<span>Installed packages</span>
+						<div className="flex items-center gap-2">
+							<span>Installed packages</span>
+							<Button disabled={actionBusy === "update::apply"} onClick={() => void runAction("update", "", false)} size="sm" type="button" variant="outline">
+								Update index
+							</Button>
+						</div>
 						<div className="relative w-full sm:w-72">
 							<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 							<Input
@@ -2258,6 +2287,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 								<th className="px-3 py-2 font-medium">Package</th>
 								<th className="px-3 py-2 font-medium">Version</th>
 								<th className="px-3 py-2 font-medium">Description</th>
+								<th className="px-3 py-2 font-medium">Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -2267,11 +2297,33 @@ function PackageInventory({ data }: { data: NativePageData }) {
 										<td className="px-3 py-3 font-medium">{pkg.name}</td>
 										<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
 										<td className="px-3 py-3">{pkg.description || "none"}</td>
+										<td className="px-3 py-3">
+											<div className="flex flex-wrap gap-1.5">
+												<Button
+													disabled={actionBusy === `remove:${pkg.name}:plan`}
+													onClick={() => void runAction("remove", pkg.name, true)}
+													size="sm"
+													type="button"
+													variant="outline"
+												>
+													Plan remove
+												</Button>
+												<Button
+													disabled={actionBusy === `remove:${pkg.name}:apply`}
+													onClick={() => void runAction("remove", pkg.name, false)}
+													size="sm"
+													type="button"
+													variant="outline"
+												>
+													Remove
+												</Button>
+											</div>
+										</td>
 									</tr>
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
 										No packages match the filter.
 									</td>
 								</tr>
@@ -2284,7 +2336,47 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	);
 }
 
-function AvailablePackageSearch() {
+function PackageActionOutput({ result }: { result: PackageActionResult | null }) {
+	if (!result) {
+		return null;
+	}
+
+	const lines = result.output
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line, index) => ({
+			stream: result.simulate ? "plan" : "apply",
+			number: index + 1,
+			text: line,
+		}));
+
+	return (
+		<div className="grid gap-3">
+			<SimpleValueTable
+				columns={["Setting", "Value"]}
+				empty="No package action context."
+				rows={[
+					["Action", `${pageTitle(result.action)} ${result.simulate ? "plan" : "result"}`],
+					["Manager", result.manager],
+					["Package", result.name || "package index"],
+					["Command", result.command || "none"],
+					["Status", result.message],
+				]}
+				title="Package action context"
+			/>
+			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
+		</div>
+	);
+}
+
+function AvailablePackageSearch({
+	busy,
+	onRunAction,
+}: {
+	busy: string | null;
+	onRunAction: (action: "install" | "remove" | "update", name?: string, simulate?: boolean) => void | Promise<void>;
+}) {
 	const [query, setQuery] = useState("");
 	const [result, setResult] = useState<PackageSearchResult | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -2355,6 +2447,7 @@ function AvailablePackageSearch() {
 							<th className="px-3 py-2 font-medium">Package</th>
 							<th className="px-3 py-2 font-medium">Version</th>
 							<th className="px-3 py-2 font-medium">Description</th>
+							<th className="px-3 py-2 font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -2364,11 +2457,33 @@ function AvailablePackageSearch() {
 									<td className="px-3 py-3 font-medium">{pkg.name}</td>
 									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
 									<td className="px-3 py-3">{pkg.description || "none"}</td>
+									<td className="px-3 py-3">
+										<div className="flex flex-wrap gap-1.5">
+											<Button
+												disabled={busy === `install:${pkg.name}:plan`}
+												onClick={() => void onRunAction("install", pkg.name, true)}
+												size="sm"
+												type="button"
+												variant="outline"
+											>
+												Plan install
+											</Button>
+											<Button
+												disabled={busy === `install:${pkg.name}:apply`}
+												onClick={() => void onRunAction("install", pkg.name, false)}
+												size="sm"
+												type="button"
+												variant="outline"
+											>
+												Install
+											</Button>
+										</div>
+									</td>
 								</tr>
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
 									{result ? "No available packages to show." : "No search run yet."}
 								</td>
 							</tr>

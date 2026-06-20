@@ -2914,6 +2914,77 @@ function package_search(query) {
 	};
 }
 
+function valid_package_name(name) {
+	return length(name) > 0 && length(name) <= 120 && replace(name, /[^A-Za-z0-9_.+:-]/g, '') == name;
+}
+
+function package_action(action, name, simulate) {
+	action = trim('' + (action || ''));
+	name = trim('' + (name || ''));
+	simulate = !!simulate;
+
+	let manager = command_exists('apk') ? 'apk' : 'opkg';
+	let argv = [];
+
+	if (action == 'update') {
+		argv = manager == 'apk' ? ['apk', 'update'] : ['opkg', 'update'];
+		name = '';
+		simulate = false;
+	}
+	else if (action == 'install' || action == 'remove') {
+		if (!valid_package_name(name))
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'Package name contains unsupported characters.'
+			};
+
+		if (manager == 'apk') {
+			if (action == 'install')
+				argv = simulate ? ['apk', 'add', '--simulate', name] : ['apk', 'add', name];
+			else
+				argv = simulate ? ['apk', 'del', '--simulate', name] : ['apk', 'del', name];
+		}
+		else {
+			if (action == 'install')
+				argv = simulate ? ['opkg', '--noaction', 'install', name] : ['opkg', 'install', name];
+			else
+				argv = simulate ? ['opkg', '--noaction', 'remove', name] : ['opkg', 'remove', name];
+		}
+	}
+	else {
+		return {
+			ok: false,
+			manager,
+			action,
+			name,
+			simulate,
+			command: '',
+			output: '',
+			message: 'Unsupported package action.'
+		};
+	}
+
+	let command = join(' ', quote_command_args(argv));
+	let output = shell_output(`${command} | sed -n "1,220p"`);
+
+	return {
+		ok: true,
+		manager,
+		action,
+		name,
+		simulate,
+		command,
+		output,
+		message: simulate ? 'Package action simulated.' : 'Package action complete.'
+	};
+}
+
 function uci_change_rows() {
 	let rows = [];
 	let output = trim(shell_output('uci changes 2>/dev/null'));
@@ -4833,6 +4904,31 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(package_search(request.args.query || ''));
+		}
+	},
+
+	package_action: {
+		args: {
+			action: '',
+			name: '',
+			simulate: true
+		},
+		call: function(request) {
+			try {
+				return respond(package_action(request.args.action || '', request.args.name || '', request.args.simulate));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					manager: command_exists('apk') ? 'apk' : 'opkg',
+					action: request.args.action || '',
+					name: request.args.name || '',
+					simulate: !!request.args.simulate,
+					command: '',
+					output: '',
+					message: 'Package action failed: ' + e
+				});
+			}
 		}
 	},
 

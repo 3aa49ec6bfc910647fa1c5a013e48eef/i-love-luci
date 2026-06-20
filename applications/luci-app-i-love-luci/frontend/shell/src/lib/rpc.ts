@@ -265,6 +265,19 @@ export type PackageSearchResult = {
 	message: string;
 };
 
+export type PackageAction = "install" | "remove" | "update";
+
+export type PackageActionResult = {
+	ok: boolean;
+	manager: string;
+	action: PackageAction;
+	name: string;
+	simulate: boolean;
+	command: string;
+	output: string;
+	message: string;
+};
+
 export type ServiceState = {
 	name: string;
 	enabled: boolean;
@@ -971,6 +984,24 @@ export async function searchPackages(query: string): Promise<PackageSearchResult
 			lines: [],
 			warnings: [],
 			message: "Package search failed.",
+		};
+	}
+}
+
+export async function runPackageAction(action: PackageAction, name = "", simulate = true): Promise<PackageActionResult> {
+	try {
+		return await callBridge<PackageActionResult>("package_action", { action, name, simulate });
+	}
+	catch {
+		return {
+			ok: false,
+			manager: "unknown",
+			action,
+			name,
+			simulate,
+			command: "",
+			output: "",
+			message: "Package action failed.",
 		};
 	}
 }

@@ -49,6 +49,7 @@
 					"network_rules_save",
 					"network_routes_save",
 					"password_set",
+					"package_action",
 					"rc_local_save",
 					"service_action",
 					"ssh_keys_save",
