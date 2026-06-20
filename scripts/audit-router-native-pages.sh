@@ -210,6 +210,12 @@ else:
 		warnings.append("console_status reports ttyd unavailable")
 	if console_data.get("enabled") and not console_data.get("url"):
 		failures.append("console_status enabled but missing URL")
+	if console_data.get("enabled") and not console_data.get("username"):
+		failures.append("console_status enabled but missing helper username")
+	if console_data.get("enabled") and not console_data.get("password"):
+		failures.append("console_status enabled but missing helper password")
+	if console_data.get("enabled") and console_data.get("path") != "/":
+		failures.append("console_status enabled but did not expose the ttyd root path")
 
 changes = json_after_marker("---ILOVELUCI-CHANGES---")
 if not changes or not changes.get("ok"):
