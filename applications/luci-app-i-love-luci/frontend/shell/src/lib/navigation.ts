@@ -7,12 +7,13 @@ export function flattenMenu(items: MenuItem[]): MenuItem[] {
 export function itemTarget(item: MenuItem) {
 	const path = item.resolvedPath ?? item.firstChildPath ?? item.path;
 	const nativePath = item.nativePath ?? nativePathFor(path);
+	const effectiveMode = item.effectiveMode ?? (item.legacy ? "legacy" : "modern");
 
-	if (nativePath && item.configuredMode !== "legacy") {
+	if (nativePath && effectiveMode === "modern") {
 		return nativePath;
 	}
 
-	if (!item.legacy && path === "/settings") {
+	if (path === "/settings" && effectiveMode !== "legacy") {
 		return "/settings";
 	}
 

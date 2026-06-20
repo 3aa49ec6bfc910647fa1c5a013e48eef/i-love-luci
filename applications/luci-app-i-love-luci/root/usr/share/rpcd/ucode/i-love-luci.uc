@@ -53,31 +53,31 @@ const nativeRoutes = {
 	'/admin/system/admin/sshkeys': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/admin/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' },
 	'/admin/system/admin/repokeys': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
-	'/admin/system/attendedsysupgrade/overview': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
-	'/admin/system/attendedsysupgrade/configuration': { status: 'partial', nativePath: '/native/attendedsysupgrade' },
-	'/admin/system/package-manager': { status: 'supported', nativePath: '/native/packages' },
+	'/admin/system/attendedsysupgrade': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
+	'/admin/system/attendedsysupgrade/overview': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
+	'/admin/system/attendedsysupgrade/configuration': { status: 'partial', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
+	'/admin/system/package-manager': { status: 'partial', nativePath: '/native/packages', autoMode: 'legacy' },
 	'/admin/system/startup': { status: 'supported', nativePath: '/native/startup' },
 	'/admin/system/crontab': { status: 'supported', nativePath: '/native/crontab' },
 	'/admin/system/flash': { status: 'partial', nativePath: '/native/flash' },
-	'/admin/system/commands': { status: 'partial', nativePath: '/native/service/commands' },
-	'/admin/system/commands/dashboard': { status: 'partial', nativePath: '/native/service/commands' },
-	'/admin/system/commands/config': { status: 'partial', nativePath: '/native/service/commands' },
+	'/admin/system/commands': { status: 'partial', nativePath: '/native/service/commands', autoMode: 'legacy' },
+	'/admin/system/commands/dashboard': { status: 'partial', nativePath: '/native/service/commands', autoMode: 'legacy' },
+	'/admin/system/commands/config': { status: 'partial', nativePath: '/native/service/commands', autoMode: 'legacy' },
 	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
 	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
 	'/admin/system/leds': { status: 'partial', nativePath: '/core/system' },
-	'/admin/services': { status: 'partial', nativePath: '/native/services' },
-	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/allowlist': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/blocklist': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/feeds': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/setreport': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/firewall_log': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip' },
-	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast' },
-	'/admin/services/upnp': { status: 'partial', nativePath: '/native/service/upnpd' },
-	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd' }
+	'/admin/services': { status: 'partial', nativePath: '/native/services', autoMode: 'legacy' },
+	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/allowlist': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/blocklist': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/feeds': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/setreport': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/firewall_log': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
+	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast', autoMode: 'legacy' },
+	'/admin/services/upnp': { status: 'partial', nativePath: '/native/service/upnpd', autoMode: 'legacy' },
+	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd', autoMode: 'legacy' }
 };
 const servicePackages = {
 	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'] },
@@ -294,7 +294,7 @@ function load_route_modes() {
 	return modes;
 }
 
-function effective_mode(configuredMode, nativeStatus) {
+function effective_mode(configuredMode, nativeStatus, autoMode) {
 	let has_native = nativeStatus == 'supported' || nativeStatus == 'partial';
 
 	if (configuredMode == 'hidden')
@@ -305,6 +305,9 @@ function effective_mode(configuredMode, nativeStatus) {
 
 	if (configuredMode == 'modern')
 		return has_native ? 'modern' : 'legacy';
+
+	if (autoMode == 'legacy')
+		return 'legacy';
 
 	return has_native ? 'modern' : 'legacy';
 }
@@ -715,7 +718,7 @@ function build_menu() {
 		let nativeRoute = nativeRoutes[path] || null;
 		let nativeStatus = nativeRoute?.status || 'unsupported';
 		let configuredMode = modes[path] || 'auto';
-		let mode = effective_mode(configuredMode, nativeStatus);
+		let mode = effective_mode(configuredMode, nativeStatus, nativeRoute?.autoMode);
 		let entry = {
 			id: route_id(path),
 			title: spec.title || basename_path(path),
@@ -733,6 +736,7 @@ function build_menu() {
 			hasChildren: false,
 			legacy: mode != 'modern',
 			nativeStatus,
+			nativeAutoMode: nativeRoute?.autoMode || 'modern',
 			configuredMode,
 			effectiveMode: mode,
 			nativePath: nativeRoute?.nativePath || null,
