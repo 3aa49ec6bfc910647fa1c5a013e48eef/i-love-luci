@@ -772,7 +772,9 @@ Mandatory workstream:
 - Perform a full route audit across every installed LuCI route before release.
 - Confirm compat is configured and working for every current LuCI app, including all child routes exposed by those apps.
 - Confirm every route migrated to a native I Love LuCI screen is recorded in the route inventory, mapped back to its LuCI source route or workflow, and covered by native route tests.
+- Confirm every migrated native route remains reachable as an I Love LuCI route and has an explicit compat fallback decision, so native migration cannot remove the original LuCI workflow by accident.
 - Harden the LuCI app adapter so current and future installed LuCI apps are discovered from menu/ACL metadata instead of hard-coded route lists.
+- Add adapter contract tests for current and future LuCI apps: discovery, ACL visibility, navigation/search indexing, direct route loading, session recovery, query-string preservation, child routes, and compat-frame rendering.
 - Audit migrated native routes and compat routes together so native coverage cannot grow by silently dropping LuCI app functionality.
 - Prove future app install handling is seamless: install a LuCI app from the standard OpenWrt feed, refresh menu/cache state, verify it appears in sidebar/search, verify it opens through compat without code changes, then uninstall it and verify the route disappears cleanly.
 - Treat adapter robustness as a release gate: unknown apps must degrade to LuCI compat, not broken native screens or missing navigation entries.
@@ -783,6 +785,8 @@ The audit has two equally important outcomes:
 - every route that has been rebuilt natively must be tracked, validated, and promoted only when it has feature parity for its current scope
 
 Route inventory must become the source of truth for compatibility decisions. It should record each discovered LuCI route, its source package, source menu file, ACL requirements, native migration state, chosen renderer, fallback target, and latest test result. Routes should not be inferred from sidebar rendering alone.
+
+Compatibility evidence must be captured per route, not only per app. Each route entry should show whether compat is configured, whether compat has been exercised successfully on the router, whether a native route exists, whether that native route is production-ready or preview-only, and what happens when the related LuCI app is installed, upgraded, removed, or reinstalled later.
 
 Audit inputs:
 
