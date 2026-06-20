@@ -453,6 +453,24 @@ export type PolicyRulesResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallDefaultsInput = {
+	input: string;
+	output: string;
+	forward: string;
+	synflood_protect: string;
+	drop_invalid: string;
+	flow_offloading: string;
+	flow_offloading_hw: string;
+};
+
+export type FirewallDefaultsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -881,6 +899,21 @@ export async function saveNetworkRules(rows: PolicyRule[]): Promise<PolicyRulesR
 			message: "Policy rules save failed.",
 			changed: false,
 			rules: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallDefaults(config: FirewallDefaultsInput): Promise<FirewallDefaultsResult> {
+	try {
+		return await callBridge<FirewallDefaultsResult>("firewall_defaults_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall defaults save failed.",
+			changed: false,
+			section: null,
 			sections: [],
 		};
 	}

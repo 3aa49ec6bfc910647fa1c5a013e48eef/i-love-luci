@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
 	getCoreSettings,
 	getDashboardStatus,
+	saveFirewallDefaults,
 	saveDhcpDomains,
 	saveDhcpHosts,
 	saveDhcpPools,
@@ -24,6 +25,7 @@ import {
 	type DhcpLease,
 	type DhcpPool,
 	type DnsmasqConfigInput,
+	type FirewallDefaultsInput,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
 	type ServiceState,
@@ -105,7 +107,7 @@ export function CoreSettingsPage() {
 				/>
 			) : null}
 			{page === "dhcp" && settings ? <DhcpSummary onSettingsChange={setSettings} settings={settings} /> : null}
-			{page === "firewall" && settings ? <FirewallSummary settings={settings} /> : null}
+			{page === "firewall" && settings ? <FirewallSummary onSettingsChange={setSettings} settings={settings} /> : null}
 			{page === "system" && settings ? <SystemSummary settings={settings} dashboard={dashboard} /> : null}
 
 			<section className="grid gap-3">
@@ -978,15 +980,34 @@ function normalizeDhcpDomain(record: DhcpDomain): DhcpDomain {
 	};
 }
 
-function FirewallSummary({ settings }: { settings: CoreSettings }) {
+function FirewallSummary({
+	onSettingsChange,
+	settings,
+}: {
+	onSettingsChange: (settings: CoreSettings) => void;
+	settings: CoreSettings;
+}) {
 	const defaults = settings.firewall.filter((section) => section.type === "defaults");
 	const zones = settings.firewall.filter((section) => section.type === "zone");
 	const forwardings = settings.firewall.filter((section) => section.type === "forwarding");
 	const rules = settings.firewall.filter((section) => section.type === "rule");
 	const redirects = settings.firewall.filter((section) => section.type === "redirect");
+	const firstDefaults = defaults[0] ?? null;
 
 	return (
 		<div className="grid gap-5">
+			{firstDefaults ? (
+				<FirewallDefaultsEditor
+					onSaved={(sections) =>
+						onSettingsChange({
+							...settings,
+							firewall: sections,
+						})
+					}
+					section={firstDefaults}
+				/>
+			) : null}
+
 			{defaults.length ? (
 				<SimpleSectionTable
 					columns={["Input", "Output", "Forward", "Syn flood", "Flow offload", "HW offload"]}
@@ -1030,6 +1051,142 @@ function FirewallSummary({ settings }: { settings: CoreSettings }) {
 			{redirects.length ? <FirewallRedirectTable redirects={redirects} /> : null}
 		</div>
 	);
+}
+
+function FirewallDefaultsEditor({
+	onSaved,
+	section,
+}: {
+	onSaved: (sections: ConfigSection[]) => void;
+	section: ConfigSection;
+}) {
+	const [values, setValues] = useState(() => firewallDefaultsValues(section));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof FirewallDefaultsInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallDefaults(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = result.section ? firewallDefaultsValues(result.section) : values;
+		toast.success(result.message);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div>
+				<h2 className="text-base font-semibold">Firewall defaults</h2>
+				<p className="text-sm text-muted-foreground">Configure default packet policies and flow offloading.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+					<Field label="Input" target="firewall-default-input">
+						<FirewallPolicySelect
+							id="firewall-default-input"
+							onChange={(value) => updateField("input", value)}
+							value={values.input}
+						/>
+					</Field>
+					<Field label="Output" target="firewall-default-output">
+						<FirewallPolicySelect
+							id="firewall-default-output"
+							onChange={(value) => updateField("output", value)}
+							value={values.output}
+						/>
+					</Field>
+					<Field label="Forward" target="firewall-default-forward">
+						<FirewallPolicySelect
+							id="firewall-default-forward"
+							onChange={(value) => updateField("forward", value)}
+							value={values.forward}
+						/>
+					</Field>
+					<BooleanField
+						id="firewall-synflood"
+						label="Syn flood protection"
+						onChange={(value) => updateField("synflood_protect", value)}
+						value={values.synflood_protect}
+					/>
+					<BooleanField
+						id="firewall-drop-invalid"
+						label="Drop invalid packets"
+						onChange={(value) => updateField("drop_invalid", value)}
+						value={values.drop_invalid}
+					/>
+					<BooleanField
+						id="firewall-flow-offload"
+						label="Software flow offload"
+						onChange={(value) => updateField("flow_offloading", value)}
+						value={values.flow_offloading}
+					/>
+					<BooleanField
+						id="firewall-flow-offload-hw"
+						label="Hardware flow offload"
+						onChange={(value) => updateField("flow_offloading_hw", value)}
+						value={values.flow_offloading_hw}
+					/>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function FirewallPolicySelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<SelectField
+			id={id}
+			onChange={onChange}
+			options={[
+				["ACCEPT", "Accept"],
+				["REJECT", "Reject"],
+				["DROP", "Drop"],
+			]}
+			value={value}
+		/>
+	);
+}
+
+function firewallDefaultsValues(section: ConfigSection): FirewallDefaultsInput {
+	return {
+		input: firewallPolicyText(section.values.input),
+		output: firewallPolicyText(section.values.output),
+		forward: firewallPolicyText(section.values.forward),
+		synflood_protect: booleanValue(section.values.synflood_protect),
+		drop_invalid: booleanValue(section.values.drop_invalid),
+		flow_offloading: booleanValue(section.values.flow_offloading),
+		flow_offloading_hw: booleanValue(section.values.flow_offloading_hw),
+	};
+}
+
+function firewallPolicyText(value: unknown) {
+	const text = rawValue(value).toUpperCase();
+	return text === "ACCEPT" || text === "DROP" || text === "REJECT" ? text : "REJECT";
 }
 
 function FirewallRuleTable({ rules }: { rules: ConfigSection[] }) {

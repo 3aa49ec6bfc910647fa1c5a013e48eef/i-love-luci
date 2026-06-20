@@ -95,7 +95,7 @@ expected_pages = {
 expected_core_pages = {
 	"network": {"sections": "network", "arrays": ["networkRoutes", "networkRules"]},
 	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
-	"firewall": {"sections": "firewall"},
+	"firewall": {"sections": "firewall", "required_options": ["input", "output", "forward"]},
 	"system": {"sections": "system"},
 }
 
@@ -172,6 +172,15 @@ for page, rules in expected_core_pages.items():
 		failures.append(f"{page}: core_settings missing {sections_key} section list")
 	elif sections_key and not data.get(sections_key):
 		failures.append(f"{page}: core_settings returned empty {sections_key} section list")
+
+	required_options = set(rules.get("required_options", []))
+	if sections_key and required_options:
+		options = set()
+		for section in data.get(sections_key) or []:
+			options.update((section.get("values") or {}).keys())
+		for option in required_options:
+			if option not in options:
+				failures.append(f"{page}: core_settings expected UCI option {option!r}")
 
 	for key in rules.get("arrays", []):
 		if not isinstance(data.get(key), list):

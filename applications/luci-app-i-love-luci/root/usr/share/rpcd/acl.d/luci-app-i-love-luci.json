@@ -34,6 +34,7 @@
 					"dhcp_pools_save",
 					"dropbear_config_save",
 					"dnsmasq_config_save",
+					"firewall_defaults_save",
 					"led_config_save",
 					"network_rules_save",
 					"network_routes_save",
@@ -53,6 +54,7 @@
 			"uci": [
 				"dropbear",
 				"dhcp",
+				"firewall",
 				"luci",
 				"i-love-luci",
 				"network",

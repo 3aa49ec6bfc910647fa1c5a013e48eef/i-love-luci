@@ -1414,6 +1414,87 @@ function save_network_rules(rows) {
 	};
 }
 
+function firewall_defaults_section() {
+	let section = null;
+
+	uci.load('firewall');
+	uci.foreach('firewall', 'defaults', function(s) {
+		section ??= s['.name'];
+	});
+
+	return section || uci.add('firewall', 'defaults');
+}
+
+function firewall_policy_value(value) {
+	value = dhcp_clean_value(value || '');
+
+	if (value == 'ACCEPT' || value == 'accept')
+		return 'ACCEPT';
+
+	if (value == 'REJECT' || value == 'reject')
+		return 'REJECT';
+
+	if (value == 'DROP' || value == 'drop')
+		return 'DROP';
+
+	return '';
+}
+
+function save_firewall_defaults(config) {
+	config ||= {};
+	uci.load('firewall');
+
+	let section = firewall_defaults_section();
+	let next = {
+		input: firewall_policy_value(config.input || ''),
+		output: firewall_policy_value(config.output || ''),
+		forward: firewall_policy_value(config.forward || ''),
+		synflood_protect: dhcp_zero_one(config.synflood_protect),
+		drop_invalid: dhcp_zero_one(config.drop_invalid),
+		flow_offloading: dhcp_zero_one(config.flow_offloading),
+		flow_offloading_hw: dhcp_zero_one(config.flow_offloading_hw)
+	};
+
+	if (!length(next.input) || !length(next.output) || !length(next.forward))
+		return {
+			saved: false,
+			message: 'Firewall default policies must be ACCEPT, REJECT, or DROP.',
+			changed: false,
+			section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
+			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		};
+
+	let changed = false;
+
+	for (let key, value in next) {
+		let current = uci.get('firewall', section, key) || '';
+
+		if ((key == 'drop_invalid' || key == 'flow_offloading' || key == 'flow_offloading_hw') && value == '0' && current == '')
+			continue;
+
+		if (current != value) {
+			changed = true;
+			if ((key == 'drop_invalid' || key == 'flow_offloading' || key == 'flow_offloading_hw') && value == '0')
+				uci.delete('firewall', section, key);
+			else
+				uci.set('firewall', section, key, value);
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall defaults saved and firewall reloaded.' : 'Firewall defaults already up to date.',
+		changed,
+		section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2693,6 +2774,26 @@ const methods = {
 					changed: false,
 					rules: network_rule_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				});
+			}
+		}
+	},
+
+	firewall_defaults_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_defaults(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall defaults save failed: ' + e,
+					changed: false,
+					section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}
 		}
