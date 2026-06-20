@@ -157,6 +157,14 @@ export type ServiceState = {
 	running: boolean;
 };
 
+export type InitAction = "enable" | "disable" | "start" | "stop" | "restart" | "status";
+
+export type InitActionResult = {
+	ok: boolean;
+	message: string;
+	state: ServiceState | null;
+};
+
 export type NativeService = {
 	id?: string;
 	name?: string;
@@ -358,6 +366,32 @@ export async function getServiceDetail(id: string): Promise<NativeService> {
 			title: id,
 			sections: [],
 			logs: {},
+		};
+	}
+}
+
+export async function runServiceAction(id: string, action: InitAction): Promise<InitActionResult> {
+	try {
+		return await callBridge<InitActionResult>("service_action", { id, action });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Service action failed.",
+			state: null,
+		};
+	}
+}
+
+export async function runStartupAction(name: string, action: InitAction): Promise<InitActionResult> {
+	try {
+		return await callBridge<InitActionResult>("startup_action", { name, action });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Startup action failed.",
+			state: null,
 		};
 	}
 }

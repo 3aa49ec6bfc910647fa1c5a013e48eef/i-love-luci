@@ -9,9 +9,12 @@ import { Input } from "@/components/ui/input";
 import {
 	getNativePage,
 	getServiceDetail,
+	runServiceAction,
+	runStartupAction,
 	runDiagnostics,
 	type CommandBlock,
 	type ConfigSection,
+	type InitAction,
 	type NativePageData,
 	type NativeService,
 } from "@/lib/rpc";
@@ -235,23 +238,59 @@ function CommandPanels({ commands }: { commands: CommandBlock[] }) {
 }
 
 function StartupTable({ services }: { services: NativeService[] }) {
+	const [overrides, setOverrides] = useState<Record<string, Partial<NativeService>>>({});
+	const [pending, setPending] = useState<string | null>(null);
+	const rows = services.map((service) => {
+		const key = service.name ?? "";
+		return key && overrides[key] ? { ...service, ...overrides[key] } : service;
+	});
+
+	async function run(name: string, action: InitAction) {
+		setPending(`${name}:${action}`);
+		const result = await runStartupAction(name, action);
+		setPending(null);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		if (result.state) {
+			setOverrides((current) => ({ ...current, [name]: result.state ?? {} }));
+		}
+
+		toast.success(result.message);
+	}
+
 	return (
 		<Panel title="Init scripts" flush>
 			<div className="overflow-x-auto">
-				<table className="w-full min-w-[32rem] text-left text-sm">
+				<table className="w-full min-w-[44rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Service</th>
 							<th className="px-3 py-2 font-medium">Enabled</th>
 							<th className="px-3 py-2 font-medium">Running</th>
+							<th className="px-3 py-2 text-right font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
-						{services.map((service) => (
+						{rows.map((service) => (
 							<tr className="border-b last:border-0" key={service.name ?? service.title}>
 								<td className="px-3 py-2 font-medium">{service.name ?? service.title}</td>
 								<td className="px-3 py-2">{stateBadge(service.enabled)}</td>
 								<td className="px-3 py-2">{stateBadge(service.running)}</td>
+								<td className="px-3 py-2">
+									{service.name ? (
+										<ServiceActionButtons
+											disabledPrefix={pending}
+											enabled={service.enabled}
+											name={service.name}
+											onRun={run}
+											running={service.running}
+										/>
+									) : null}
+								</td>
 							</tr>
 						))}
 					</tbody>
@@ -272,6 +311,31 @@ function ServiceOverview({ services }: { services: NativeService[] }) {
 }
 
 function ServiceStateCard({ service }: { service: NativeService }) {
+	const [override, setOverride] = useState(service.init ?? null);
+	const [pending, setPending] = useState<string | null>(null);
+	const state = override ?? service.init ?? null;
+
+	async function run(action: InitAction) {
+		if (!service.id || !state) {
+			return;
+		}
+
+		setPending(`${state.name}:${action}`);
+		const result = await runServiceAction(service.id, action);
+		setPending(null);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		if (result.state) {
+			setOverride(result.state);
+		}
+
+		toast.success(result.message);
+	}
+
 	return (
 		<Panel
 			title={
@@ -287,12 +351,53 @@ function ServiceStateCard({ service }: { service: NativeService }) {
 			<div className="grid gap-3 text-sm">
 				<div className="flex flex-wrap items-center gap-2">
 					<Badge>{service.package}</Badge>
-					{service.init ? stateBadge(service.init.enabled, "enabled", "disabled") : null}
-					{service.init ? stateBadge(service.init.running, "running", "stopped") : null}
+					{state ? stateBadge(state.enabled, "enabled", "disabled") : null}
+					{state ? stateBadge(state.running, "running", "stopped") : null}
 				</div>
 				<p className="text-muted-foreground">{service.sections?.length ?? 0} UCI sections detected.</p>
+				{state ? (
+					<ServiceActionButtons
+						disabledPrefix={pending}
+						enabled={state.enabled}
+						name={state.name}
+						onRun={(_, action) => run(action)}
+						running={state.running}
+					/>
+				) : null}
 			</div>
 		</Panel>
+	);
+}
+
+function ServiceActionButtons({
+	disabledPrefix,
+	enabled,
+	name,
+	onRun,
+	running,
+}: {
+	disabledPrefix: string | null;
+	enabled?: boolean;
+	name: string;
+	onRun: (name: string, action: InitAction) => void | Promise<void>;
+	running?: boolean;
+}) {
+	const busy = disabledPrefix?.startsWith(`${name}:`) ?? false;
+	const primaryAction: InitAction = running ? "stop" : "start";
+	const enabledAction: InitAction = enabled ? "disable" : "enable";
+
+	return (
+		<div className="flex flex-wrap justify-end gap-1.5">
+			<Button disabled={busy} onClick={() => void onRun(name, primaryAction)} size="sm" variant="outline">
+				{running ? "Stop" : "Start"}
+			</Button>
+			<Button disabled={busy} onClick={() => void onRun(name, "restart")} size="sm" variant="outline">
+				Restart
+			</Button>
+			<Button disabled={busy} onClick={() => void onRun(name, enabledAction)} size="sm" variant="outline">
+				{enabled ? "Disable" : "Enable"}
+			</Button>
+		</div>
 	);
 }
 

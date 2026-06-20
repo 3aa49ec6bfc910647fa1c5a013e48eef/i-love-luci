@@ -541,25 +541,27 @@ Converted to native React/Vite surfaces:
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration.
 - `/admin/system/package-manager`: installed package inventory.
-- `/admin/system/startup`: init script enabled/running state.
+- `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab view.
 - `/admin/system/flash`: read-only filesystem and flash partition overview.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
 - `/admin/system/commands` and children: modern read-only UCI summary for custom commands.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
-- `/admin/services`: service overview.
-- `/admin/services/banip` and child routes: service status and UCI summary.
-- `/admin/services/adblock-fast`: service status and UCI summary.
-- `/admin/services/upnp`: service status and UCI summary.
-- `/admin/services/uhttpd`: uHTTPd service status and UCI summary.
+- `/admin/services`: service overview with native lifecycle actions where an init script exists.
+- `/admin/services/banip` and child routes: service status, lifecycle actions, and UCI summary.
+- `/admin/services/adblock-fast`: service status, lifecycle actions, and UCI summary.
+- `/admin/services/upnp`: service status, lifecycle actions, and UCI summary.
+- `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, and UCI summary.
 
 Validation on `172.16.172.1`:
 
 - All visible LuCI menu routes now resolve to `modern` mode. The router menu has `0` visible unsupported routes.
 - `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `flash`, `services`, and `reboot`.
 - `service_detail` returned successfully for `banip`, `adblock-fast`, `upnpd`, `commands`, `uhttpd`, and `dropbear`.
+- `service_action` and `startup_action` returned current state for `uhttpd` with non-mutating `status`; invalid init names are rejected.
 - Browser smoke test loaded `#/native/services` and rendered the service overview with the flattened native layout.
 - Browser smoke tests loaded `#/native/wireless` and `#/native/attendedsysupgrade`.
+- Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
 
 Remaining legacy or partial gaps:
 
@@ -567,7 +569,7 @@ Remaining legacy or partial gaps:
 - Attended sysupgrade is native but guarded/read-only. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
 - Package install/remove/update remains legacy. Current native package screen is inventory-only.
-- Advanced service editors for banIP, AdBlock Fast, UPnP, custom commands, Dropbear, and uHTTPd remain read-only UCI summaries. Native write forms should be added per service after pending-change/apply flow is complete.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, custom commands, Dropbear, and uHTTPd remain read-only UCI summaries. Service lifecycle is native, but native config forms should be added per service after pending-change/apply flow is complete.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
 ## Login Conversion

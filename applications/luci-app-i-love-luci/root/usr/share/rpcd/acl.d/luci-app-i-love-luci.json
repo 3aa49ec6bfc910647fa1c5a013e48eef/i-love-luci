@@ -25,6 +25,8 @@
 					"changes_apply",
 					"changes_revert",
 					"diagnostics_run",
+					"service_action",
+					"startup_action",
 					"route_mode_set",
 					"auth_mfa_begin_setup",
 					"auth_mfa_verify_setup",

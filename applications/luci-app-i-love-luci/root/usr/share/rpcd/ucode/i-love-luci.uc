@@ -93,6 +93,14 @@ const routeModes = {
 	legacy: true,
 	hidden: true
 };
+const initActions = {
+	enable: true,
+	disable: true,
+	start: true,
+	stop: true,
+	restart: true,
+	status: true
+};
 
 function respond(data) {
 	return {
@@ -369,6 +377,12 @@ function command_exists(name) {
 	return system(`command -v ${name} >/dev/null 2>&1`) == 0;
 }
 
+function safe_init_name(name) {
+	name = name || '';
+
+	return length(name) && replace(name, /[^A-Za-z0-9_.-]/g, '') == name ? name : null;
+}
+
 function init_status(name) {
 	if (!name)
 		return null;
@@ -414,6 +428,38 @@ function fast_service_state(name) {
 		name,
 		enabled,
 		running
+	};
+}
+
+function run_init_action(name, action) {
+	name = safe_init_name(name);
+	action = action || 'status';
+
+	if (!name || !initActions[action])
+		return {
+			ok: false,
+			message: 'Unsupported init action.',
+			state: null
+		};
+
+	let script = `/etc/init.d/${name}`;
+
+	if (stat(script)?.type != 'file')
+		return {
+			ok: false,
+			message: 'Init script was not found.',
+			state: null
+		};
+
+	let exit_code = 0;
+
+	if (action != 'status')
+		exit_code = system(`${script} ${action} >/dev/null 2>&1`);
+
+	return {
+		ok: exit_code == 0,
+		message: exit_code == 0 ? `Action ${action} completed.` : `Action ${action} failed.`,
+		state: fast_service_state(name)
 	};
 }
 
@@ -501,6 +547,19 @@ function service_detail(id) {
 		sections: collect_uci_config(meta.package, meta.sections || []),
 		logs: {}
 	};
+}
+
+function service_action(id, action) {
+	let meta = servicePackages[id] || null;
+
+	if (!meta?.init)
+		return {
+			ok: false,
+			message: 'This service does not expose an init script.',
+			state: null
+		};
+
+	return run_init_action(meta.init, action);
 }
 
 function native_page(page) {
@@ -791,6 +850,26 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(service_detail(request.args.id || ''));
+		}
+	},
+
+	service_action: {
+		args: {
+			id: '',
+			action: 'status'
+		},
+		call: function(request) {
+			return respond(service_action(request.args.id || '', request.args.action || 'status'));
+		}
+	},
+
+	startup_action: {
+		args: {
+			name: '',
+			action: 'status'
+		},
+		call: function(request) {
+			return respond(run_init_action(request.args.name || '', request.args.action || 'status'));
 		}
 	},
 
