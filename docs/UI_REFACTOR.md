@@ -636,6 +636,7 @@ Validation on `172.16.172.1`:
 - The route compatibility table now labels route support as `Coverage` and no longer displays effective `modern`/`legacy` status text beside each route. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native35` bundle confirmed the settings table renders `Route`, `Coverage`, and `Mode` columns; mode labels remain only inside the explicit route override selector. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - banIP child routes now have focused native preview targets for allowlist, blocklist, custom feeds, reporting, firewall log, and processing log when a route is explicitly forced to modern. Auto mode still defaults these LuCI app routes to compat until edit/reload parity is complete. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native36` bundle confirmed `#/native/service/banip/allowlist`, `#/native/service/banip/blocklist`, `#/native/service/banip/feeds`, `#/native/service/banip/setreport`, and `#/native/service/banip/firewall_log` render focused structured views without `<pre>` elements. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - Route audit now validates every native-capable route has a shell-native preview path matching a known I Love LuCI route pattern, including partial routes that default to LuCI compat in auto mode. The latest audit on `172.16.172.1` reported `native_preview_routes=60` and passed route, native page, and HTTP route checks.
+- Native page audit now asserts focused service-preview data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so focused native child routes cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
 
 Remaining legacy or partial gaps:
 
@@ -811,6 +812,7 @@ Required tooling:
   - native page RPC failures
   - missing command/section/service/text/package data for known native routes
   - service adapter detail failures
+  - focused service-preview data source failures such as missing banIP file/log summaries
   - missing service enabled/running state
   - console bridge availability/URL regressions
   - pending-change bridge shape regressions
