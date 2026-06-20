@@ -1,6 +1,8 @@
 import {
 	Activity,
 	Boxes,
+	ChevronDown,
+	ChevronRight,
 	Cog,
 	LayoutDashboard,
 	Network,
@@ -74,36 +76,78 @@ function isActive(item: MenuItem, pathname: string, search: string) {
 	const target = itemTarget(item);
 
 	if (target.startsWith("/legacy")) {
-		return activeLegacyPath(search) === (item.resolvedPath ?? item.firstChildPath ?? item.path) && !item.children?.length;
+		return activeLegacyPath(search) === (item.resolvedPath ?? item.firstChildPath ?? item.path);
 	}
 
-	return pathname === target && !item.children?.length;
+	return pathname === target;
 }
 
-function NavItem({ depth = 0, item, onClose }: { depth?: number; item: MenuItem; onClose?: () => void }) {
+function collectExpandablePaths(items: MenuItem[]) {
+	return flattenMenu(items)
+		.filter((item) => item.children?.length)
+		.map((item) => item.path);
+}
+
+function NavItem({
+	depth = 0,
+	expanded,
+	item,
+	onClose,
+	onToggle,
+}: {
+	depth?: number;
+	expanded: Set<string>;
+	item: MenuItem;
+	onClose?: () => void;
+	onToggle: (path: string) => void;
+}) {
 	const location = useLocation();
 	const target = itemTarget(item);
 	const active = isActive(item, location.pathname, location.search);
 	const children = item.children ?? [];
+	const hasChildren = children.length > 0;
+	const isExpanded = expanded.has(item.path);
 
 	return (
 		<div>
-			<Link
-				className={cn(
-					"flex h-9 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground",
-					active && "bg-secondary font-semibold text-foreground",
-				)}
-				style={{ paddingLeft: `${0.75 + depth * 0.85}rem` }}
-				to={target}
-				onClick={onClose}
-			>
-				{depth === 0 ? itemIcon(item) : <span className="size-4 shrink-0" />}
-				<span className="min-w-0 truncate">{item.title}</span>
-			</Link>
-			{children.length ? (
+			<div className="flex items-center gap-1">
+				<Link
+					className={cn(
+						"flex h-9 min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground",
+						active && hasChildren && "font-semibold text-foreground",
+						active && !hasChildren && "bg-secondary font-semibold text-foreground",
+					)}
+					style={{ paddingLeft: `${0.75 + depth * 0.85}rem` }}
+					to={target}
+					onClick={onClose}
+				>
+					{depth === 0 ? itemIcon(item) : <span className="size-4 shrink-0" />}
+					<span className="min-w-0 truncate">{item.title}</span>
+				</Link>
+				{hasChildren ? (
+					<Button
+						className="size-8 shrink-0"
+						size="icon"
+						variant="ghost"
+						aria-label={isExpanded ? `Collapse ${item.title}` : `Expand ${item.title}`}
+						aria-expanded={isExpanded}
+						onClick={() => onToggle(item.path)}
+					>
+						{isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+					</Button>
+				) : null}
+			</div>
+			{hasChildren && isExpanded ? (
 				<div className="mt-0.5 grid gap-0.5">
 					{children.map((child) => (
-						<NavItem depth={depth + 1} item={child} key={child.path} onClose={onClose} />
+						<NavItem
+							depth={depth + 1}
+							expanded={expanded}
+							item={child}
+							key={child.path}
+							onClose={onClose}
+							onToggle={onToggle}
+						/>
 					))}
 				</div>
 			) : null}
@@ -113,6 +157,7 @@ function NavItem({ depth = 0, item, onClose }: { depth?: number; item: MenuItem;
 
 function NavItems({ onClose }: { onClose?: () => void }) {
 	const [tree, setTree] = useState<MenuItem[]>(fallbackTree);
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
 	useEffect(() => {
 		let cancelled = false;
@@ -137,19 +182,52 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 
 		return [...dashboard, ...withoutSettings];
 	}, [tree]);
+	const expandablePaths = useMemo(() => collectExpandablePaths(visibleTree), [visibleTree]);
+	const allExpanded = expandablePaths.length > 0 && expandablePaths.every((path) => expanded.has(path));
+
+	function togglePath(path: string) {
+		setExpanded((current) => {
+			const next = new Set(current);
+
+			if (next.has(path)) {
+				next.delete(path);
+			}
+			else {
+				next.add(path);
+			}
+
+			return next;
+		});
+	}
+
+	function toggleAll() {
+		setExpanded(allExpanded ? new Set() : new Set(expandablePaths));
+	}
 
 	return (
-		<nav className="flex min-h-full flex-col gap-3">
-			<div>
-				<div className="px-3 pb-2 pt-3 text-xs font-semibold uppercase text-muted-foreground">Navigation</div>
+		<nav className="flex min-h-0 flex-1 flex-col gap-3">
+			<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+				<div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
+					<div className="text-xs font-semibold uppercase text-muted-foreground">Navigation</div>
+					<Button
+						className="h-7 px-2 text-xs"
+						size="sm"
+						variant="ghost"
+						type="button"
+						disabled={!expandablePaths.length}
+						onClick={toggleAll}
+					>
+						{allExpanded ? "Collapse all" : "Expand all"}
+					</Button>
+				</div>
 				<div className="grid gap-1">
 					{visibleTree.map((item) => (
-						<NavItem item={item} key={item.path} onClose={onClose} />
+						<NavItem expanded={expanded} item={item} key={item.path} onClose={onClose} onToggle={togglePath} />
 					))}
 				</div>
 			</div>
-			<div className="mt-auto border-t pt-3">
-				<NavItem item={fallbackTree[1]} onClose={onClose} />
+			<div className="shrink-0 border-t pt-3">
+				<NavItem expanded={expanded} item={fallbackTree[1]} onClose={onClose} onToggle={togglePath} />
 			</div>
 		</nav>
 	);
@@ -158,7 +236,7 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 export function Sidebar({ open, onClose }: SidebarProps) {
 	return (
 		<>
-			<aside className="hidden w-72 shrink-0 overflow-y-auto border-r bg-card p-3 lg:block">
+			<aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-hidden border-r bg-card p-3 lg:block">
 				<NavItems />
 			</aside>
 			{open ? (
@@ -169,14 +247,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 						aria-label="Close navigation overlay"
 						onClick={onClose}
 					/>
-					<aside className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-y-auto border-r bg-card p-3 shadow-xl">
-						<div className="mb-2 flex items-center justify-between px-2">
+					<aside className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-hidden border-r bg-card p-3 shadow-xl">
+						<div className="mb-2 flex shrink-0 items-center justify-between px-2">
 							<span className="font-semibold">I Love LuCI</span>
 							<Button size="icon" variant="ghost" aria-label="Close navigation" onClick={onClose}>
 								<X className="size-5" />
 							</Button>
 						</div>
-						<NavItems onClose={onClose} />
+						<div className="min-h-0 flex-1 overflow-y-auto">
+							<NavItems onClose={onClose} />
+						</div>
 					</aside>
 				</div>
 			) : null}

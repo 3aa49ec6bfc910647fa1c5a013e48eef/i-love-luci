@@ -130,6 +130,22 @@ export type DashboardStatus = {
 	devices: Record<string, DeviceStatus>;
 };
 
+export type ConfigValue = string | number | boolean | Array<string | number | boolean>;
+
+export type ConfigSection = {
+	name: string;
+	type: string;
+	values: Record<string, ConfigValue>;
+};
+
+export type CoreSettings = {
+	page: string;
+	network: ConfigSection[];
+	dhcp: ConfigSection[];
+	firewall: ConfigSection[];
+	system: ConfigSection[];
+};
+
 type BridgeResponse<T> = {
 	ok: boolean;
 	data: T;
@@ -262,5 +278,20 @@ export async function getDashboardStatus(): Promise<DashboardStatus> {
 	}
 	catch {
 		return fallbackDashboard;
+	}
+}
+
+export async function getCoreSettings(page: string): Promise<CoreSettings> {
+	try {
+		return await callBridge<CoreSettings>("core_settings", { page });
+	}
+	catch {
+		return {
+			page,
+			network: [],
+			dhcp: [],
+			firewall: [],
+			system: [],
+		};
 	}
 }

@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthRoute } from "@/components/auth/auth-route";
 import { LoginPage } from "@/routes/login";
 import { ModernShell } from "@/components/shell/modern-shell";
+import { CoreSettingsPage } from "@/routes/core-settings";
 import { DashboardPage } from "@/routes/dashboard";
 import { LegacyPage } from "@/routes/legacy";
 import { SettingsPage } from "@/routes/settings";
@@ -22,6 +23,7 @@ export function App() {
 					}
 				>
 					<Route index element={<DashboardPage />} />
+					<Route path="core/:page" element={<CoreSettingsPage />} />
 					<Route path="settings" element={<SettingsPage />} />
 					<Route path="legacy/*" element={<LegacyPage />} />
 					<Route path="*" element={<Navigate to="/" replace />} />
