@@ -17,7 +17,7 @@
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 	<link rel="icon" href="/luci-static/i-love-luci-app/logo.svg" sizes="any" />
-	<link rel="stylesheet" href="/luci-static/i-love-luci-app/assets/app.css?v=1.0.0-r4-native67" />
+	<link rel="stylesheet" href="/luci-static/i-love-luci-app/assets/app.css?v=1.0.0-r4-native68" />
 	<title>Log in | I Love LuCI</title>
 </head>
 <body data-iloveluci-login="true" data-login-failed="{{ fuser ? 'true' : 'false' }}" data-default-user="{{ entityencode(duser || "root", true) }}">
@@ -48,6 +48,6 @@
 			});
 		}
 	</script>
-	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native67"></script>
+	<script type="module" src="/luci-static/i-love-luci-app/assets/app.js?v=1.0.0-r4-native68"></script>
 </body>
 </html>

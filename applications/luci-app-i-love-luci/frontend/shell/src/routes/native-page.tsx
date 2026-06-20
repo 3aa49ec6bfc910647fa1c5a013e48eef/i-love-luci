@@ -1,4 +1,4 @@
-import { Play, Plus, Power, Search, Trash2 } from "lucide-react";
+import { Download, Play, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -779,6 +779,12 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 						<Badge className={result.exitcode === 0 ? "text-primary" : ""}>exit {result.exitcode}</Badge>
 						<span className="break-all font-mono">{result.command}</span>
+						{!result.binary ? (
+							<Button onClick={() => downloadCommandResult(command, result)} size="sm" type="button" variant="outline">
+								<Download className="size-3.5" />
+								Download
+							</Button>
+						) : null}
 					</div>
 					{result.binary ? <p className="text-sm text-muted-foreground">Binary output hidden.</p> : null}
 					<OutputLinesTable
@@ -793,6 +799,33 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 			) : null}
 		</div>
 	);
+}
+
+function downloadCommandResult(command: CustomCommand, result: CustomCommandResult) {
+	const text = [
+		`Command: ${result.command}`,
+		`Exit: ${result.exitcode}`,
+		"",
+		"STDOUT",
+		result.stdout || "",
+		"",
+		"STDERR",
+		result.stderr || "",
+	].join("\n");
+	const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+
+	anchor.href = url;
+	anchor.download = `${safeDownloadName(command.name || command.id || "command")}.txt`;
+	document.body.append(anchor);
+	anchor.click();
+	anchor.remove();
+	URL.revokeObjectURL(url);
+}
+
+function safeDownloadName(value: string) {
+	return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "command";
 }
 
 function PageHeader({ meta }: { meta: PageMeta }) {
