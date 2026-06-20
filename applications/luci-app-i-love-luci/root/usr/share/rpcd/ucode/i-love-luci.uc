@@ -3234,6 +3234,10 @@ function valid_numeric_value(value) {
 	return value == '' || replace(value, /[^0-9]/g, '') == value;
 }
 
+function valid_signed_numeric_value(value) {
+	return value == '' || match(value, /^-?[0-9]+$/);
+}
+
 function collect_system_settings_sections() {
 	let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
 
@@ -3612,6 +3616,140 @@ function save_uhttpd_cert_defaults(config) {
 		message: changed ? 'Certificate defaults saved and web server reloaded.' : 'Certificate defaults already up to date.',
 		changed,
 		sections: collect_system_settings_sections()
+	};
+}
+
+function banip_save_sections() {
+	return collect_uci_config('banip', ['banip']);
+}
+
+function banip_save_state() {
+	let sections = banip_save_sections();
+
+	return {
+		section: sections?.[0] || null,
+		sections
+	};
+}
+
+function save_banip_config(config) {
+	config ||= {};
+	uci.load('banip');
+
+	let section = first_uci_section('banip', 'banip') || uci.add('banip', 'banip');
+	let next = {
+		ban_enabled: zero_one(config.ban_enabled),
+		ban_autodetect: zero_one(config.ban_autodetect),
+		ban_autoallowlist: zero_one(config.ban_autoallowlist),
+		ban_autoblocklist: zero_one(config.ban_autoblocklist),
+		ban_allowlistonly: zero_one(config.ban_allowlistonly),
+		ban_protov4: zero_one(config.ban_protov4),
+		ban_protov6: zero_one(config.ban_protov6),
+		ban_blockpolicy: clean_uci_value(config.ban_blockpolicy || ''),
+		ban_nftpolicy: clean_uci_value(config.ban_nftpolicy || ''),
+		ban_nftpriority: clean_uci_value(config.ban_nftpriority || ''),
+		ban_nftloglevel: clean_uci_value(config.ban_nftloglevel || ''),
+		ban_loglimit: clean_uci_value(config.ban_loglimit || ''),
+		ban_fetchretry: clean_uci_value(config.ban_fetchretry || ''),
+		ban_icmplimit: clean_uci_value(config.ban_icmplimit || ''),
+		ban_synlimit: clean_uci_value(config.ban_synlimit || ''),
+		ban_udplimit: clean_uci_value(config.ban_udplimit || ''),
+		ban_feed: split_uci_lines(config.ban_feed || ''),
+		ban_country: split_uci_lines(config.ban_country || ''),
+		ban_trigger: split_uci_lines(config.ban_trigger || ''),
+		ban_ifv4: split_uci_lines(config.ban_ifv4 || ''),
+		ban_ifv6: split_uci_lines(config.ban_ifv6 || ''),
+		ban_dev: split_uci_lines(config.ban_dev || ''),
+		ban_logterm: split_uci_lines(config.ban_logterm || '')
+	};
+
+	if (next.ban_blockpolicy != '' && next.ban_blockpolicy != 'drop' && next.ban_blockpolicy != 'reject')
+		return {
+			saved: false,
+			message: 'banIP block policy must be drop or reject.',
+			changed: false,
+			...banip_save_state()
+		};
+
+	if (next.ban_nftpolicy != '' && next.ban_nftpolicy != 'memory' && next.ban_nftpolicy != 'performance')
+		return {
+			saved: false,
+			message: 'banIP nft policy must be memory or performance.',
+			changed: false,
+			...banip_save_state()
+		};
+
+	if (!valid_signed_numeric_value(next.ban_nftpriority) || !valid_numeric_value(next.ban_loglimit) || !valid_numeric_value(next.ban_fetchretry) || !valid_numeric_value(next.ban_icmplimit) || !valid_numeric_value(next.ban_synlimit) || !valid_numeric_value(next.ban_udplimit))
+		return {
+			saved: false,
+			message: 'banIP numeric limits contain unsupported values.',
+			changed: false,
+			...banip_save_state()
+		};
+
+	for (let key in ['ban_nftloglevel']) {
+		let value = next[key];
+
+		if (replace(value, /[^A-Za-z0-9_.:-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'banIP log level contains unsupported characters.',
+				changed: false,
+				...banip_save_state()
+			};
+	}
+
+	for (let key in ['ban_feed', 'ban_country', 'ban_trigger', 'ban_ifv4', 'ban_ifv6', 'ban_dev']) {
+		for (let value in next[key]) {
+			if (replace(value, /[^A-Za-z0-9_.:-]/g, '') != value)
+				return {
+					saved: false,
+					message: 'banIP list fields contain unsupported characters.',
+					changed: false,
+					...banip_save_state()
+				};
+		}
+	}
+
+	for (let value in next.ban_logterm) {
+		if (replace(value, /[^A-Za-z0-9 .,:_@/+()-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'banIP log terms contain unsupported characters.',
+				changed: false,
+				...banip_save_state()
+			};
+	}
+
+	let changed = false;
+
+	for (let key, value in next) {
+		let current = uci.get('banip', section, key) || '';
+
+		if (type(value) == 'array') {
+			if (!uci_list_equal(current, value)) {
+				changed = true;
+				set_uci_option('banip', section, key, value);
+			}
+			continue;
+		}
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('banip', section, key, value);
+		}
+	}
+
+	if (changed) {
+		uci.commit('banip');
+		system('/etc/init.d/banip reload >/dev/null 2>&1 || /etc/init.d/banip restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'banIP settings saved and reloaded.' : 'banIP settings already up to date.',
+		changed,
+		...banip_save_state()
 	};
 }
 
@@ -4747,6 +4885,25 @@ const methods = {
 					message: 'AdBlock Fast settings save failed: ' + e,
 					changed: false,
 					...adblock_fast_save_state()
+				});
+			}
+		}
+	},
+
+	banip_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_banip_config(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'banIP settings save failed: ' + e,
+					changed: false,
+					...banip_save_state()
 				});
 			}
 		}

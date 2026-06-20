@@ -11,6 +11,7 @@ import {
 	getServiceDetail,
 	runCustomCommand,
 	saveAdblockFastConfig,
+	saveBanipConfig,
 	saveCustomCommands,
 	saveDropbearConfig,
 	saveLedConfig,
@@ -26,6 +27,7 @@ import {
 	setRouterPassword,
 	type AdblockFastConfigInput,
 	type AdblockFastFeed,
+	type BanipConfigInput,
 	type CommandBlock,
 	type ConfigSection,
 	type CustomCommand,
@@ -980,21 +982,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="Countries" value={joinConfigValue(global?.values.ban_country) || "none"} />
 					<MetricBlock label="Block policy" value={configValue(global, "ban_blockpolicy") || "unknown"} />
 				</div>
-				<SimpleValueTable
-					columns={["Setting", "Value"]}
-					empty="No banIP configuration found."
-					rows={[
-						["Enabled", enabledText(configValue(global, "ban_enabled"))],
-						["Autodetect", enabledText(configValue(global, "ban_autodetect"))],
-						["Auto allowlist", enabledText(configValue(global, "ban_autoallowlist"))],
-						["Auto blocklist", enabledText(configValue(global, "ban_autoblocklist"))],
-						["Interfaces", joinConfigValue(global?.values.ban_trigger)],
-						["IPv4", `${enabledText(configValue(global, "ban_protov4"))} / ${configValue(global, "ban_ifv4") || "unknown"}`],
-						["IPv6", `${enabledText(configValue(global, "ban_protov6"))} / ${configValue(global, "ban_ifv6") || "unknown"}`],
-						["Log terms", joinConfigValue(global?.values.ban_logterm)],
-					]}
-					title="banIP policy"
-				/>
+				<BanipPanel config={global} />
 			</div>
 		);
 	}
@@ -1038,6 +1026,210 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	return null;
+}
+
+function BanipPanel({ config }: { config: ConfigSection | undefined }) {
+	const initial = useMemo(() => banipConfigValues(config), [config]);
+	const [values, setValues] = useState(initial);
+	const [savedValues, setSavedValues] = useState(initial);
+	const [section, setSection] = useState(config);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+	const current = section ?? config;
+
+	function update<K extends keyof BanipConfigInput>(key: K, value: BanipConfigInput[K]) {
+		setValues((currentValues) => ({ ...currentValues, [key]: value }));
+	}
+
+	async function save() {
+		setSaving(true);
+		const result = await saveBanipConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextSection = result.section ?? current;
+		const nextValues = banipConfigValues(nextSection);
+		setSection(nextSection);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		toast.success(result.message);
+	}
+
+	return (
+		<Panel title="banIP policy">
+			<div className="grid gap-5">
+				<div className="grid gap-3 md:grid-cols-3">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Enabled</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_enabled", event.target.value)}
+							value={values.ban_enabled}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Autodetect</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_autodetect", event.target.value)}
+							value={values.ban_autodetect}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Allowlist only</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_allowlistonly", event.target.value)}
+							value={values.ban_allowlistonly}
+						>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Auto allowlist</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_autoallowlist", event.target.value)}
+							value={values.ban_autoallowlist}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Auto blocklist</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_autoblocklist", event.target.value)}
+							value={values.ban_autoblocklist}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Block policy</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_blockpolicy", event.target.value)}
+							value={values.ban_blockpolicy}
+						>
+							<option value="drop">drop</option>
+							<option value="reject">reject</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">IPv4</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_protov4", event.target.value)}
+							value={values.ban_protov4}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">IPv6</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_protov6", event.target.value)}
+							value={values.ban_protov6}
+						>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">nft policy</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("ban_nftpolicy", event.target.value)}
+							value={values.ban_nftpolicy}
+						>
+							<option value="memory">memory</option>
+							<option value="performance">performance</option>
+						</select>
+					</label>
+				</div>
+
+				<div className="grid gap-3 md:grid-cols-3">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">nft priority</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_nftpriority", event.target.value)} value={values.ban_nftpriority} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">nft log level</span>
+						<Input onChange={(event) => update("ban_nftloglevel", event.target.value)} value={values.ban_nftloglevel} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Log limit</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_loglimit", event.target.value)} value={values.ban_loglimit} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Fetch retries</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_fetchretry", event.target.value)} value={values.ban_fetchretry} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">ICMP limit</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_icmplimit", event.target.value)} value={values.ban_icmplimit} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">SYN limit</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_synlimit", event.target.value)} value={values.ban_synlimit} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">UDP limit</span>
+						<Input inputMode="numeric" onChange={(event) => update("ban_udplimit", event.target.value)} value={values.ban_udplimit} />
+					</label>
+				</div>
+
+				<div className="grid gap-3 md:grid-cols-2">
+					<BanipTextarea label="Feeds" onChange={(value) => update("ban_feed", value)} value={values.ban_feed} />
+					<BanipTextarea label="Countries" onChange={(value) => update("ban_country", value)} value={values.ban_country} />
+					<BanipTextarea label="Trigger interfaces" onChange={(value) => update("ban_trigger", value)} value={values.ban_trigger} />
+					<BanipTextarea label="Devices" onChange={(value) => update("ban_dev", value)} value={values.ban_dev} />
+					<BanipTextarea label="IPv4 interfaces" onChange={(value) => update("ban_ifv4", value)} value={values.ban_ifv4} />
+					<BanipTextarea label="IPv6 interfaces" onChange={(value) => update("ban_ifv6", value)} value={values.ban_ifv6} />
+					<BanipTextarea label="Log terms" onChange={(value) => update("ban_logterm", value)} value={values.ban_logterm} />
+				</div>
+
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+		</Panel>
+	);
+}
+
+function BanipTextarea({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<label className="grid gap-2 text-sm">
+			<span className="font-medium">{label}</span>
+			<textarea
+				className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+				onChange={(event) => onChange(event.target.value)}
+				spellCheck={false}
+				value={value}
+			/>
+		</label>
+	);
 }
 
 function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined; feeds: ConfigSection[] }) {
@@ -1719,6 +1911,34 @@ function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput 
 		http_keepalive: configValue(config, "http_keepalive"),
 		tcp_keepalive: configValue(config, "tcp_keepalive") === "0" ? "0" : "1",
 		ubus_prefix: configValue(config, "ubus_prefix"),
+	};
+}
+
+function banipConfigValues(config: ConfigSection | undefined): BanipConfigInput {
+	return {
+		ban_enabled: configValue(config, "ban_enabled") === "0" ? "0" : "1",
+		ban_autodetect: configValue(config, "ban_autodetect") === "0" ? "0" : "1",
+		ban_autoallowlist: configValue(config, "ban_autoallowlist") === "0" ? "0" : "1",
+		ban_autoblocklist: configValue(config, "ban_autoblocklist") === "0" ? "0" : "1",
+		ban_allowlistonly: configValue(config, "ban_allowlistonly") === "1" ? "1" : "0",
+		ban_protov4: configValue(config, "ban_protov4") === "0" ? "0" : "1",
+		ban_protov6: configValue(config, "ban_protov6") === "0" ? "0" : "1",
+		ban_blockpolicy: configValue(config, "ban_blockpolicy") || "drop",
+		ban_nftpolicy: configValue(config, "ban_nftpolicy") || "memory",
+		ban_nftpriority: configValue(config, "ban_nftpriority") || "-100",
+		ban_nftloglevel: configValue(config, "ban_nftloglevel") || "warn",
+		ban_loglimit: configValue(config, "ban_loglimit") || "100",
+		ban_fetchretry: configValue(config, "ban_fetchretry") || "5",
+		ban_icmplimit: configValue(config, "ban_icmplimit") || "25",
+		ban_synlimit: configValue(config, "ban_synlimit") || "10",
+		ban_udplimit: configValue(config, "ban_udplimit") || "100",
+		ban_feed: textareaConfigList(config?.values.ban_feed),
+		ban_country: textareaConfigList(config?.values.ban_country),
+		ban_trigger: textareaConfigList(config?.values.ban_trigger),
+		ban_ifv4: textareaConfigList(config?.values.ban_ifv4),
+		ban_ifv6: textareaConfigList(config?.values.ban_ifv6),
+		ban_dev: textareaConfigList(config?.values.ban_dev),
+		ban_logterm: textareaConfigList(config?.values.ban_logterm),
 	};
 }
 

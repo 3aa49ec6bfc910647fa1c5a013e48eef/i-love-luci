@@ -443,6 +443,40 @@ export type AdblockFastConfigResult = {
 	sections: ConfigSection[];
 };
 
+export type BanipConfigInput = {
+	ban_enabled: string;
+	ban_autodetect: string;
+	ban_autoallowlist: string;
+	ban_autoblocklist: string;
+	ban_allowlistonly: string;
+	ban_protov4: string;
+	ban_protov6: string;
+	ban_blockpolicy: string;
+	ban_nftpolicy: string;
+	ban_nftpriority: string;
+	ban_nftloglevel: string;
+	ban_loglimit: string;
+	ban_fetchretry: string;
+	ban_icmplimit: string;
+	ban_synlimit: string;
+	ban_udplimit: string;
+	ban_feed: string;
+	ban_country: string;
+	ban_trigger: string;
+	ban_ifv4: string;
+	ban_ifv6: string;
+	ban_dev: string;
+	ban_logterm: string;
+};
+
+export type BanipConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	sections: ConfigSection[];
+};
+
 export type UhttpdCertDefaultsInput = {
 	section: string;
 	days: string;
@@ -1044,6 +1078,21 @@ export async function saveAdblockFastConfig(config: AdblockFastConfigInput, feed
 			changed: false,
 			config: null,
 			feeds: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveBanipConfig(config: BanipConfigInput): Promise<BanipConfigResult> {
+	try {
+		return await callBridge<BanipConfigResult>("banip_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "banIP settings save failed.",
+			changed: false,
+			section: null,
 			sections: [],
 		};
 	}
