@@ -31,6 +31,7 @@
 					"diagnostics_run",
 					"dhcp_domains_save",
 					"dhcp_hosts_save",
+					"dhcp_pools_save",
 					"dropbear_config_save",
 					"led_config_save",
 					"password_set",

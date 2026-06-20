@@ -189,6 +189,18 @@ export type DhcpDomain = {
 	ip: string;
 };
 
+export type DhcpPool = {
+	section: string;
+	interface: string;
+	ignore: string;
+	start: string;
+	limit: string;
+	leasetime: string;
+	dhcpv4: string;
+	dhcpv6: string;
+	ra: string;
+};
+
 export type DhcpStatus = {
 	dnsmasq?: ServiceState | null;
 	odhcpd?: ServiceState | null;
@@ -203,6 +215,7 @@ export type CoreSettings = {
 	dhcpLeases?: DhcpLease[];
 	dhcpHosts?: DhcpHost[];
 	dhcpDomains?: DhcpDomain[];
+	dhcpPools?: DhcpPool[];
 	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
 	system: ConfigSection[];
@@ -354,6 +367,14 @@ export type DhcpDomainsResult = {
 	message: string;
 	changed: boolean;
 	domains: DhcpDomain[];
+	sections: ConfigSection[];
+};
+
+export type DhcpPoolsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	pools: DhcpPool[];
 	sections: ConfigSection[];
 };
 
@@ -560,6 +581,7 @@ export async function getCoreSettings(page: string): Promise<CoreSettings> {
 			dhcpLeases: [],
 			dhcpHosts: [],
 			dhcpDomains: [],
+			dhcpPools: [],
 			dhcpStatus: {},
 			firewall: [],
 			system: [],
@@ -724,6 +746,21 @@ export async function saveDhcpDomains(rows: DhcpDomain[]): Promise<DhcpDomainsRe
 			message: "DNS host records save failed.",
 			changed: false,
 			domains: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpPools(rows: DhcpPool[]): Promise<DhcpPoolsResult> {
+	try {
+		return await callBridge<DhcpPoolsResult>("dhcp_pools_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP pools save failed.",
+			changed: false,
+			pools: [],
 			sections: [],
 		};
 	}

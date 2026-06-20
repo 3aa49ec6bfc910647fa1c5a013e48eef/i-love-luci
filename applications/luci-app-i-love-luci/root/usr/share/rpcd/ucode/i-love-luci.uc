@@ -879,6 +879,166 @@ function save_dhcp_domain_records(rows) {
 	};
 }
 
+function dhcp_pool_rows() {
+	let pools = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return pools;
+	}
+
+	uci.foreach('dhcp', 'dhcp', function(section) {
+		push(pools, {
+			section: section['.name'] || '',
+			interface: section.interface || section['.name'] || '',
+			ignore: section.ignore || '0',
+			start: section.start || '',
+			limit: section.limit || '',
+			leasetime: section.leasetime || '',
+			dhcpv4: section.dhcpv4 || '',
+			dhcpv6: section.dhcpv6 || '',
+			ra: section.ra || ''
+		});
+	});
+
+	return pools;
+}
+
+function valid_dhcp_mode(value) {
+	return value == '' || value == 'server' || value == 'relay' || value == 'hybrid' || value == 'disabled';
+}
+
+function dhcp_zero_one(value) {
+	return value == '1' || value == 1 || value == true || value == 'on' ? '1' : '0';
+}
+
+function dhcp_numeric_value(value) {
+	return value == '' || replace(value, /[^0-9]/g, '') == value;
+}
+
+function valid_dhcp_leasetime(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_-]/g, '') == value;
+}
+
+function save_dhcp_pools(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'dhcp', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'dhcp';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'dhcp');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let iface = dhcp_clean_value(row?.interface || section);
+		let ignore = dhcp_zero_one(row?.ignore);
+		let start = dhcp_clean_value(row?.start || '');
+		let limit = dhcp_clean_value(row?.limit || '');
+		let leasetime = dhcp_clean_value(row?.leasetime || '');
+		let dhcpv4 = dhcp_clean_value(row?.dhcpv4 || '');
+		let dhcpv6 = dhcp_clean_value(row?.dhcpv6 || '');
+		let ra = dhcp_clean_value(row?.ra || '');
+
+		if (!length(iface))
+			return {
+				saved: false,
+				message: 'DHCP pool interface is required.',
+				changed: false,
+				pools: dhcp_pool_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		if ((start != '' && !dhcp_numeric_value(start)) || (limit != '' && !dhcp_numeric_value(limit)))
+			return {
+				saved: false,
+				message: 'DHCP pool start and limit must be numeric.',
+				changed: false,
+				pools: dhcp_pool_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		if (leasetime != '' && !valid_dhcp_leasetime(leasetime))
+			return {
+				saved: false,
+				message: 'DHCP lease time contains unsupported characters.',
+				changed: false,
+				pools: dhcp_pool_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		if (!valid_dhcp_mode(dhcpv4) || !valid_dhcp_mode(dhcpv6) || !valid_dhcp_mode(ra))
+			return {
+				saved: false,
+				message: 'DHCP mode must be server, relay, hybrid, disabled, or blank.',
+				changed: false,
+				pools: dhcp_pool_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		let next = {
+			interface: iface,
+			ignore,
+			start,
+			limit,
+			leasetime,
+			dhcpv4,
+			dhcpv6,
+			ra
+		};
+
+		for (let key, value in next) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (key == 'ignore' && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if (key == 'ignore' && value == '0')
+					uci.delete('dhcp', section, key);
+				else
+					dhcp_set_option(section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+		system('/etc/init.d/odhcpd reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP pools saved and services reloaded.' : 'DHCP pools already up to date.',
+		changed,
+		pools: dhcp_pool_rows(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -1849,6 +2009,7 @@ function build_core_settings(page) {
 		dhcpLeases: [],
 		dhcpHosts: [],
 		dhcpDomains: [],
+		dhcpPools: [],
 		dhcpStatus: {},
 		firewall: [],
 		system: []
@@ -1859,6 +2020,7 @@ function build_core_settings(page) {
 		data.dhcpLeases = dhcp_leases();
 		data.dhcpHosts = dhcp_static_hosts();
 		data.dhcpDomains = dhcp_domain_records();
+		data.dhcpPools = dhcp_pool_rows();
 		data.dhcpStatus = dhcp_status();
 	}
 	else if (page == 'firewall') {
@@ -2071,6 +2233,26 @@ const methods = {
 					message: 'DNS host records save failed: ' + e,
 					changed: false,
 					domains: dhcp_domain_records(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	dhcp_pools_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_pools(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP pools save failed: ' + e,
+					changed: false,
+					pools: dhcp_pool_rows(),
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 				});
 			}

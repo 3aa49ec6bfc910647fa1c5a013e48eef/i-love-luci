@@ -11,6 +11,7 @@ import {
 	getDashboardStatus,
 	saveDhcpDomains,
 	saveDhcpHosts,
+	saveDhcpPools,
 	saveSystemSettings,
 	type ConfigSection,
 	type CoreSettings,
@@ -18,6 +19,7 @@ import {
 	type DhcpDomain,
 	type DhcpHost,
 	type DhcpLease,
+	type DhcpPool,
 	type NetworkInterfaceStatus,
 	type ServiceState,
 	type SystemSettingsInput,
@@ -144,6 +146,7 @@ function DhcpSummary({
 	const leases = settings.dhcpLeases ?? [];
 	const staticHosts = settings.dhcpHosts ?? [];
 	const domainRecords = settings.dhcpDomains ?? [];
+	const pools = settings.dhcpPools ?? [];
 
 	return (
 		<div className="grid gap-5">
@@ -160,6 +163,16 @@ function DhcpSummary({
 				</div>
 			</section>
 
+			<DhcpPoolEditor
+				onSaved={(nextPools, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpPools: nextPools,
+					})
+				}
+				pools={pools}
+			/>
 			<LeaseTable leases={leases} />
 			<StaticHostEditor
 				hosts={staticHosts}
@@ -183,6 +196,221 @@ function DhcpSummary({
 			/>
 		</div>
 	);
+}
+
+function DhcpPoolEditor({
+	onSaved,
+	pools,
+}: {
+	onSaved: (pools: DhcpPool[], sections: ConfigSection[]) => void;
+	pools: DhcpPool[];
+}) {
+	const [rows, setRows] = useState(() => pools.map(normalizeDhcpPool));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpPool, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{ section: "", interface: "", ignore: "0", start: "", limit: "", leasetime: "12h", dhcpv4: "server", dhcpv6: "", ra: "" },
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpPools(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.pools.map(normalizeDhcpPool);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">DHCP pools</h2>
+					<p className="text-sm text-muted-foreground">Configure address ranges and router advertisement mode per interface.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add pool
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[64rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Interface</th>
+								<th className="px-3 py-2 font-medium">Ignore</th>
+								<th className="px-3 py-2 font-medium">Start</th>
+								<th className="px-3 py-2 font-medium">Limit</th>
+								<th className="px-3 py-2 font-medium">Lease</th>
+								<th className="px-3 py-2 font-medium">DHCPv4</th>
+								<th className="px-3 py-2 font-medium">DHCPv6</th>
+								<th className="px-3 py-2 font-medium">RA</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((pool, index) => (
+									<tr className="border-b align-top last:border-0" key={`${pool.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Interface"
+												onChange={(event) => updateRow(index, "interface", event.target.value)}
+												value={pool.interface}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`dhcp-pool-ignore-${index}`}
+												onChange={(value) => updateRow(index, "ignore", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={pool.ignore}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Start address offset"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "start", event.target.value)}
+												value={pool.start}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Address limit"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "limit", event.target.value)}
+												value={pool.limit}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Lease time"
+												onChange={(event) => updateRow(index, "leasetime", event.target.value)}
+												value={pool.leasetime}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<DhcpModeSelect
+												id={`dhcp-pool-v4-${index}`}
+												onChange={(value) => updateRow(index, "dhcpv4", value)}
+												value={pool.dhcpv4}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<DhcpModeSelect
+												id={`dhcp-pool-v6-${index}`}
+												onChange={(value) => updateRow(index, "dhcpv6", value)}
+												value={pool.dhcpv6}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<DhcpModeSelect
+												id={`dhcp-pool-ra-${index}`}
+												onChange={(value) => updateRow(index, "ra", value)}
+												value={pool.ra}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${pool.interface || "pool"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={9}>
+										No DHCP pools configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function DhcpModeSelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<SelectField
+			id={id}
+			onChange={onChange}
+			options={[
+				["", "Default"],
+				["server", "Server"],
+				["relay", "Relay"],
+				["hybrid", "Hybrid"],
+				["disabled", "Disabled"],
+			]}
+			value={value}
+		/>
+	);
+}
+
+function normalizeDhcpPool(pool: DhcpPool): DhcpPool {
+	return {
+		section: pool.section ?? "",
+		interface: pool.interface ?? "",
+		ignore: pool.ignore === "1" ? "1" : "0",
+		start: pool.start ?? "",
+		limit: pool.limit ?? "",
+		leasetime: pool.leasetime ?? "",
+		dhcpv4: pool.dhcpv4 ?? "",
+		dhcpv6: pool.dhcpv6 ?? "",
+		ra: pool.ra ?? "",
+	};
 }
 
 function ServiceStatusBlock({ label, state }: { label: string; state?: ServiceState | null }) {
