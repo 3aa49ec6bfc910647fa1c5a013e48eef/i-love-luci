@@ -23,7 +23,7 @@ import {
 	saveLedConfig,
 	savePackageFeeds,
 	saveUpnpdConfig,
-	saveUhttpdConfig,
+	saveUhttpdConfigs,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -1234,7 +1234,8 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	if (service.id === "uhttpd") {
-		const main = sections.find((section) => section.type === "uhttpd");
+		const configs = sections.filter((section) => section.type === "uhttpd");
+		const main = configs[0];
 		const cert = firstSection(sections, "cert");
 
 		return (
@@ -1244,7 +1245,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="HTTPS" value={joinConfigValue(main?.values.listen_https) || "none"} />
 					<MetricBlock label="Redirect HTTPS" value={enabledText(configValue(main, "redirect_https"))} />
 				</div>
-				<UhttpdAccessPanel cert={cert} config={main} />
+				<UhttpdAccessPanel cert={cert} configs={configs} />
 			</div>
 		);
 	}
@@ -2161,22 +2162,29 @@ function DropbearAccessPanel({ configs }: { configs: ConfigSection[] }) {
 	);
 }
 
-function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; config: ConfigSection | undefined }) {
-	const initial = useMemo(() => uhttpdFormValues(config), [config]);
+function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined; configs: ConfigSection[] }) {
+	const initial = useMemo(() => (configs.length ? configs.map(uhttpdFormValues) : [newUhttpdRow()]), [configs]);
 	const [values, setValues] = useState(initial);
 	const [savedValues, setSavedValues] = useState(initial);
-	const [section, setSection] = useState(config);
 	const [saving, setSaving] = useState(false);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
-	const current = section ?? config;
+	const current = configs[0];
 
-	function update<K extends keyof UhttpdConfigInput>(key: K, value: UhttpdConfigInput[K]) {
-		setValues((currentValues) => ({ ...currentValues, [key]: value }));
+	function update<K extends keyof UhttpdConfigInput>(index: number, key: K, value: UhttpdConfigInput[K]) {
+		setValues((currentValues) => currentValues.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)));
+	}
+
+	function addInstance() {
+		setValues((currentValues) => [...currentValues, newUhttpdRow()]);
+	}
+
+	function removeInstance(index: number) {
+		setValues((currentValues) => currentValues.filter((_, rowIndex) => rowIndex !== index));
 	}
 
 	async function save() {
 		setSaving(true);
-		const result = await saveUhttpdConfig(values);
+		const result = await saveUhttpdConfigs(values);
 		setSaving(false);
 
 		if (!result.saved) {
@@ -2184,8 +2192,8 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 			return;
 		}
 
-		const nextValues = uhttpdFormValues(result.section ?? current);
-		setSection(result.section ?? current);
+		const sections = result.sections?.length ? result.sections : result.section ? [result.section] : configs;
+		const nextValues = sections.length ? sections.map(uhttpdFormValues) : [newUhttpdRow()];
 		setValues(nextValues);
 		setSavedValues(nextValues);
 		toast.success(result.message);
@@ -2195,206 +2203,32 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 		<div className="grid gap-4">
 			<Panel title="HTTP(S) access">
 				<div className="grid max-w-4xl gap-4">
-					<div className="grid gap-3 md:grid-cols-2">
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">HTTP listeners</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("listen_http", event.target.value)}
-								spellCheck={false}
-								value={values.listen_http}
-							/>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">HTTPS listeners</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("listen_https", event.target.value)}
-								spellCheck={false}
-								value={values.listen_https}
-							/>
-						</label>
-					</div>
-					<div className="grid gap-3 md:grid-cols-3">
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Document root</span>
-							<Input onChange={(event) => update("home", event.target.value)} value={values.home} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">CGI prefix</span>
-							<Input onChange={(event) => update("cgi_prefix", event.target.value)} value={values.cgi_prefix} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Ubus prefix</span>
-							<Input onChange={(event) => update("ubus_prefix", event.target.value)} value={values.ubus_prefix} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Lua handler</span>
-							<Input onChange={(event) => update("lua_handler", event.target.value)} value={values.lua_handler} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Ubus socket</span>
-							<Input onChange={(event) => update("ubus_socket", event.target.value)} value={values.ubus_socket} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Error page</span>
-							<Input onChange={(event) => update("error_page", event.target.value)} value={values.error_page} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Auth realm</span>
-							<Input onChange={(event) => update("realm", event.target.value)} value={values.realm} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Auth config file</span>
-							<Input onChange={(event) => update("config", event.target.value)} value={values.config} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Certificate</span>
-							<Input onChange={(event) => update("cert", event.target.value)} value={values.cert} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Private key</span>
-							<Input onChange={(event) => update("key", event.target.value)} value={values.key} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">RFC1918 filter</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("rfc1918_filter", event.target.value)}
-								value={values.rfc1918_filter}
-							>
-								<option value="1">enabled</option>
-								<option value="0">disabled</option>
-							</select>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Directory listings</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("no_dirlists", event.target.value)}
-								value={values.no_dirlists}
-							>
-								<option value="0">enabled</option>
-								<option value="1">disabled</option>
-							</select>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">External symlinks</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("no_symlinks", event.target.value)}
-								value={values.no_symlinks}
-							>
-								<option value="0">enabled</option>
-								<option value="1">disabled</option>
-							</select>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Ubus CORS</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("ubus_cors", event.target.value)}
-								value={values.ubus_cors}
-							>
-								<option value="0">disabled</option>
-								<option value="1">enabled</option>
-							</select>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Ubus auth</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("no_ubusauth", event.target.value)}
-								value={values.no_ubusauth}
-							>
-								<option value="0">enabled</option>
-								<option value="1">disabled</option>
-							</select>
-						</label>
-					</div>
-					<div className="grid gap-3 md:grid-cols-2">
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Index pages</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("index_page", event.target.value)}
-								spellCheck={false}
-								value={values.index_page}
-							/>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">CGI filetype handlers</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("interpreter", event.target.value)}
-								spellCheck={false}
-								value={values.interpreter}
-							/>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Aliases</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("alias", event.target.value)}
-								spellCheck={false}
-								value={values.alias}
-							/>
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Lua prefixes</span>
-							<textarea
-								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
-								onChange={(event) => update("lua_prefix", event.target.value)}
-								spellCheck={false}
-								value={values.lua_prefix}
-							/>
-						</label>
-					</div>
-					<div className="grid gap-3 md:grid-cols-3">
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Max requests</span>
-							<Input inputMode="numeric" onChange={(event) => update("max_requests", event.target.value)} value={values.max_requests} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Max connections</span>
-							<Input inputMode="numeric" onChange={(event) => update("max_connections", event.target.value)} value={values.max_connections} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Script timeout</span>
-							<Input inputMode="numeric" onChange={(event) => update("script_timeout", event.target.value)} value={values.script_timeout} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">Network timeout</span>
-							<Input inputMode="numeric" onChange={(event) => update("network_timeout", event.target.value)} value={values.network_timeout} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">HTTP keepalive</span>
-							<Input inputMode="numeric" onChange={(event) => update("http_keepalive", event.target.value)} value={values.http_keepalive} />
-						</label>
-						<label className="grid gap-2 text-sm">
-							<span className="font-medium">TCP keepalive</span>
-							<select
-								className="h-9 rounded-md border bg-card px-2 text-sm"
-								onChange={(event) => update("tcp_keepalive", event.target.value)}
-								value={values.tcp_keepalive}
-							>
-								<option value="1">enabled</option>
-								<option value="0">disabled</option>
-							</select>
-						</label>
-					</div>
-					<label className="grid max-w-xl gap-2 text-sm">
-						<span className="font-medium">Redirect to HTTPS</span>
-						<select
-							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => update("redirect_https", event.target.value)}
-							value={values.redirect_https}
-						>
-							<option value="0">disabled</option>
-							<option value="1">enabled</option>
-						</select>
-					</label>
+					{values.map((row, index) => (
+						<div className="grid gap-4 rounded-md border bg-card p-3" key={row.section || `new-uhttpd-${index}`}>
+							<div className="flex items-center justify-between gap-3">
+								<div>
+									<div className="text-sm font-semibold">Instance {index + 1}</div>
+									<div className="text-xs text-muted-foreground">{row.section || "new web server"}</div>
+								</div>
+								<Button
+									aria-label="Remove web server instance"
+									disabled={values.length <= 1 || saving}
+									onClick={() => removeInstance(index)}
+									size="icon"
+									type="button"
+									variant="outline"
+								>
+									<Trash2 className="h-4 w-4" />
+								</Button>
+							</div>
+							<UhttpdInstanceFields index={index} row={row} update={update} />
+						</div>
+					))}
 					<div className="flex justify-end gap-2">
+						<Button disabled={saving} onClick={addInstance} type="button" variant="outline">
+							<Plus className="h-4 w-4" />
+							Add instance
+						</Button>
 						<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
 							Cancel
 						</Button>
@@ -2422,8 +2256,195 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 	);
 }
 
+function UhttpdInstanceFields({
+	index,
+	row,
+	update,
+}: {
+	index: number;
+	row: UhttpdConfigInput;
+	update: <K extends keyof UhttpdConfigInput>(index: number, key: K, value: UhttpdConfigInput[K]) => void;
+}) {
+	return (
+		<>
+			<div className="grid gap-3 md:grid-cols-2">
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">HTTP listeners</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "listen_http", event.target.value)}
+						spellCheck={false}
+						value={row.listen_http}
+					/>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">HTTPS listeners</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "listen_https", event.target.value)}
+						spellCheck={false}
+						value={row.listen_https}
+					/>
+				</label>
+			</div>
+			<div className="grid gap-3 md:grid-cols-3">
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Document root</span>
+					<Input onChange={(event) => update(index, "home", event.target.value)} value={row.home} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">CGI prefix</span>
+					<Input onChange={(event) => update(index, "cgi_prefix", event.target.value)} value={row.cgi_prefix} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Ubus prefix</span>
+					<Input onChange={(event) => update(index, "ubus_prefix", event.target.value)} value={row.ubus_prefix} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Lua handler</span>
+					<Input onChange={(event) => update(index, "lua_handler", event.target.value)} value={row.lua_handler} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Ubus socket</span>
+					<Input onChange={(event) => update(index, "ubus_socket", event.target.value)} value={row.ubus_socket} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Error page</span>
+					<Input onChange={(event) => update(index, "error_page", event.target.value)} value={row.error_page} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Auth realm</span>
+					<Input onChange={(event) => update(index, "realm", event.target.value)} value={row.realm} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Auth config file</span>
+					<Input onChange={(event) => update(index, "config", event.target.value)} value={row.config} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Certificate</span>
+					<Input onChange={(event) => update(index, "cert", event.target.value)} value={row.cert} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Private key</span>
+					<Input onChange={(event) => update(index, "key", event.target.value)} value={row.key} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">RFC1918 filter</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "rfc1918_filter", event.target.value)} value={row.rfc1918_filter}>
+						<option value="1">enabled</option>
+						<option value="0">disabled</option>
+					</select>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Directory listings</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "no_dirlists", event.target.value)} value={row.no_dirlists}>
+						<option value="0">enabled</option>
+						<option value="1">disabled</option>
+					</select>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">External symlinks</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "no_symlinks", event.target.value)} value={row.no_symlinks}>
+						<option value="0">enabled</option>
+						<option value="1">disabled</option>
+					</select>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Ubus CORS</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "ubus_cors", event.target.value)} value={row.ubus_cors}>
+						<option value="0">disabled</option>
+						<option value="1">enabled</option>
+					</select>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Ubus auth</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "no_ubusauth", event.target.value)} value={row.no_ubusauth}>
+						<option value="0">enabled</option>
+						<option value="1">disabled</option>
+					</select>
+				</label>
+			</div>
+			<div className="grid gap-3 md:grid-cols-2">
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Index pages</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "index_page", event.target.value)}
+						spellCheck={false}
+						value={row.index_page}
+					/>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">CGI filetype handlers</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "interpreter", event.target.value)}
+						spellCheck={false}
+						value={row.interpreter}
+					/>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Aliases</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "alias", event.target.value)}
+						spellCheck={false}
+						value={row.alias}
+					/>
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Lua prefixes</span>
+					<textarea
+						className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						onChange={(event) => update(index, "lua_prefix", event.target.value)}
+						spellCheck={false}
+						value={row.lua_prefix}
+					/>
+				</label>
+			</div>
+			<div className="grid gap-3 md:grid-cols-3">
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Max requests</span>
+					<Input inputMode="numeric" onChange={(event) => update(index, "max_requests", event.target.value)} value={row.max_requests} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Max connections</span>
+					<Input inputMode="numeric" onChange={(event) => update(index, "max_connections", event.target.value)} value={row.max_connections} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Script timeout</span>
+					<Input inputMode="numeric" onChange={(event) => update(index, "script_timeout", event.target.value)} value={row.script_timeout} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">Network timeout</span>
+					<Input inputMode="numeric" onChange={(event) => update(index, "network_timeout", event.target.value)} value={row.network_timeout} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">HTTP keepalive</span>
+					<Input inputMode="numeric" onChange={(event) => update(index, "http_keepalive", event.target.value)} value={row.http_keepalive} />
+				</label>
+				<label className="grid gap-2 text-sm">
+					<span className="font-medium">TCP keepalive</span>
+					<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "tcp_keepalive", event.target.value)} value={row.tcp_keepalive}>
+						<option value="1">enabled</option>
+						<option value="0">disabled</option>
+					</select>
+				</label>
+			</div>
+			<label className="grid max-w-xl gap-2 text-sm">
+				<span className="font-medium">Redirect to HTTPS</span>
+				<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update(index, "redirect_https", event.target.value)} value={row.redirect_https}>
+					<option value="0">disabled</option>
+					<option value="1">enabled</option>
+				</select>
+			</label>
+		</>
+	);
+}
+
 function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput {
 	return {
+		section: config?.name ?? "",
 		redirect_https: enabledText(configValue(config, "redirect_https")) === "enabled" ? "1" : "0",
 		listen_http: joinConfigValue(config?.values.listen_http),
 		listen_https: joinConfigValue(config?.values.listen_https),
@@ -2452,6 +2473,40 @@ function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput 
 		ubus_socket: configValue(config, "ubus_socket"),
 		ubus_cors: configValue(config, "ubus_cors") === "1" ? "1" : "0",
 		no_ubusauth: configValue(config, "no_ubusauth") === "1" ? "1" : "0",
+	};
+}
+
+function newUhttpdRow(): UhttpdConfigInput {
+	return {
+		section: "",
+		redirect_https: "0",
+		listen_http: "",
+		listen_https: "",
+		home: "/www",
+		rfc1918_filter: "1",
+		no_symlinks: "0",
+		no_dirlists: "0",
+		max_requests: "3",
+		max_connections: "100",
+		cert: "",
+		key: "",
+		cgi_prefix: "/cgi-bin",
+		index_page: "",
+		interpreter: "",
+		alias: "",
+		lua_prefix: "/cgi-bin/luci=/usr/lib/lua/luci/sgi/uhttpd.lua",
+		lua_handler: "",
+		realm: "",
+		config: "",
+		error_page: "",
+		script_timeout: "60",
+		network_timeout: "30",
+		http_keepalive: "20",
+		tcp_keepalive: "1",
+		ubus_prefix: "",
+		ubus_socket: "",
+		ubus_cors: "0",
+		no_ubusauth: "0",
 	};
 }
 

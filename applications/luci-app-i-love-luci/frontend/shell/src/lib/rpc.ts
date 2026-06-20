@@ -432,6 +432,7 @@ export type LedConfigResult = {
 };
 
 export type UhttpdConfigInput = {
+	section?: string;
 	redirect_https: string;
 	listen_http: string;
 	listen_https: string;
@@ -467,6 +468,7 @@ export type UhttpdConfigResult = {
 	message: string;
 	changed: boolean;
 	section: ConfigSection | null;
+	sections?: ConfigSection[];
 	init: ServiceState | null;
 };
 
@@ -1273,6 +1275,22 @@ export async function saveUhttpdConfig(config: UhttpdConfigInput): Promise<Uhttp
 			message: "HTTP access save failed.",
 			changed: false,
 			section: null,
+			init: null,
+		};
+	}
+}
+
+export async function saveUhttpdConfigs(rows: UhttpdConfigInput[]): Promise<UhttpdConfigResult> {
+	try {
+		return await callBridge<UhttpdConfigResult>("uhttpd_config_save", { config: { rows } });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "HTTP access save failed.",
+			changed: false,
+			section: null,
+			sections: [],
 			init: null,
 		};
 	}
