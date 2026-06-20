@@ -275,6 +275,9 @@ export function NativePage() {
 		page === "wireless" ||
 		page === "diagnostics" ||
 		page === "packages" ||
+		page === "attendedsysupgrade" ||
+		page === "flash" ||
+		page === "reboot" ||
 		page === "repokeys" ||
 		page === "leds";
 
@@ -324,7 +327,7 @@ export function NativePage() {
 				/>
 			) : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
-			{page === "reboot" ? <RebootPanel /> : null}
+			{page === "reboot" ? <RebootPanel data={data} /> : null}
 			{page === "flash" && data ? <FlashSummary data={data} /> : null}
 			{page === "repokeys" && data ? <RepoKeySummary data={data} /> : null}
 			{page === "leds" && data ? <LedSummary data={data} /> : null}
@@ -2844,19 +2847,32 @@ function TextFileEditor({
 	);
 }
 
-function RebootPanel() {
+function RebootPanel({ data }: { data: NativePageData | null }) {
+	const uptime = commandOutput(data?.commands ?? [], "System uptime").trim();
+
 	return (
-		<Panel title="Reboot guard">
-			<div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-				<p className="text-muted-foreground">
-					Reboot will be enabled after a dedicated confirm/apply RPC is added and tested. Use legacy LuCI for now.
-				</p>
-				<Button disabled variant="outline">
-					<Power className="mr-1 size-4" />
-					Reboot disabled
-				</Button>
-			</div>
-		</Panel>
+		<div className="grid gap-4">
+			<SimpleValueTable
+				columns={["Signal", "Value"]}
+				empty="No reboot context available."
+				rows={[
+					["Uptime", uptime || "unknown"],
+					["Action state", "disabled until confirm RPC exists"],
+				]}
+				title="Reboot context"
+			/>
+			<Panel title="Reboot guard">
+				<div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+					<p className="text-muted-foreground">
+						Reboot will be enabled after a dedicated confirm/apply RPC is added and tested. Use legacy LuCI for now.
+					</p>
+					<Button disabled variant="outline">
+						<Power className="mr-1 size-4" />
+						Reboot disabled
+					</Button>
+				</div>
+			</Panel>
+		</div>
 	);
 }
 
