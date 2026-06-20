@@ -10,6 +10,7 @@ import {
 	getCoreSettings,
 	getDashboardStatus,
 	saveFirewallDefaults,
+	saveFirewallFile,
 	saveFirewallForwardings,
 	saveFirewallRedirects,
 	saveFirewallRules,
@@ -41,6 +42,7 @@ import {
 	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
 	type PolicyRule,
+	type ServiceFile,
 	type ServiceState,
 	type StaticRoute,
 	type SystemSettingsInput,
@@ -1076,6 +1078,111 @@ function FirewallSummary({
 					})
 				}
 				redirects={redirects}
+			/>
+
+			<FirewallFilesEditor files={settings.firewallFiles ?? []} />
+		</div>
+	);
+}
+
+function FirewallFilesEditor({ files }: { files: ServiceFile[] }) {
+	if (!files.length) {
+		return (
+			<section className="grid gap-3">
+				<h2 className="text-base font-semibold">Custom nftables files</h2>
+				<div className="rounded-md border bg-card px-4 py-5 text-sm text-muted-foreground">
+					No editable firewall include files found.
+				</div>
+			</section>
+		);
+	}
+
+	return (
+		<section className="grid gap-4">
+			<div className="flex items-center justify-between gap-3">
+				<h2 className="text-base font-semibold">Custom nftables files</h2>
+				<span className="text-xs text-muted-foreground">{files.length} files</span>
+			</div>
+			<div className="overflow-x-auto rounded-md border bg-card">
+				<table className="w-full min-w-[42rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">File</th>
+							<th className="px-3 py-2 font-medium">Path</th>
+							<th className="px-3 py-2 font-medium">Status</th>
+							<th className="px-3 py-2 font-medium">Lines</th>
+							<th className="px-3 py-2 font-medium">Size</th>
+						</tr>
+					</thead>
+					<tbody>
+						{files.map((file) => (
+							<tr className="border-b align-top last:border-0" key={file.path}>
+								<td className="px-3 py-3 font-medium">{file.title}</td>
+								<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{file.path}</td>
+								<td className="px-3 py-3">{file.exists ? "present" : "missing"}</td>
+								<td className="px-3 py-3 font-mono text-xs">{file.lines}</td>
+								<td className="px-3 py-3 font-mono text-xs">{formatBytes(file.size)}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{files
+				.filter((file) => file.editable)
+				.map((file) => (
+					<FirewallFileEditor file={file} key={file.path} />
+				))}
+		</section>
+	);
+}
+
+function FirewallFileEditor({ file }: { file: ServiceFile }) {
+	const initial = file.content ?? file.preview.join("\n");
+	const [text, setText] = useState(initial);
+	const [savedText, setSavedText] = useState(initial);
+	const [savedFile, setSavedFile] = useState(file);
+	const [saving, setSaving] = useState(false);
+	const dirty = text !== savedText;
+
+	async function save() {
+		setSaving(true);
+		const result = await saveFirewallFile(savedFile.path, text);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextFile = result.file ?? savedFile;
+		const nextText = nextFile.content ?? text;
+		setSavedFile(nextFile);
+		setText(nextText);
+		setSavedText(nextText);
+		toast.success(result.message);
+	}
+
+	return (
+		<div className="grid gap-3 rounded-md border bg-card p-4">
+			<div className="flex flex-wrap items-start justify-between gap-3">
+				<div className="grid gap-1">
+					<h3 className="text-sm font-semibold">{savedFile.title}</h3>
+					<p className="font-mono text-xs text-muted-foreground">{savedFile.path}</p>
+				</div>
+				<div className="flex gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setText(savedText)} size="sm" type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} onClick={() => void save()} size="sm" type="button">
+						Save
+					</Button>
+				</div>
+			</div>
+			<textarea
+				className="min-h-72 rounded-md border bg-background px-3 py-2 font-mono text-xs outline-none focus-visible:border-ring"
+				onChange={(event) => setText(event.target.value)}
+				spellCheck={false}
+				value={text}
 			/>
 		</div>
 	);

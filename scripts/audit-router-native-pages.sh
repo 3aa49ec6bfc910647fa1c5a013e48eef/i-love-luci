@@ -95,7 +95,7 @@ expected_pages = {
 expected_core_pages = {
 	"network": {"sections": "network", "arrays": ["networkRoutes", "networkRules"], "required_types": ["interface", "device"]},
 	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
-	"firewall": {"sections": "firewall", "required_options": ["input", "output", "forward"], "required_types": ["defaults", "zone", "forwarding", "rule"]},
+	"firewall": {"sections": "firewall", "arrays": ["firewallFiles"], "required_options": ["input", "output", "forward"], "required_types": ["defaults", "zone", "forwarding", "rule"]},
 	"system": {"sections": "system", "required_types": ["system", "timeserver", "led", "dropbear", "uhttpd", "cert"]},
 }
 
@@ -192,6 +192,11 @@ for page, rules in expected_core_pages.items():
 	for key in rules.get("arrays", []):
 		if not isinstance(data.get(key), list):
 			failures.append(f"{page}: core_settings missing {key} array")
+
+	if page == "firewall":
+		files = data.get("firewallFiles") or []
+		if not any(file.get("path", "").startswith("/etc/nftables.d/") and file.get("editable") for file in files):
+			failures.append("firewall: expected editable /etc/nftables.d firewall include file")
 
 	for key in rules.get("objects", []):
 		if not isinstance(data.get(key), dict):

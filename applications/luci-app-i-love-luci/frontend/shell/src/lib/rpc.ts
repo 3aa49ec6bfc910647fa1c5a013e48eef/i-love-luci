@@ -249,6 +249,7 @@ export type CoreSettings = {
 	dhcpPools?: DhcpPool[];
 	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
+	firewallFiles?: ServiceFile[];
 	system: ConfigSection[];
 };
 
@@ -759,6 +760,13 @@ export type FirewallRedirectsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallFileResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	file: ServiceFile | null;
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -965,6 +973,7 @@ export async function getCoreSettings(page: string): Promise<CoreSettings> {
 			dhcpPools: [],
 			dhcpStatus: {},
 			firewall: [],
+			firewallFiles: [],
 			system: [],
 		};
 	}
@@ -1400,6 +1409,20 @@ export async function saveFirewallRedirects(rows: FirewallRedirect[]): Promise<F
 			changed: false,
 			redirects: [],
 			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallFile(path: string, text: string): Promise<FirewallFileResult> {
+	try {
+		return await callBridge<FirewallFileResult>("firewall_file_save", { path, text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall file save failed.",
+			changed: false,
+			file: null,
 		};
 	}
 }

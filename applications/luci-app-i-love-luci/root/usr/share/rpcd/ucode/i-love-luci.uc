@@ -2538,6 +2538,132 @@ function save_firewall_redirects(rows) {
 	};
 }
 
+function firewall_file_allowed(path) {
+	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
+
+	if (path == '/etc/firewall.user')
+		return {
+			title: 'Legacy firewall.user',
+			path,
+			editable: true
+		};
+
+	let prefix = '/etc/nftables.d/';
+
+	if (substr(path, 0, length(prefix)) != prefix)
+		return null;
+
+	let name = substr(path, length(prefix));
+
+	if (length(name) < 5 || index(name, '/') >= 0 || index(name, '..') >= 0)
+		return null;
+
+	if (substr(name, length(name) - 4) != '.nft')
+		return null;
+
+	if (replace(name, /[^A-Za-z0-9_.-]/g, '') != name)
+		return null;
+
+	return {
+		title: name,
+		path,
+		editable: true
+	};
+}
+
+function firewall_file_entry(file) {
+	let path = file.path || '';
+	let info = stat(path);
+	let preview = [];
+	let line_count = 0;
+	let content = '';
+	let quoted = quote_command_args([path])[0];
+
+	if (info?.type == 'file') {
+		line_count = int(trim(shell_output(`wc -l < ${quoted}`)) || 0);
+		preview = split(trim(shell_output(`sed -n '1,20p' ${quoted}`)), '\n');
+
+		if (info.size <= 131072)
+			content = readfile(path) || '';
+	}
+
+	if (length(preview) == 1 && !length(preview[0]))
+		preview = [];
+
+	return {
+		title: file.title || path,
+		path,
+		exists: info?.type == 'file',
+		size: info?.size || 0,
+		lines: line_count,
+		preview,
+		editable: !!file.editable,
+		content
+	};
+}
+
+function firewall_files() {
+	let files = [];
+	let seen = {};
+
+	let legacy = firewall_file_allowed('/etc/firewall.user');
+	push(files, legacy);
+	seen[legacy.path] = true;
+
+	for (let path in glob('/etc/nftables.d/*.nft')) {
+		let file = firewall_file_allowed(path);
+
+		if (file && !seen[file.path]) {
+			push(files, file);
+			seen[file.path] = true;
+		}
+	}
+
+	sort(files, function(a, b) {
+		return a.path > b.path ? 1 : -1;
+	});
+
+	return map(files, firewall_file_entry);
+}
+
+function save_firewall_file(path, text) {
+	path = replace(trim('' + (path || '')), /[\r\n]/g, '');
+	text = '' + (text || '');
+
+	if (length(text) > 131072)
+		return {
+			saved: false,
+			message: 'Firewall file is too large.',
+			changed: false,
+			file: null
+		};
+
+	let file = firewall_file_allowed(path);
+
+	if (!file)
+		return {
+			saved: false,
+			message: 'Firewall file is not editable from I Love LuCI.',
+			changed: false,
+			file: null
+		};
+
+	let current = readfile(path) || '';
+	let changed = current != text;
+
+	if (changed) {
+		writefile(path, text);
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall file saved and firewall reloaded.' : 'Firewall file already up to date.',
+		changed,
+		file: firewall_file_entry(file)
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -4503,6 +4629,7 @@ function build_core_settings(page) {
 		networkRoutes: [],
 		networkRules: [],
 		firewall: [],
+		firewallFiles: [],
 		system: []
 	};
 
@@ -4516,6 +4643,7 @@ function build_core_settings(page) {
 	}
 	else if (page == 'firewall') {
 		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']);
+		data.firewallFiles = firewall_files();
 	}
 	else if (page == 'system') {
 		data.system = collect_system_settings_sections();
@@ -5232,6 +5360,26 @@ const methods = {
 					changed: false,
 					redirects: firewall_redirect_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_file_save: {
+		args: {
+			path: '',
+			text: ''
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_file(request.args.path || '', request.args.text || ''));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall file save failed: ' + e,
+					changed: false,
+					file: null
 				});
 			}
 		}
