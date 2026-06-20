@@ -763,6 +763,8 @@ The audit has two equally important outcomes:
 - every installed LuCI route must have a working compatibility path
 - every route that has been rebuilt natively must be tracked, validated, and promoted only when it has feature parity for its current scope
 
+Route inventory must become the source of truth for compatibility decisions. It should record each discovered LuCI route, its source package, source menu file, ACL requirements, native migration state, chosen renderer, fallback target, and latest test result. Routes should not be inferred from sidebar rendering alone.
+
 Audit inputs:
 
 - Installed LuCI menu files: `/usr/share/luci/menu.d/*.json`.
@@ -792,6 +794,7 @@ Audit checks:
 Native migration checks:
 
 - Maintain a route inventory that marks each LuCI route as `native`, `partial native`, `legacy compat`, or `hidden`.
+- Require every native route migrated into I Love LuCI to have an owner entry in the inventory with source LuCI route, native React route, data source, write/apply behavior, mobile test status, and fallback route.
 - For native routes, verify the React route renders, uses the intended `rpcd`/UCI data source, and has mobile-safe layout.
 - For partial native routes, verify `auto` mode still prefers LuCI compat until missing edit/save/apply flows are complete.
 - For migrated first-party routes, test sidebar navigation, search navigation, direct hash URL load, refresh, and session-expired login recovery.
@@ -803,6 +806,8 @@ LuCI app adapter robustness checks:
 - Adapter selection must be deterministic: native adapter first, generic service/UCI/file adapter second, LuCI compat frame last.
 - Unknown current and future `luci-app-*` packages must be considered supported through compat unless ACL/menu metadata says otherwise.
 - Installing a future LuCI app must not require a code change, rebuild, or manual route mapping for basic navigation and compat rendering.
+- Installing, upgrading, removing, or reinstalling LuCI apps must update navigation/search after menu/cache refresh without stale routes, duplicate routes, or broken compat links.
+- The adapter must preserve LuCI route parameters, query strings, ACL visibility, auth/session handling, and child-route nesting for current and future installed apps.
 - The adapter must not special-case only known apps such as banIP or AdBlock Fast; those apps should validate the generic adapter pattern used for all service-style LuCI apps.
 - Route discovery must tolerate new menu files, changed route nesting, missing optional ACL files, package uninstall/reinstall, and renamed init scripts.
 - Adapter failures must degrade to LuCI compat instead of showing a broken native screen.
@@ -814,6 +819,7 @@ Future app handling:
 - Default path for unknown future apps: discover menu + ACL metadata, show route in navigation/search, open through LuCI compat frame.
 - Native support for future apps should come from adapter registration, not editing app-specific special cases into the shell.
 - Adapter registration should be data-driven where possible: package id, route prefixes, UCI packages/section types, init scripts, log filters, and whitelisted files.
+- Future app install flow should be tested through standard OpenWrt tooling: install package, refresh LuCI menu/cache state, verify sidebar/search/route open, remove package, verify cleanup.
 
 Required tooling:
 
@@ -849,6 +855,7 @@ Acceptance gate:
 - The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
 - The release is not ready until every installed `luci-app-*` package has confirmed compat coverage and every native replacement route has confirmed I Love LuCI test coverage.
 - Future app handling must be proven with an install/remove/reinstall smoke test for a LuCI app that was not hard-coded into I Love LuCI.
+- Native migration is not complete until every migrated route has parity evidence and every non-migrated or partial route has a working LuCI compat fallback.
 - Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=42`, `legacy=18`, `menu_files=15`, and `luci_apps=9`.
 
 Final release/test gate:
