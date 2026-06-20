@@ -547,7 +547,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, client filter, and package family counts. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
-- `/admin/system/flash`: read-only filesystem and flash partition overview.
+- `/admin/system/flash`: guarded read-only firmware, overlay usage, mounted filesystem, and flash partition overview.
 - `/admin/system/leds`: LED trigger configuration and current sysfs LED state.
 - `/admin/system/reboot`: guarded modern surface; destructive reboot action is intentionally disabled until a confirmation RPC is added.
 - `/admin/system/commands` and children: modern custom command dashboard can list and execute configured LuCI commands by section id, with UCI summary. Auto mode still defaults to LuCI compat until command add/edit/delete and download/public-link parity are complete.
@@ -577,6 +577,7 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/core/firewall` on `172.16.172.1` with the `1.0.0-r4-native13` bundle and rendered firewall defaults, 3 zones, 3 zone forwardings, and 9 traffic rules.
 - Browser smoke test loaded `#/core/system` on `172.16.172.1` with the `1.0.0-r4-native14` bundle and rendered system identity, NTP servers, SSH access, uHTTPd listeners, LEDs, and certificate defaults.
 - Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native15` bundle and rendered 186 installed packages, 31 LuCI packages, 30 kernel modules, and a parsed package/version/description table.
+- Browser smoke test loaded `#/native/flash` on `172.16.172.1` with the `1.0.0-r4-native16` bundle and rendered firmware version, root usage, overlay free space, mounted filesystem table, and the target's no-MTD-partition state.
 
 Remaining legacy or partial gaps:
 
@@ -586,7 +587,7 @@ Remaining legacy or partial gaps:
 - Firewall is native read-only for summary views. Zone/rule/redirect create/edit/delete, custom rule files, nft include handling, validation, and save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - System administration is native read-only for summary views. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
 - Attended sysupgrade has a native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling native default.
-- Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
+- Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.

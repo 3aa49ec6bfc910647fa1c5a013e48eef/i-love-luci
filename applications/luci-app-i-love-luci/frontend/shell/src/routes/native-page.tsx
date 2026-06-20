@@ -37,6 +37,22 @@ type PackageEntry = {
 	line: string;
 };
 
+type FilesystemEntry = {
+	filesystem: string;
+	size: string;
+	used: string;
+	available: string;
+	usePercent: string;
+	mountedOn: string;
+};
+
+type FlashPartitionEntry = {
+	device: string;
+	size: string;
+	eraseSize: string;
+	name: string;
+};
+
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
@@ -160,6 +176,7 @@ export function NativePage() {
 			) : null}
 			{page === "services" ? <ServiceOverview services={data?.services ?? []} /> : null}
 			{page === "reboot" ? <RebootPanel /> : null}
+			{page === "flash" && data ? <FlashSummary data={data} /> : null}
 			{data?.sections?.length ? <ConfigTable sections={data.sections} /> : null}
 
 			<CommandPanels commands={data?.commands ?? []} />
@@ -639,11 +656,106 @@ function PackageInventory({ lines }: { lines: string[] }) {
 	);
 }
 
-function MetricBlock({ label, value }: { label: string; value: number }) {
+function FlashSummary({ data }: { data: NativePageData }) {
+	const filesystems = parseFilesystems(commandOutput(data.commands, "Mounted filesystems"));
+	const partitions = parseFlashPartitions(commandOutput(data.commands, "Flash partitions"));
+
+	return (
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Firmware" value={data.board.release?.description ?? "unknown"} />
+				<MetricBlock label="Root used" value={storagePercent(data.system.root)} />
+				<MetricBlock label="Overlay free" value={formatStorageKiB(data.system.root?.free ?? data.system.root?.avail)} />
+			</div>
+			<FilesystemTable entries={filesystems} />
+			<FlashPartitionTable entries={partitions} />
+		</div>
+	);
+}
+
+function FilesystemTable({ entries }: { entries: FilesystemEntry[] }) {
+	return (
+		<Panel title="Mounted filesystems" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[44rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Filesystem</th>
+							<th className="px-3 py-2 font-medium">Size</th>
+							<th className="px-3 py-2 font-medium">Used</th>
+							<th className="px-3 py-2 font-medium">Available</th>
+							<th className="px-3 py-2 font-medium">Use</th>
+							<th className="px-3 py-2 font-medium">Mounted on</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={`${entry.filesystem}.${entry.mountedOn}`}>
+									<td className="px-3 py-3 font-medium">{entry.filesystem}</td>
+									<td className="px-3 py-3">{entry.size}</td>
+									<td className="px-3 py-3">{entry.used}</td>
+									<td className="px-3 py-3">{entry.available}</td>
+									<td className="px-3 py-3">{entry.usePercent}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.mountedOn}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+									No mounted filesystems found.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function FlashPartitionTable({ entries }: { entries: FlashPartitionEntry[] }) {
+	return (
+		<Panel title="Flash partitions" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[36rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Device</th>
+							<th className="px-3 py-2 font-medium">Size</th>
+							<th className="px-3 py-2 font-medium">Erase size</th>
+							<th className="px-3 py-2 font-medium">Name</th>
+						</tr>
+					</thead>
+					<tbody>
+						{entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={entry.device}>
+									<td className="px-3 py-3 font-medium">{entry.device}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.size}</td>
+									<td className="px-3 py-3 font-mono text-xs">{entry.eraseSize}</td>
+									<td className="px-3 py-3">{entry.name}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+									No MTD flash partitions exposed by this target.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
+	);
+}
+
+function MetricBlock({ label, value }: { label: string; value: ReactNode }) {
 	return (
 		<div className="rounded-md border bg-card p-3 text-sm">
 			<div className="text-xs uppercase text-muted-foreground">{label}</div>
-			<div className="mt-1 text-2xl font-semibold">{value}</div>
+			<div className="mt-1 break-words text-2xl font-semibold">{value}</div>
 		</div>
 	);
 }
@@ -666,6 +778,70 @@ function parsePackageLine(line: string): PackageEntry {
 		description: match[3],
 		line,
 	};
+}
+
+function commandOutput(commands: CommandBlock[], title: string) {
+	return commands.find((command) => command.title === title)?.output ?? "";
+}
+
+function parseFilesystems(output: string): FilesystemEntry[] {
+	return output
+		.split("\n")
+		.slice(1)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const [filesystem = "", size = "", used = "", available = "", usePercent = "", ...mountParts] = line.split(/\s+/);
+			return {
+				filesystem,
+				size,
+				used,
+				available,
+				usePercent,
+				mountedOn: mountParts.join(" ") || "unknown",
+			};
+		});
+}
+
+function parseFlashPartitions(output: string): FlashPartitionEntry[] {
+	return output
+		.split("\n")
+		.slice(1)
+		.map((line) => line.trim())
+		.filter(Boolean)
+		.map((line) => {
+			const match = /^(mtd\d+):\s+([0-9a-fA-F]+)\s+([0-9a-fA-F]+)\s+"?([^"]*)"?/.exec(line);
+			return {
+				device: match?.[1] ?? line,
+				size: match?.[2] ?? "unknown",
+				eraseSize: match?.[3] ?? "unknown",
+				name: match?.[4] ?? "unknown",
+			};
+		});
+}
+
+function storagePercent(storage?: { total?: number; used?: number; free?: number; avail?: number }) {
+	const total = storage?.total ?? 0;
+	const used = storage?.used ?? Math.max(0, total - (storage?.avail ?? storage?.free ?? 0));
+
+	if (!total) {
+		return "unknown";
+	}
+
+	return `${Math.round((used / total) * 100)}%`;
+}
+
+function formatStorageKiB(value?: number) {
+	if (typeof value !== "number") {
+		return "unknown";
+	}
+
+	const bytes = value * 1024;
+	const units = ["B", "KB", "MB", "GB", "TB"];
+	const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+	const scaled = bytes / 1024 ** index;
+
+	return `${scaled >= 10 || index === 0 ? scaled.toFixed(0) : scaled.toFixed(1)} ${units[index]}`;
 }
 
 function TextFileEditor({
