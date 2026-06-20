@@ -118,7 +118,7 @@ expected_services = {
 		"file_titles": ["Allowlist", "Blocklist", "Custom feeds"],
 		"logs": ["activity"],
 	},
-	"upnpd": {"sections": True},
+	"upnpd": {"sections": True, "arrays": ["upnpActiveRules"], "required_options": ["upnp_lease_file", "uuid"]},
 	"commands": {"customCommands": True},
 	"uhttpd": {"sections": True, "required_options": ["redirect_https", "lua_prefix"]},
 	"dropbear": {"sections": True, "required_options": ["Port", "PasswordAuth", "RootPasswordAuth"]},
@@ -283,6 +283,10 @@ for service, rules in expected_services.items():
 
 	if rules.get("files") and not data.get("files"):
 		failures.append(f"{service}: expected service file summaries")
+
+	for key in rules.get("arrays", []):
+		if not isinstance(data.get(key), list):
+			failures.append(f"{service}: expected {key} array")
 
 	file_titles = {file.get("title") for file in data.get("files") or []}
 	for title in rules.get("file_titles", []):

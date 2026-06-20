@@ -3703,6 +3703,33 @@ function service_detail(id) {
 			logs: {}
 		};
 
+	let files = [];
+	let logs = {};
+	let upnp_rules = [];
+
+	try {
+		files = service_files(meta);
+	}
+	catch (e) {
+		files = [];
+	}
+
+	try {
+		logs = service_logs(meta);
+	}
+	catch (e) {
+		logs = {};
+	}
+
+	if (id == 'upnpd') {
+		try {
+			upnp_rules = upnpd_active_rules();
+		}
+		catch (e) {
+			upnp_rules = [];
+		}
+	}
+
 	return {
 		id,
 		title: meta.title,
@@ -3710,8 +3737,9 @@ function service_detail(id) {
 		init: fast_service_state(meta.init),
 		sections: collect_uci_config(meta.package, meta.sections || []),
 		customCommands: id == 'commands' ? custom_command_entries() : [],
-		files: service_files(meta),
-		logs: service_logs(meta)
+		upnpActiveRules: upnp_rules,
+		files,
+		logs
 	};
 }
 
@@ -4856,6 +4884,60 @@ function upnpd_rule_rows() {
 	return rows;
 }
 
+function upnpd_active_rules() {
+	try {
+		let status = ubus.call('luci.upnp', 'get_status', {}) || {};
+		return status.rules || [];
+	}
+	catch (e) {
+		return [];
+	}
+}
+
+function upnpd_delete_active_rule(token) {
+	token = clean_uci_value(token || '');
+
+	if (!length(token) || replace(token, /[^0-9]/g, '') != token || +token < 1)
+		return {
+			ok: false,
+			message: 'UPnP active rule token is invalid.',
+			activeRules: []
+		};
+
+	let rules = upnpd_active_rules();
+	let exists = false;
+
+	for (let rule in rules) {
+		if ('' + (rule?.num || '') == token) {
+			exists = true;
+			break;
+		}
+	}
+
+	if (!exists)
+		return {
+			ok: false,
+			message: 'UPnP active rule is no longer present.',
+			activeRules: rules
+		};
+
+	try {
+		let result = ubus.call('luci.upnp', 'delete_rule', { token }) || {};
+		return {
+			ok: result.result == 'OK',
+			message: result.result == 'OK' ? 'UPnP port map deleted.' : 'UPnP port map delete failed.',
+			activeRules: upnpd_active_rules()
+		};
+	}
+	catch (e) {
+		return {
+			ok: false,
+			message: 'UPnP port map delete failed: ' + e,
+			activeRules: upnpd_active_rules()
+		};
+	}
+}
+
 function save_upnpd_config(config, rows) {
 	config ||= {};
 	rows ||= [];
@@ -4868,20 +4950,62 @@ function save_upnpd_config(config, rows) {
 		upload: clean_uci_value(config.upload || ''),
 		internal_iface: clean_uci_value(config.internal_iface || ''),
 		port: clean_uci_value(config.port || ''),
-		igdv1: zero_one(config.igdv1)
+		igdv1: zero_one(config.igdv1),
+		enable_upnp: clean_uci_value(config.enable_upnp || ''),
+		enable_natpmp: clean_uci_value(config.enable_natpmp || ''),
+		use_stun: clean_uci_value(config.use_stun || ''),
+		stun_host: clean_uci_value(config.stun_host || ''),
+		stun_port: clean_uci_value(config.stun_port || ''),
+		secure_mode: clean_uci_value(config.secure_mode || ''),
+		notify_interval: clean_uci_value(config.notify_interval || ''),
+		presentation_url: clean_uci_value(config.presentation_url || ''),
+		uuid: clean_uci_value(config.uuid || ''),
+		model_number: clean_uci_value(config.model_number || ''),
+		serial_number: clean_uci_value(config.serial_number || ''),
+		system_uptime: clean_uci_value(config.system_uptime || ''),
+		log_output: clean_uci_value(config.log_output || ''),
+		upnp_lease_file: clean_uci_value(config.upnp_lease_file || '')
 	};
 
-	if (!valid_numeric_value(next_config.download) || !valid_numeric_value(next_config.upload) || !valid_numeric_value(next_config.port))
+	if (!valid_numeric_value(next_config.download) || !valid_numeric_value(next_config.upload) || !valid_numeric_value(next_config.port) || !valid_numeric_value(next_config.stun_port) || !valid_numeric_value(next_config.notify_interval))
 		return {
 			saved: false,
-			message: 'UPnP bandwidth and port values must be numeric.',
+			message: 'UPnP bandwidth, port, STUN port, and interval values must be numeric.',
 			changed: false,
 			config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
 			rules: upnpd_rule_rows(),
 			sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 		};
 
-	if (!length(next_config.internal_iface) || replace(next_config.internal_iface, /[^A-Za-z0-9_.:-]/g, '') != next_config.internal_iface)
+	for (let key in ['enable_upnp', 'enable_natpmp', 'use_stun', 'secure_mode', 'system_uptime', 'log_output']) {
+		let value = next_config[key];
+
+		if (value != '' && value != '0' && value != '1')
+			return {
+				saved: false,
+				message: 'UPnP boolean options must be enabled, disabled, or default.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+	}
+
+	for (let key in ['internal_iface', 'stun_host', 'uuid', 'model_number', 'serial_number']) {
+		let value = next_config[key];
+
+		if (length(value) && replace(value, /[^A-Za-z0-9_.:-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'UPnP identifier fields contain unsupported characters.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+	}
+
+	if (!length(next_config.internal_iface))
 		return {
 			saved: false,
 			message: 'UPnP internal interface is required.',
@@ -4890,6 +5014,20 @@ function save_upnpd_config(config, rows) {
 			rules: upnpd_rule_rows(),
 			sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 		};
+
+	for (let key in ['presentation_url', 'upnp_lease_file']) {
+		let value = next_config[key];
+
+		if (length(value) && replace(value, /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\]-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'UPnP URL and file fields contain unsupported characters.',
+				changed: false,
+				config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
+				rules: upnpd_rule_rows(),
+				sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
+			};
+	}
 
 	let existing = {};
 	uci.foreach('upnpd', 'perm_rule', function(section) {
@@ -4996,6 +5134,7 @@ function save_upnpd_config(config, rows) {
 		changed,
 		config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
 		rules: upnpd_rule_rows(),
+		activeRules: upnpd_active_rules(),
 		sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 	};
 }
@@ -6016,9 +6155,19 @@ const methods = {
 					changed: false,
 					config: (collect_uci_config('upnpd', ['upnpd']) || [])[0] || null,
 					rules: upnpd_rule_rows(),
+					activeRules: upnpd_active_rules(),
 					sections: collect_uci_config('upnpd', ['upnpd', 'perm_rule'])
 				});
 			}
+		}
+	},
+
+	upnpd_active_rule_delete: {
+		args: {
+			token: ''
+		},
+		call: function(request) {
+			return respond(upnpd_delete_active_rule(request.args.token || ''));
 		}
 	},
 

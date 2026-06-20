@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
 	confirmReboot,
 	createConfigBackup,
+	deleteUpnpdActiveRule,
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
@@ -49,6 +50,7 @@ import {
 	type PackageSearchResult,
 	type ServiceFile,
 	type UpnpdConfigInput,
+	type UpnpdActiveRule,
 	type UpnpdRule,
 	type UhttpdConfigInput,
 } from "@/lib/rpc";
@@ -732,6 +734,104 @@ function normalizeCustomCommand(command: CustomCommand): CustomCommand {
 	};
 }
 
+function UpnpdActiveRulesTable({
+	deleting,
+	onDelete,
+	rules,
+}: {
+	deleting: string | null;
+	onDelete: (token: string) => void | Promise<void>;
+	rules: UpnpdActiveRule[];
+}) {
+	return (
+		<div className="overflow-x-auto rounded-md border">
+			<table className="w-full min-w-[52rem] text-left text-sm">
+				<thead className="border-b bg-muted/30 text-xs uppercase text-muted-foreground">
+					<tr>
+						<th className="px-3 py-2 font-medium">Client</th>
+						<th className="px-3 py-2 font-medium">Address</th>
+						<th className="px-3 py-2 font-medium">Ports</th>
+						<th className="px-3 py-2 font-medium">Protocol</th>
+						<th className="px-3 py-2 font-medium">Expires</th>
+						<th className="px-3 py-2 font-medium">Description</th>
+						<th className="w-12 px-3 py-2" />
+					</tr>
+				</thead>
+				<tbody>
+					{rules.length ? (
+						rules.map((rule, index) => {
+							const token = String(rule.num ?? "");
+							return (
+								<tr className="border-b last:border-0" key={`${token}.${index}`}>
+									<td className="px-3 py-2">{rule.host_hint || "Unknown"}</td>
+									<td className="px-3 py-2 font-mono text-xs text-muted-foreground">{rule.intaddr || "unknown"}</td>
+									<td className="px-3 py-2">
+										{String(rule.intport ?? "unknown")} → {String(rule.extport ?? "unknown")}
+									</td>
+									<td className="px-3 py-2">{rule.proto || "unknown"}</td>
+									<td className="px-3 py-2">{formatDuration(Number(rule.expires ?? 0))}</td>
+									<td className="px-3 py-2">{rule.descr || "none"}</td>
+									<td className="px-3 py-2 text-right">
+										<Button
+											aria-label="Delete active port map"
+											disabled={!token || deleting === token}
+											onClick={() => void onDelete(token)}
+											size="icon"
+											type="button"
+											variant="ghost"
+										>
+											<Trash2 className="size-4" />
+										</Button>
+									</td>
+								</tr>
+							);
+						})
+					) : (
+						<tr>
+							<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
+								No active UPnP port maps.
+							</td>
+						</tr>
+					)}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function DefaultSelect({ label, onChange, value }: { label: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<label className="grid gap-2 text-sm">
+			<span className="font-medium">{label}</span>
+			<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => onChange(event.target.value)} value={value}>
+				<option value="">default</option>
+				<option value="1">enabled</option>
+				<option value="0">disabled</option>
+			</select>
+		</label>
+	);
+}
+
+function formatDuration(seconds: number) {
+	if (!Number.isFinite(seconds) || seconds <= 0) {
+		return "none";
+	}
+
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor((seconds % 3600) / 60);
+	const remainingSeconds = Math.floor(seconds % 60);
+
+	if (hours) {
+		return `${hours}h ${minutes.toString().padStart(2, "0")}m ${remainingSeconds.toString().padStart(2, "0")}s`;
+	}
+
+	if (minutes) {
+		return `${minutes}m ${remainingSeconds.toString().padStart(2, "0")}s`;
+	}
+
+	return `${remainingSeconds}s`;
+}
+
 function CustomCommandRunner({ command }: { command: CustomCommand }) {
 	const [args, setArgs] = useState("");
 	const [running, setRunning] = useState(false);
@@ -1122,7 +1222,7 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 					<MetricBlock label="Interface" value={configValue(config, "internal_iface") || "unknown"} />
 					<MetricBlock label="Permission rules" value={rules.length} />
 				</div>
-				<UpnpdAccessPanel config={config} rules={rules} />
+				<UpnpdAccessPanel activeRules={service.upnpActiveRules ?? []} config={config} rules={rules} />
 			</div>
 		);
 	}
@@ -1569,14 +1669,24 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 	);
 }
 
-function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined; rules: ConfigSection[] }) {
+function UpnpdAccessPanel({
+	activeRules,
+	config,
+	rules,
+}: {
+	activeRules: UpnpdActiveRule[];
+	config: ConfigSection | undefined;
+	rules: ConfigSection[];
+}) {
 	const initialConfig = useMemo(() => upnpdConfigValues(config), [config]);
 	const initialRules = useMemo(() => rules.map(upnpdRuleValues), [rules]);
 	const [values, setValues] = useState(initialConfig);
 	const [savedValues, setSavedValues] = useState(initialConfig);
 	const [ruleRows, setRuleRows] = useState(initialRules);
 	const [savedRuleRows, setSavedRuleRows] = useState(initialRules);
+	const [activeRuleRows, setActiveRuleRows] = useState(activeRules);
 	const [saving, setSaving] = useState(false);
+	const [deletingRule, setDeletingRule] = useState<string | null>(null);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues) || JSON.stringify(ruleRows) !== JSON.stringify(savedRuleRows);
 
 	function update<K extends keyof UpnpdConfigInput>(key: K, value: UpnpdConfigInput[K]) {
@@ -1626,12 +1736,28 @@ function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined
 		setSavedValues(nextValues);
 		setRuleRows(nextRules);
 		setSavedRuleRows(nextRules);
+		setActiveRuleRows(result.activeRules ?? activeRuleRows);
+		toast.success(result.message);
+	}
+
+	async function deleteActiveRule(token: string) {
+		setDeletingRule(token);
+		const result = await deleteUpnpdActiveRule(token);
+		setDeletingRule(null);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		setActiveRuleRows(result.activeRules);
 		toast.success(result.message);
 	}
 
 	return (
 		<Panel title="UPnP settings">
 			<div className="grid gap-5">
+				<UpnpdActiveRulesTable deleting={deletingRule} onDelete={deleteActiveRule} rules={activeRuleRows} />
 				<div className="grid gap-3 md:grid-cols-3">
 					<label className="grid gap-2 text-sm">
 						<span className="font-medium">Enabled</span>
@@ -1644,6 +1770,8 @@ function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined
 							<option value="1">enabled</option>
 						</select>
 					</label>
+					<DefaultSelect label="UPnP IGD protocol" onChange={(value) => update("enable_upnp", value)} value={values.enable_upnp} />
+					<DefaultSelect label="PCP/NAT-PMP protocols" onChange={(value) => update("enable_natpmp", value)} value={values.enable_natpmp} />
 					<label className="grid gap-2 text-sm">
 						<span className="font-medium">Internal interface</span>
 						<Input onChange={(event) => update("internal_iface", event.target.value)} value={values.internal_iface} />
@@ -1670,6 +1798,42 @@ function UpnpdAccessPanel({ config, rules }: { config: ConfigSection | undefined
 							<option value="1">enabled</option>
 							<option value="0">disabled</option>
 						</select>
+					</label>
+					<DefaultSelect label="Secure mode" onChange={(value) => update("secure_mode", value)} value={values.secure_mode} />
+					<DefaultSelect label="System uptime" onChange={(value) => update("system_uptime", value)} value={values.system_uptime} />
+					<DefaultSelect label="Extra logging" onChange={(value) => update("log_output", value)} value={values.log_output} />
+					<DefaultSelect label="STUN" onChange={(value) => update("use_stun", value)} value={values.use_stun} />
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">STUN host</span>
+						<Input onChange={(event) => update("stun_host", event.target.value)} value={values.stun_host} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">STUN port</span>
+						<Input inputMode="numeric" onChange={(event) => update("stun_port", event.target.value)} value={values.stun_port} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Notify interval</span>
+						<Input inputMode="numeric" onChange={(event) => update("notify_interval", event.target.value)} value={values.notify_interval} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Presentation URL</span>
+						<Input onChange={(event) => update("presentation_url", event.target.value)} value={values.presentation_url} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Device UUID</span>
+						<Input onChange={(event) => update("uuid", event.target.value)} value={values.uuid} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Model number</span>
+						<Input onChange={(event) => update("model_number", event.target.value)} value={values.model_number} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Serial number</span>
+						<Input onChange={(event) => update("serial_number", event.target.value)} value={values.serial_number} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Lease file</span>
+						<Input onChange={(event) => update("upnp_lease_file", event.target.value)} value={values.upnp_lease_file} />
 					</label>
 				</div>
 
@@ -2228,11 +2392,25 @@ function normalizeAdblockFastFeed(feed: AdblockFastFeed): AdblockFastFeed {
 function upnpdConfigValues(config: ConfigSection | undefined): UpnpdConfigInput {
 	return {
 		enabled: configValue(config, "enabled") === "1" ? "1" : "0",
+		enable_upnp: configValue(config, "enable_upnp"),
+		enable_natpmp: configValue(config, "enable_natpmp"),
 		download: configValue(config, "download") || "1024",
 		upload: configValue(config, "upload") || "512",
 		internal_iface: configValue(config, "internal_iface") || "lan",
 		port: configValue(config, "port") || "5000",
 		igdv1: configValue(config, "igdv1") === "0" ? "0" : "1",
+		use_stun: configValue(config, "use_stun"),
+		stun_host: configValue(config, "stun_host"),
+		stun_port: configValue(config, "stun_port"),
+		secure_mode: configValue(config, "secure_mode"),
+		notify_interval: configValue(config, "notify_interval"),
+		presentation_url: configValue(config, "presentation_url"),
+		uuid: configValue(config, "uuid"),
+		model_number: configValue(config, "model_number"),
+		serial_number: configValue(config, "serial_number"),
+		system_uptime: configValue(config, "system_uptime"),
+		log_output: configValue(config, "log_output"),
+		upnp_lease_file: configValue(config, "upnp_lease_file"),
 	};
 }
 

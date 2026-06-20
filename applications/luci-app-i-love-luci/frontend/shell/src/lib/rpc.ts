@@ -370,6 +370,7 @@ export type NativeService = {
 	init?: ServiceState | null;
 	sections?: ConfigSection[];
 	customCommands?: CustomCommand[];
+	upnpActiveRules?: UpnpdActiveRule[];
 	files?: ServiceFile[];
 	logs?: Record<string, string>;
 	enabled?: boolean;
@@ -467,11 +468,25 @@ export type UhttpdConfigResult = {
 
 export type UpnpdConfigInput = {
 	enabled: string;
+	enable_upnp: string;
+	enable_natpmp: string;
 	download: string;
 	upload: string;
 	internal_iface: string;
 	port: string;
 	igdv1: string;
+	use_stun: string;
+	stun_host: string;
+	stun_port: string;
+	secure_mode: string;
+	notify_interval: string;
+	presentation_url: string;
+	uuid: string;
+	model_number: string;
+	serial_number: string;
+	system_uptime: string;
+	log_output: string;
+	upnp_lease_file: string;
 };
 
 export type UpnpdRule = {
@@ -489,7 +504,25 @@ export type UpnpdConfigResult = {
 	changed: boolean;
 	config: ConfigSection | null;
 	rules: UpnpdRule[];
+	activeRules: UpnpdActiveRule[];
 	sections: ConfigSection[];
+};
+
+export type UpnpdActiveRule = {
+	num?: string | number;
+	host_hint?: string;
+	intaddr?: string;
+	intport?: string | number;
+	extport?: string | number;
+	proto?: string;
+	expires?: number;
+	descr?: string;
+};
+
+export type UpnpdActiveRuleDeleteResult = {
+	ok: boolean;
+	message: string;
+	activeRules: UpnpdActiveRule[];
 };
 
 export type AdblockFastConfigInput = {
@@ -1235,7 +1268,21 @@ export async function saveUpnpdConfig(config: UpnpdConfigInput, rules: UpnpdRule
 			changed: false,
 			config: null,
 			rules: [],
+			activeRules: [],
 			sections: [],
+		};
+	}
+}
+
+export async function deleteUpnpdActiveRule(token: string): Promise<UpnpdActiveRuleDeleteResult> {
+	try {
+		return await callBridge<UpnpdActiveRuleDeleteResult>("upnpd_active_rule_delete", { token });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "UPnP port map delete failed.",
+			activeRules: [],
 		};
 	}
 }

@@ -64,6 +64,7 @@
 					"system_settings_save",
 					"uhttpd_cert_defaults_save",
 					"uhttpd_config_save",
+					"upnpd_active_rule_delete",
 					"upnpd_config_save",
 					"route_mode_set",
 					"auth_mfa_begin_setup",
