@@ -58,4 +58,17 @@ describe("itemTarget", () => {
 			}),
 		).toBe("/realtime");
 	});
+
+	it("routes banIP child previews to focused native service views when modern is selected", () => {
+		expect(
+			itemTarget({
+				title: "Edit Allowlist",
+				path: "/admin/services/banip/allowlist",
+				nativePath: "/native/service/banip/allowlist",
+				effectiveMode: "modern",
+				configuredMode: "modern",
+				legacy: false,
+			}),
+		).toBe("/native/service/banip/allowlist");
+	});
 });

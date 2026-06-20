@@ -46,6 +46,7 @@ export function App() {
 					<Route path="core/:page" element={<CoreSettingsPage />} />
 					<Route path="native/:page" element={<NativePage />} />
 					<Route path="native/service/:service" element={<NativeServicePage />} />
+					<Route path="native/service/:service/:focus" element={<NativeServicePage />} />
 					<Route path="settings" element={<SettingsPage />} />
 					<Route path="legacy/*" element={<LegacyPage />} />
 					<Route path="*" element={<Navigate to="/" replace />} />

@@ -317,7 +317,9 @@ export function NativePage() {
 export function NativeServicePage() {
 	const params = useParams();
 	const service = params.service ?? "";
+	const focus = params.focus ?? "";
 	const [detail, setDetail] = useState<NativeService | null>(null);
+	const focusMeta = serviceFocusMeta(service, focus);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -334,23 +336,70 @@ export function NativeServicePage() {
 	}, [service]);
 
 	const sections = detail?.sections ?? [];
+	const focusedFiles = focusMeta?.fileTitles
+		? (detail?.files ?? []).filter((file) => focusMeta.fileTitles?.includes(file.title))
+		: [];
 
 	return (
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
 			<PageHeader
 				meta={{
-					title: detail?.title ?? pageTitle(service),
-					description: "Modern service status and configuration summary. Advanced editing remains in legacy LuCI.",
+					title: focusMeta ? `${detail?.title ?? pageTitle(service)} ${focusMeta.title}` : (detail?.title ?? pageTitle(service)),
+					description: focusMeta?.description ?? "Modern service status and configuration summary. Advanced editing remains in legacy LuCI.",
 				}}
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
-			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
-			{detail ? <ServiceSpecificSummary service={detail} /> : null}
-			<ServiceFileTables files={detail?.files ?? []} />
-			<ConfigTable sections={sections} />
-			<ServiceLogTables logs={detail?.logs ?? {}} />
+			{focusMeta?.fileTitles ? <ServiceFileTables files={focusedFiles} /> : null}
+			{focusMeta?.policyOnly && detail ? <ServiceSpecificSummary service={detail} /> : null}
+			{focusMeta?.logsOnly ? <ServiceLogTables logs={detail?.logs ?? {}} /> : null}
+			{!focusMeta && detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
+			{!focusMeta && detail ? <ServiceSpecificSummary service={detail} /> : null}
+			{!focusMeta ? <ServiceFileTables files={detail?.files ?? []} /> : null}
+			{!focusMeta ? <ConfigTable sections={sections} /> : null}
+			{!focusMeta ? <ServiceLogTables logs={detail?.logs ?? {}} /> : null}
 		</div>
 	);
+}
+
+function serviceFocusMeta(service: string, focus: string) {
+	if (service !== "banip") {
+		return null;
+	}
+
+	const focusMap: Record<string, { description: string; fileTitles?: string[]; logsOnly?: boolean; policyOnly?: boolean; title: string }> = {
+		allowlist: {
+			title: "allowlist",
+			description: "Read-only preview of the banIP allowlist file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			fileTitles: ["Allowlist"],
+		},
+		blocklist: {
+			title: "blocklist",
+			description: "Read-only preview of the banIP blocklist file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			fileTitles: ["Blocklist"],
+		},
+		feeds: {
+			title: "custom feeds",
+			description: "Read-only preview of the banIP custom feed file. Editing remains in LuCI compat until file save and reload parity is complete.",
+			fileTitles: ["Custom feeds"],
+		},
+		setreport: {
+			title: "reporting",
+			description: "banIP policy and reporting context from UCI. Report editing remains in LuCI compat until full parity is complete.",
+			policyOnly: true,
+		},
+		firewall_log: {
+			title: "firewall log",
+			description: "banIP service activity from the router log. Full firewall log workflow remains in LuCI compat.",
+			logsOnly: true,
+		},
+		processing_log: {
+			title: "processing log",
+			description: "banIP processing activity from the router log. Full processing log workflow remains in LuCI compat.",
+			logsOnly: true,
+		},
+	};
+
+	return focusMap[focus] ?? null;
 }
 
 function ServiceFileTables({ files }: { files: ServiceFile[] }) {
