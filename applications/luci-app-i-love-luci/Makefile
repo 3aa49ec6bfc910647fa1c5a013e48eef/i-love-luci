@@ -5,7 +5,7 @@ PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 
 LUCI_TITLE:=I Love LuCI modern application shell
-LUCI_DEPENDS:=+luci-base +rpcd-mod-ucode
+LUCI_DEPENDS:=+luci-base +rpcd-mod-ucode +ttyd
 LUCI_PKGARCH:=all
 
 PKG_LICENSE:=Apache-2.0

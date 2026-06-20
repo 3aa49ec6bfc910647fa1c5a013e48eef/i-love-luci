@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Input } from "@/components/ui/input";
 import { getMenuTree, type MenuItem } from "@/lib/rpc";
-import { searchMenu } from "@/lib/navigation";
+import { itemTarget, searchMenu } from "@/lib/navigation";
 
 export function HeaderSearch() {
 	const navigate = useNavigate();
@@ -17,7 +17,7 @@ export function HeaderSearch() {
 	const visibleItems = query ? results : recent.length ? recent : results.slice(0, 5);
 
 	useEffect(() => {
-		void getMenuTree().then(setItems);
+		void getMenuTree().then((menu) => setItems(menu.items));
 	}, []);
 
 	useEffect(() => {
@@ -40,12 +40,7 @@ export function HeaderSearch() {
 		setRecent(nextRecent);
 		writeRecent(nextRecent);
 
-		if (item.legacy) {
-			navigate(`/legacy?path=${encodeURIComponent(item.path)}`);
-		}
-		else {
-			navigate(item.path === "/settings" ? "/settings" : "/");
-		}
+		navigate(itemTarget(item));
 	}
 
 	return (
@@ -83,7 +78,7 @@ export function HeaderSearch() {
 								<span>
 									<span className="block text-xs font-medium sm:text-sm">{item.title}</span>
 									<span className="block text-xs text-muted-foreground">
-										{item.legacy ? "Legacy LuCI bridge" : "Native route"} · {item.path}
+										{item.legacy ? "Legacy LuCI bridge" : "Native route"} · {item.resolvedPath ?? item.path}
 									</span>
 								</span>
 							</button>

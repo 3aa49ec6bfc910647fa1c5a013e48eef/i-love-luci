@@ -1,9 +1,30 @@
 import { getShellConfig } from "@/lib/config";
 
 export type MenuItem = {
+	id?: string;
 	title: string;
 	path: string;
+	parentPath?: string | null;
+	order?: number;
+	depth?: number;
+	actionType?: string;
+	actionPath?: string | null;
+	firstChildPath?: string | null;
+	resolvedPath?: string;
+	nativePath?: string | null;
+	nativeStatus?: "supported" | "partial" | "unsupported";
+	effectiveMode?: "modern" | "legacy" | "hidden";
+	configuredMode?: "auto" | "modern" | "legacy" | "hidden";
+	eligible?: boolean;
+	hidden?: boolean;
+	hasChildren?: boolean;
 	legacy: boolean;
+	children?: MenuItem[];
+};
+
+export type MenuTree = {
+	items: MenuItem[];
+	tree: MenuItem[];
 };
 
 export type SessionInfo = {
@@ -13,6 +34,17 @@ export type SessionInfo = {
 		passkeys: boolean;
 		legacyFrame: boolean;
 	};
+};
+
+export type ConsoleStatus = {
+	available: boolean;
+	enabled: boolean;
+	port?: string;
+	ssl?: boolean;
+	username?: string;
+	password?: string;
+	path?: string;
+	url?: string;
 };
 
 export type SystemMemory = {
@@ -111,13 +143,21 @@ const fallbackSession: SessionInfo = {
 	},
 };
 
-const fallbackMenu: MenuItem[] = [
-	{ title: "Status overview", path: "/admin/status/overview", legacy: true },
-	{ title: "Network interfaces", path: "/admin/network/network", legacy: true },
-	{ title: "DHCP and DNS", path: "/admin/network/dhcp", legacy: true },
-	{ title: "Firewall", path: "/admin/network/firewall", legacy: true },
-	{ title: "I Love LuCI settings", path: "/settings", legacy: false },
-];
+const fallbackMenu: MenuTree = {
+	items: [
+		{ title: "Status overview", path: "/admin/status/overview", nativePath: "/", legacy: false },
+		{ title: "Network interfaces", path: "/admin/network/network", legacy: true },
+		{ title: "DHCP and DNS", path: "/admin/network/dhcp", legacy: true },
+		{ title: "Firewall", path: "/admin/network/firewall", legacy: true },
+		{ title: "I Love LuCI settings", path: "/settings", legacy: false },
+	],
+	tree: [
+		{ title: "Dashboard", path: "/admin/status/overview", nativePath: "/", legacy: false },
+		{ title: "Network", path: "/admin/network/network", legacy: true },
+		{ title: "DHCP and DNS", path: "/admin/network/dhcp", legacy: true },
+		{ title: "Settings", path: "/settings", legacy: false },
+	],
+};
 
 const fallbackDashboard: DashboardStatus = {
 	board: {},
@@ -168,10 +208,13 @@ export async function getSessionInfo(): Promise<SessionInfo> {
 	}
 }
 
-export async function getMenuTree(): Promise<MenuItem[]> {
+export async function getMenuTree(): Promise<MenuTree> {
 	try {
-		const data = await callBridge<{ items: MenuItem[] }>("menu_tree");
-		return data.items;
+		const data = await callBridge<MenuTree>("menu_tree");
+		return {
+			items: data.items ?? [],
+			tree: data.tree ?? data.items ?? [],
+		};
 	}
 	catch {
 		return fallbackMenu;
@@ -185,6 +228,18 @@ export async function getPendingChanges(): Promise<number> {
 	}
 	catch {
 		return 0;
+	}
+}
+
+export async function getConsoleStatus(): Promise<ConsoleStatus> {
+	try {
+		return await callBridge<ConsoleStatus>("console_status");
+	}
+	catch {
+		return {
+			available: false,
+			enabled: false,
+		};
 	}
 }
 

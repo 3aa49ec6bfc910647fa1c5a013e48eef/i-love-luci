@@ -8,6 +8,7 @@
 					"menu_tree",
 					"dashboard_status",
 					"changes_list",
+					"console_status",
 					"auth_mfa_status"
 				]
 			},
