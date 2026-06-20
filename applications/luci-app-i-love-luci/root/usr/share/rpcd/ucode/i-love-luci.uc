@@ -1189,6 +1189,160 @@ function clean_uci_value(value) {
 	return replace(value, /[\r\n]/g, '');
 }
 
+function split_uci_lines(value) {
+	let rows = [];
+
+	for (let line in split('' + (value || ''), '\n')) {
+		line = clean_uci_value(line);
+
+		if (length(line))
+			push(rows, line);
+	}
+
+	return rows;
+}
+
+function normalize_uci_list(value) {
+	if (type(value) == 'array')
+		return value;
+
+	if (value == null || value == '')
+		return [];
+
+	return [value];
+}
+
+function uci_list_equal(a, b) {
+	a = normalize_uci_list(a);
+	b = normalize_uci_list(b);
+
+	if (length(a) != length(b))
+		return false;
+
+	for (let i = 0; i < length(a); i++)
+		if (a[i] != b[i])
+			return false;
+
+	return true;
+}
+
+function valid_numeric_value(value) {
+	return value == '' || replace(value, /[^0-9]/g, '') == value;
+}
+
+function collect_system_settings_sections() {
+	let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
+
+	for (let section in collect_uci_config('dropbear', ['dropbear']))
+		push(system, section);
+
+	for (let section in collect_uci_config('uhttpd', ['uhttpd', 'cert', 'cert_defaults']))
+		push(system, section);
+
+	return system;
+}
+
+function save_system_settings(config) {
+	config ||= {};
+	uci.load('system');
+
+	let system_section = first_uci_section('system', 'system');
+
+	if (!system_section)
+		system_section = uci.add('system', 'system');
+
+	let hostname = clean_uci_value(config.hostname || 'OpenWrt');
+
+	if (!length(hostname) || !match(hostname, /^[A-Za-z0-9][A-Za-z0-9.-]*$/))
+		return {
+			saved: false,
+			message: 'Hostname must start with a letter or number and contain only letters, numbers, dots, and dashes.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	let next_system = {
+		hostname,
+		description: clean_uci_value(config.description || ''),
+		log_size: clean_uci_value(config.log_size || ''),
+		log_proto: config.log_proto == 'tcp' ? 'tcp' : 'udp',
+		conloglevel: clean_uci_value(config.conloglevel || ''),
+		cronloglevel: clean_uci_value(config.cronloglevel || '')
+	};
+
+	if (!valid_numeric_value(next_system.log_size) || !valid_numeric_value(next_system.conloglevel) || !valid_numeric_value(next_system.cronloglevel))
+		return {
+			saved: false,
+			message: 'Log size and log levels must be numeric.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	let ntp_section = first_uci_section('system', 'timeserver');
+	let next_ntp = {
+		enabled: zero_one(config.ntp_enabled),
+		use_dhcp: zero_one(config.ntp_use_dhcp),
+		server: split_uci_lines(config.ntp_servers || '')
+	};
+
+	let changed = false;
+
+	for (let key, value in next_system) {
+		let current = uci.get('system', system_section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('system', system_section, key, value);
+		}
+	}
+
+	if (!ntp_section) {
+		ntp_section = uci.add('system', 'timeserver');
+		changed = true;
+	}
+
+	let current_ntp_enabled = uci.get('system', ntp_section, 'enabled') || '1';
+	let current_ntp_use_dhcp = uci.get('system', ntp_section, 'use_dhcp') || '1';
+	let current_ntp_servers = uci.get('system', ntp_section, 'server') || [];
+
+	if (current_ntp_enabled != next_ntp.enabled) {
+		changed = true;
+		if (next_ntp.enabled == '1')
+			uci.delete('system', ntp_section, 'enabled');
+		else
+			uci.set('system', ntp_section, 'enabled', '0');
+	}
+
+	if (current_ntp_use_dhcp != next_ntp.use_dhcp) {
+		changed = true;
+		if (next_ntp.use_dhcp == '1')
+			uci.delete('system', ntp_section, 'use_dhcp');
+		else
+			uci.set('system', ntp_section, 'use_dhcp', '0');
+	}
+
+	if (!uci_list_equal(current_ntp_servers, next_ntp.server)) {
+		changed = true;
+		if (length(next_ntp.server))
+			uci.set('system', ntp_section, 'server', next_ntp.server);
+		else
+			uci.delete('system', ntp_section, 'server');
+	}
+
+	if (changed) {
+		uci.commit('system');
+		system('/etc/init.d/system reload >/dev/null 2>&1 || true');
+		system('/etc/init.d/sysntpd restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'System settings saved and services reloaded.' : 'System settings already up to date.',
+		changed,
+		sections: collect_system_settings_sections()
+	};
+}
+
 function save_led_config(rows) {
 	rows ||= [];
 	uci.load('system');
@@ -1481,15 +1635,7 @@ function build_core_settings(page) {
 		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']);
 	}
 	else if (page == 'system') {
-		let system = collect_uci_config('system', ['system', 'timeserver', 'led', 'button']);
-
-		for (let section in collect_uci_config('dropbear', ['dropbear']))
-			push(system, section);
-
-		for (let section in collect_uci_config('uhttpd', ['uhttpd', 'cert', 'cert_defaults']))
-			push(system, section);
-
-		data.system = system;
+		data.system = collect_system_settings_sections();
 	}
 	else {
 		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
@@ -1658,6 +1804,25 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(build_core_settings(request.args.page || 'network'));
+		}
+	},
+
+	system_settings_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_system_settings(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'System settings save failed: ' + e,
+					changed: false,
+					sections: collect_system_settings_sections()
+				});
+			}
 		}
 	},
 

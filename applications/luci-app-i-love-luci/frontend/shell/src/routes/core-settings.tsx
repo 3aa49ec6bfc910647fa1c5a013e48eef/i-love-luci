@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
 	getCoreSettings,
 	getDashboardStatus,
+	saveSystemSettings,
 	type ConfigSection,
 	type CoreSettings,
 	type DashboardStatus,
@@ -13,6 +17,7 @@ import {
 	type DhcpLease,
 	type NetworkInterfaceStatus,
 	type ServiceState,
+	type SystemSettingsInput,
 } from "@/lib/rpc";
 
 type CorePage = "network" | "dhcp" | "firewall" | "system";
@@ -35,7 +40,7 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 	},
 	system: {
 		title: "System administration",
-		description: "Modern read-only view of system, SSH, uHTTPd, and package key configuration.",
+		description: "Modern editor for identity, logging, and NTP with summaries for SSH, uHTTPd, LEDs, and keys.",
 		configKey: "system",
 	},
 };
@@ -358,15 +363,18 @@ function FirewallRedirectTable({ redirects }: { redirects: ConfigSection[] }) {
 }
 
 function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashboard: DashboardStatus | null }) {
-	const system = settings.system.find((section) => section.type === "system");
-	const timeservers = settings.system.filter((section) => section.type === "timeserver");
-	const leds = settings.system.filter((section) => section.type === "led");
-	const dropbear = settings.system.filter((section) => section.type === "dropbear");
-	const uhttpd = settings.system.filter((section) => section.type === "uhttpd");
-	const certs = settings.system.filter((section) => section.type === "cert");
+	const [systemSections, setSystemSections] = useState(settings.system);
+	const system = systemSections.find((section) => section.type === "system");
+	const timeservers = systemSections.filter((section) => section.type === "timeserver");
+	const leds = systemSections.filter((section) => section.type === "led");
+	const dropbear = systemSections.filter((section) => section.type === "dropbear");
+	const uhttpd = systemSections.filter((section) => section.type === "uhttpd");
+	const certs = systemSections.filter((section) => section.type === "cert");
 
 	return (
 		<div className="grid gap-5">
+			<SystemSettingsEditor dashboard={dashboard} onSaved={setSystemSections} sections={systemSections} />
+
 			<SimpleSectionTable
 				columns={["Hostname", "Timezone", "Local time", "Uptime", "Log size", "Console log", "Cron log"]}
 				empty="No system identity configured."
@@ -453,6 +461,221 @@ function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashbo
 			) : null}
 		</div>
 	);
+}
+
+function SystemSettingsEditor({
+	dashboard,
+	onSaved,
+	sections,
+}: {
+	dashboard: DashboardStatus | null;
+	onSaved: (sections: ConfigSection[]) => void;
+	sections: ConfigSection[];
+}) {
+	const [values, setValues] = useState(() => systemSettingsValues(sections, dashboard));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof SystemSettingsInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveSystemSettings(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+		onSaved(result.sections);
+		setSavedValues(values);
+	}
+
+	return (
+		<section className="grid gap-3 border-t pt-4">
+			<div className="flex flex-col gap-1">
+				<h2 className="text-base font-semibold">System settings</h2>
+				<p className="text-sm text-muted-foreground">Edit identity, logging, and basic NTP configuration.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Field label="Hostname" target="system-hostname">
+						<Input
+							id="system-hostname"
+							onChange={(event) => updateField("hostname", event.target.value)}
+							value={values.hostname}
+						/>
+					</Field>
+					<Field label="Description" target="system-description">
+						<Input
+							id="system-description"
+							onChange={(event) => updateField("description", event.target.value)}
+							value={values.description}
+						/>
+					</Field>
+					<Field label="Log buffer size" target="system-log-size">
+						<Input
+							id="system-log-size"
+							inputMode="numeric"
+							onChange={(event) => updateField("log_size", event.target.value)}
+							value={values.log_size}
+						/>
+					</Field>
+					<Field label="Log protocol" target="system-log-proto">
+						<SelectField
+							id="system-log-proto"
+							onChange={(value) => updateField("log_proto", value)}
+							options={[
+								["udp", "UDP"],
+								["tcp", "TCP"],
+							]}
+							value={values.log_proto}
+						/>
+					</Field>
+					<Field label="Console log level" target="system-console-log">
+						<LogLevelSelect
+							id="system-console-log"
+							onChange={(value) => updateField("conloglevel", value)}
+							value={values.conloglevel}
+						/>
+					</Field>
+					<Field label="Cron log level" target="system-cron-log">
+						<LogLevelSelect
+							id="system-cron-log"
+							onChange={(value) => updateField("cronloglevel", value)}
+							value={values.cronloglevel}
+						/>
+					</Field>
+					<Field label="NTP client" target="system-ntp-enabled">
+						<SelectField
+							id="system-ntp-enabled"
+							onChange={(value) => updateField("ntp_enabled", value)}
+							options={[
+								["1", "Enabled"],
+								["0", "Disabled"],
+							]}
+							value={values.ntp_enabled}
+						/>
+					</Field>
+					<Field label="Use DHCP advertised servers" target="system-ntp-dhcp">
+						<SelectField
+							id="system-ntp-dhcp"
+							onChange={(value) => updateField("ntp_use_dhcp", value)}
+							options={[
+								["1", "Enabled"],
+								["0", "Disabled"],
+							]}
+							value={values.ntp_use_dhcp}
+						/>
+					</Field>
+				</div>
+				<Field label="NTP servers" target="system-ntp-servers">
+					<textarea
+						className="min-h-28 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						id="system-ntp-servers"
+						onChange={(event) => updateField("ntp_servers", event.target.value)}
+						spellCheck={false}
+						value={values.ntp_servers}
+					/>
+				</Field>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function Field({ children, label, target }: { children: ReactNode; label: string; target: string }) {
+	return (
+		<div className="grid gap-2">
+			<label className="text-sm font-medium" htmlFor={target}>
+				{label}
+			</label>
+			{children}
+		</div>
+	);
+}
+
+function SelectField({
+	id,
+	onChange,
+	options,
+	value,
+}: {
+	id: string;
+	onChange: (value: string) => void;
+	options: [string, string][];
+	value: string;
+}) {
+	return (
+		<select
+			className="h-10 rounded-md border bg-card px-3 text-sm outline-none focus-visible:border-ring"
+			id={id}
+			onChange={(event) => onChange(event.target.value)}
+			value={value}
+		>
+			{options.map(([optionValue, label]) => (
+				<option key={optionValue} value={optionValue}>
+					{label}
+				</option>
+			))}
+		</select>
+	);
+}
+
+function LogLevelSelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<SelectField
+			id={id}
+			onChange={onChange}
+			options={[
+				["", "Default"],
+				["0", "0"],
+				["1", "1"],
+				["2", "2"],
+				["3", "3"],
+				["4", "4"],
+				["5", "5"],
+				["6", "6"],
+				["7", "7"],
+				["8", "8"],
+				["9", "9"],
+			]}
+			value={value}
+		/>
+	);
+}
+
+function systemSettingsValues(sections: ConfigSection[], dashboard: DashboardStatus | null): SystemSettingsInput {
+	const system = sections.find((section) => section.type === "system");
+	const ntp = sections.find((section) => section.type === "timeserver");
+
+	return {
+		hostname: rawValue(system?.values.hostname || dashboard?.board.hostname || "OpenWrt"),
+		description: rawValue(system?.values.description),
+		log_size: rawValue(system?.values.log_size),
+		log_proto: rawValue(system?.values.log_proto || "udp"),
+		conloglevel: rawValue(system?.values.conloglevel),
+		cronloglevel: rawValue(system?.values.cronloglevel),
+		ntp_enabled: rawValue(ntp?.values.enabled || "1") === "0" ? "0" : "1",
+		ntp_use_dhcp: rawValue(ntp?.values.use_dhcp || "1") === "0" ? "0" : "1",
+		ntp_servers: rawListValue(ntp?.values.server).join("\n"),
+	};
 }
 
 function SimpleSectionTable({
@@ -660,6 +883,23 @@ function normalizePage(page?: string): CorePage {
 
 function formatValue(value: ConfigSection["values"][string]) {
 	return Array.isArray(value) ? value.join(", ") : String(value);
+}
+
+function rawValue(value: unknown) {
+	if (Array.isArray(value)) {
+		return value.map((item) => `${item}`).join("\n");
+	}
+
+	return value == null ? "" : `${value}`;
+}
+
+function rawListValue(value: unknown) {
+	if (Array.isArray(value)) {
+		return value.map((item) => `${item}`);
+	}
+
+	const text = rawValue(value);
+	return text ? [text] : [];
 }
 
 function valueText(value: ConfigSection["values"][string] | undefined) {

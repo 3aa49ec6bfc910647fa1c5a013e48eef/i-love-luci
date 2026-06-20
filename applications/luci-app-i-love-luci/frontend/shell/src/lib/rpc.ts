@@ -320,6 +320,25 @@ export type UhttpdConfigResult = {
 	init: ServiceState | null;
 };
 
+export type SystemSettingsInput = {
+	hostname: string;
+	description: string;
+	log_size: string;
+	log_proto: string;
+	conloglevel: string;
+	cronloglevel: string;
+	ntp_enabled: string;
+	ntp_use_dhcp: string;
+	ntp_servers: string;
+};
+
+export type SystemSettingsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -644,6 +663,20 @@ export async function saveUhttpdConfig(config: UhttpdConfigInput): Promise<Uhttp
 			changed: false,
 			section: null,
 			init: null,
+		};
+	}
+}
+
+export async function saveSystemSettings(config: SystemSettingsInput): Promise<SystemSettingsResult> {
+	try {
+		return await callBridge<SystemSettingsResult>("system_settings_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "System settings save failed.",
+			changed: false,
+			sections: [],
 		};
 	}
 }
