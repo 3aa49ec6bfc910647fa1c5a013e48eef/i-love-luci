@@ -378,6 +378,34 @@ export type DhcpPoolsResult = {
 	sections: ConfigSection[];
 };
 
+export type DnsmasqConfigInput = {
+	domainneeded: string;
+	localise_queries: string;
+	rebind_protection: string;
+	rebind_localhost: string;
+	expandhosts: string;
+	readethers: string;
+	localservice: string;
+	authoritative: string;
+	sequential_ip: string;
+	local: string;
+	domain: string;
+	cachesize: string;
+	ednspacket_max: string;
+	leasefile: string;
+	resolvfile: string;
+	serversfile: string;
+	server: string;
+};
+
+export type DnsmasqConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	sections: ConfigSection[];
+};
+
 export type NativePageData = {
 	page: string;
 	board: BoardInfo;
@@ -761,6 +789,21 @@ export async function saveDhcpPools(rows: DhcpPool[]): Promise<DhcpPoolsResult> 
 			message: "DHCP pools save failed.",
 			changed: false,
 			pools: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDnsmasqConfig(config: DnsmasqConfigInput): Promise<DnsmasqConfigResult> {
+	try {
+		return await callBridge<DnsmasqConfigResult>("dnsmasq_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DNS settings save failed.",
+			changed: false,
+			section: null,
 			sections: [],
 		};
 	}

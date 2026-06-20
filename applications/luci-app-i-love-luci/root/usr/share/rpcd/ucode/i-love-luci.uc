@@ -1039,6 +1039,92 @@ function save_dhcp_pools(rows) {
 	};
 }
 
+function first_dhcp_section(section_type) {
+	let section = null;
+
+	uci.load('dhcp');
+	uci.foreach('dhcp', section_type, function(s) {
+		section ??= s['.name'];
+	});
+
+	return section;
+}
+
+function dnsmasq_section() {
+	let section = first_dhcp_section('dnsmasq');
+
+	return section || uci.add('dhcp', 'dnsmasq');
+}
+
+function save_dnsmasq_config(config) {
+	config ||= {};
+	uci.load('dhcp');
+
+	let section = dnsmasq_section();
+	let server_list = split_dhcp_list(config.server || '');
+	let next = {
+		domainneeded: dhcp_zero_one(config.domainneeded),
+		localise_queries: dhcp_zero_one(config.localise_queries),
+		rebind_protection: dhcp_zero_one(config.rebind_protection),
+		rebind_localhost: dhcp_zero_one(config.rebind_localhost),
+		expandhosts: dhcp_zero_one(config.expandhosts),
+		readethers: dhcp_zero_one(config.readethers),
+		localservice: dhcp_zero_one(config.localservice),
+		authoritative: dhcp_zero_one(config.authoritative),
+		sequential_ip: dhcp_zero_one(config.sequential_ip),
+		local: dhcp_clean_value(config.local || ''),
+		domain: dhcp_clean_value(config.domain || ''),
+		cachesize: dhcp_clean_value(config.cachesize || ''),
+		ednspacket_max: dhcp_clean_value(config.ednspacket_max || ''),
+		leasefile: dhcp_clean_value(config.leasefile || ''),
+		resolvfile: dhcp_clean_value(config.resolvfile || ''),
+		serversfile: dhcp_clean_value(config.serversfile || '')
+	};
+
+	if (!dhcp_numeric_value(next.cachesize) || !dhcp_numeric_value(next.ednspacket_max))
+		return {
+			saved: false,
+			message: 'DNS cache size and EDNS packet size must be numeric.',
+			changed: false,
+			section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
+			sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+		};
+
+	let changed = false;
+
+	for (let key, value in next) {
+		let current = uci.get('dhcp', section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			dhcp_set_option(section, key, value);
+		}
+	}
+
+	let current_servers = uci.get('dhcp', section, 'server') || [];
+
+	if (!same_dhcp_list(current_servers, server_list)) {
+		changed = true;
+		if (length(server_list))
+			uci.set('dhcp', section, 'server', server_list);
+		else
+			uci.delete('dhcp', section, 'server');
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'DNS settings saved and dnsmasq reloaded.' : 'DNS settings already up to date.',
+		changed,
+		section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+	};
+}
+
 function run_init_action(name, action) {
 	name = safe_init_name(name);
 	action = action || 'status';
@@ -2253,6 +2339,26 @@ const methods = {
 					message: 'DHCP pools save failed: ' + e,
 					changed: false,
 					pools: dhcp_pool_rows(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	dnsmasq_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_dnsmasq_config(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DNS settings save failed: ' + e,
+					changed: false,
+					section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 				});
 			}

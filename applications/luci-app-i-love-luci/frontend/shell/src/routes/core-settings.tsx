@@ -12,6 +12,7 @@ import {
 	saveDhcpDomains,
 	saveDhcpHosts,
 	saveDhcpPools,
+	saveDnsmasqConfig,
 	saveSystemSettings,
 	type ConfigSection,
 	type CoreSettings,
@@ -20,6 +21,7 @@ import {
 	type DhcpHost,
 	type DhcpLease,
 	type DhcpPool,
+	type DnsmasqConfigInput,
 	type NetworkInterfaceStatus,
 	type ServiceState,
 	type SystemSettingsInput,
@@ -147,6 +149,7 @@ function DhcpSummary({
 	const staticHosts = settings.dhcpHosts ?? [];
 	const domainRecords = settings.dhcpDomains ?? [];
 	const pools = settings.dhcpPools ?? [];
+	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
 
 	return (
 		<div className="grid gap-5">
@@ -163,6 +166,17 @@ function DhcpSummary({
 				</div>
 			</section>
 
+			{dnsmasq ? (
+				<DnsmasqSettingsEditor
+					onSaved={(sections) =>
+						onSettingsChange({
+							...settings,
+							dhcp: sections,
+						})
+					}
+					section={dnsmasq}
+				/>
+			) : null}
 			<DhcpPoolEditor
 				onSaved={(nextPools, sections) =>
 					onSettingsChange({
@@ -196,6 +210,209 @@ function DhcpSummary({
 			/>
 		</div>
 	);
+}
+
+function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: ConfigSection[]) => void; section: ConfigSection }) {
+	const [values, setValues] = useState(() => dnsmasqSettingsValues(section));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof DnsmasqConfigInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDnsmasqConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = result.section ? dnsmasqSettingsValues(result.section) : values;
+		toast.success(result.message);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div>
+				<h2 className="text-base font-semibold">DNS settings</h2>
+				<p className="text-sm text-muted-foreground">Configure common dnsmasq behavior and upstream server sources.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+					<BooleanField
+						id="dns-domain-needed"
+						label="Domain required"
+						onChange={(value) => updateField("domainneeded", value)}
+						value={values.domainneeded}
+					/>
+					<BooleanField
+						id="dns-localise"
+						label="Localise queries"
+						onChange={(value) => updateField("localise_queries", value)}
+						value={values.localise_queries}
+					/>
+					<BooleanField
+						id="dns-rebind"
+						label="Rebind protection"
+						onChange={(value) => updateField("rebind_protection", value)}
+						value={values.rebind_protection}
+					/>
+					<BooleanField
+						id="dns-rebind-localhost"
+						label="Allow localhost rebind"
+						onChange={(value) => updateField("rebind_localhost", value)}
+						value={values.rebind_localhost}
+					/>
+					<BooleanField
+						id="dns-expandhosts"
+						label="Expand hosts"
+						onChange={(value) => updateField("expandhosts", value)}
+						value={values.expandhosts}
+					/>
+					<BooleanField
+						id="dns-readethers"
+						label="Read ethers"
+						onChange={(value) => updateField("readethers", value)}
+						value={values.readethers}
+					/>
+					<BooleanField
+						id="dns-localservice"
+						label="Local service only"
+						onChange={(value) => updateField("localservice", value)}
+						value={values.localservice}
+					/>
+					<BooleanField
+						id="dns-authoritative"
+						label="Authoritative"
+						onChange={(value) => updateField("authoritative", value)}
+						value={values.authoritative}
+					/>
+					<BooleanField
+						id="dns-sequential-ip"
+						label="Sequential IP"
+						onChange={(value) => updateField("sequential_ip", value)}
+						value={values.sequential_ip}
+					/>
+					<Field label="Local domain" target="dns-local">
+						<Input id="dns-local" onChange={(event) => updateField("local", event.target.value)} value={values.local} />
+					</Field>
+					<Field label="Search domain" target="dns-domain">
+						<Input id="dns-domain" onChange={(event) => updateField("domain", event.target.value)} value={values.domain} />
+					</Field>
+					<Field label="Cache size" target="dns-cachesize">
+						<Input
+							id="dns-cachesize"
+							inputMode="numeric"
+							onChange={(event) => updateField("cachesize", event.target.value)}
+							value={values.cachesize}
+						/>
+					</Field>
+					<Field label="EDNS packet max" target="dns-edns">
+						<Input
+							id="dns-edns"
+							inputMode="numeric"
+							onChange={(event) => updateField("ednspacket_max", event.target.value)}
+							value={values.ednspacket_max}
+						/>
+					</Field>
+					<Field label="Lease file" target="dns-leasefile">
+						<Input id="dns-leasefile" onChange={(event) => updateField("leasefile", event.target.value)} value={values.leasefile} />
+					</Field>
+					<Field label="Resolver file" target="dns-resolvfile">
+						<Input id="dns-resolvfile" onChange={(event) => updateField("resolvfile", event.target.value)} value={values.resolvfile} />
+					</Field>
+					<Field label="Servers file" target="dns-serversfile">
+						<Input
+							id="dns-serversfile"
+							onChange={(event) => updateField("serversfile", event.target.value)}
+							value={values.serversfile}
+						/>
+					</Field>
+				</div>
+				<Field label="Upstream servers" target="dns-servers">
+					<textarea
+						className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						id="dns-servers"
+						onChange={(event) => updateField("server", event.target.value)}
+						spellCheck={false}
+						value={values.server}
+					/>
+				</Field>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function BooleanField({
+	id,
+	label,
+	onChange,
+	value,
+}: {
+	id: string;
+	label: string;
+	onChange: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<Field label={label} target={id}>
+			<SelectField
+				id={id}
+				onChange={onChange}
+				options={[
+					["1", "Enabled"],
+					["0", "Disabled"],
+				]}
+				value={value}
+			/>
+		</Field>
+	);
+}
+
+function dnsmasqSettingsValues(section: ConfigSection): DnsmasqConfigInput {
+	return {
+		domainneeded: booleanValue(section.values.domainneeded),
+		localise_queries: booleanValue(section.values.localise_queries),
+		rebind_protection: booleanValue(section.values.rebind_protection),
+		rebind_localhost: booleanValue(section.values.rebind_localhost),
+		expandhosts: booleanValue(section.values.expandhosts),
+		readethers: booleanValue(section.values.readethers),
+		localservice: booleanValue(section.values.localservice),
+		authoritative: booleanValue(section.values.authoritative),
+		sequential_ip: booleanValue(section.values.sequential_ip),
+		local: rawValue(section.values.local),
+		domain: rawValue(section.values.domain),
+		cachesize: rawValue(section.values.cachesize),
+		ednspacket_max: rawValue(section.values.ednspacket_max),
+		leasefile: rawValue(section.values.leasefile),
+		resolvfile: rawValue(section.values.resolvfile),
+		serversfile: rawValue(section.values.serversfile),
+		server: rawListValue(section.values.server).join("\n"),
+	};
+}
+
+function booleanValue(value: unknown) {
+	return rawValue(value) === "1" ? "1" : "0";
 }
 
 function DhcpPoolEditor({

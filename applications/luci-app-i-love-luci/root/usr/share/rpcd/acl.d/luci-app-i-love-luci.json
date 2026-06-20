@@ -33,6 +33,7 @@
 					"dhcp_hosts_save",
 					"dhcp_pools_save",
 					"dropbear_config_save",
+					"dnsmasq_config_save",
 					"led_config_save",
 					"password_set",
 					"rc_local_save",
