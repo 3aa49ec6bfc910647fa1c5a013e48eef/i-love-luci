@@ -548,7 +548,7 @@ function normaliseLoad(value?: number) {
 		return 0;
 	}
 
-	return value > 1000 ? value / 65536 : value;
+	return value > 32 ? value / 65536 : value;
 }
 
 function bytesToMbps(bytes: number, elapsedSeconds: number) {
