@@ -144,12 +144,11 @@ dist/openwrt/<version>/rockchip-armv8/
 Rules:
 
 - Pull requests build artifacts only.
-- `dev` and `uat` build test artifacts only.
 - `main` builds stable artifacts and publishes the GitHub Pages package feed.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 24 is used for the frontend build.
 
-Stable package version is `1.0.0-r4`. Test builds use `PKG_RELEASE=<GitHub run number>`, producing upgradeable test packages without changing the stable semver base.
+Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed updates.
 
 ## OpenWrt Source Integration
 

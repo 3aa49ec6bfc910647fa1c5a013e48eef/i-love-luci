@@ -3,8 +3,6 @@ name: Build OpenWrt packages
 on:
   push:
     branches:
-      - dev
-      - uat
       - main
   pull_request:
   workflow_dispatch:
