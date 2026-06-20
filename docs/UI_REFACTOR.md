@@ -1,10 +1,10 @@
-# I Love LuCI Modern UI Spike
+# I Love LuCI Modern UI
 
 ## Goal
 
 Build a modern `I Love LuCI` application shell that can sit beside existing LuCI, provide a better UI/UX for core workflows, and bridge back to legacy LuCI apps when a page has not been rebuilt natively.
 
-This spike should prove the architecture before rewriting pages. The first target is a package named `luci-app-i-love-luci`, with the existing `luci-theme-i-love-luci` retained as the fallback theme for legacy pages and iframe-mounted compatibility views.
+The production target is a single package named `luci-app-i-love-luci`. It owns the app shell, static assets, rpcd bridge, settings, and legacy iframe compatibility layer.
 
 ## Working Model
 
@@ -23,7 +23,7 @@ Upstream LuCI is a feed of many OpenWrt packages, not a single SPA:
 
 - app packages live in `applications/luci-app-*`
 - core modules live in `modules/luci-mod-*`
-- themes live in `themes/luci-theme-*`
+- themes live in `themes/luci-theme-*`, but this project is no longer theme-first
 - static assets install from `htdocs/` into `/www`
 - server templates and dispatcher code use `ucode/`
 - menu entries live under `root/usr/share/luci/menu.d/*.json`
@@ -544,7 +544,7 @@ Router smoke tests should be manual at first. Add scheduled or self-hosted CI on
 5. Should WebAuthn/passkey support be a separate optional package to avoid increasing base dependency size?
 6. Should Vite-built assets be committed, generated in CI only, or both?
 
-## Recommended Spike Order
+## Recommended Delivery Order
 
 1. Build shell and legacy iframe bridge first.
 2. Add typed RPC client and session/menu endpoint.
@@ -561,6 +561,5 @@ Proceed with a hybrid replacement:
 - Build modern React shell as `luci-app-i-love-luci`.
 - Use iframe bridge for universal legacy compatibility.
 - Rebuild important routes natively over time.
-- Keep `luci-theme-i-love-luci` as fallback styling for classic/iframe pages.
 
 This is practical, testable, and reversible.

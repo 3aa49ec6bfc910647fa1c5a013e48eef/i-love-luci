@@ -181,7 +181,6 @@ The live router also has installed app menus such as:
 - `luci-app-package-manager`
 - `luci-app-uhttpd`
 - `luci-app-upnp`
-- `luci-theme-i-love-luci`
 
 These are not default core screens, but the modern shell must enumerate them and default them to legacy. Native replacements should be considered app-by-app after the default core sections are stable.
 
@@ -297,7 +296,7 @@ The registry should drive:
 - search result labels
 - test coverage requirements
 
-## Theme Settings UI
+## Route Compatibility Settings UI
 
 Add a "Route compatibility" section to the modern Settings page.
 
@@ -443,4 +442,3 @@ For menu enumeration:
 7. Add DHCP leases/static leases as the first real network config page.
 
 This order fixes discoverability first and keeps all old LuCI routes available while native pages land.
-

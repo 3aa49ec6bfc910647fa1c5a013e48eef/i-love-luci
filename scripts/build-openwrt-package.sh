@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PACKAGE_NAME="${PACKAGE_NAME:-luci-theme-i-love-luci}"
-PACKAGE_DIR="${PACKAGE_DIR:-themes/${PACKAGE_NAME}}"
+PACKAGE_NAME="${PACKAGE_NAME:-luci-app-i-love-luci}"
+PACKAGE_DIR="${PACKAGE_DIR:-applications/${PACKAGE_NAME}}"
 PACKAGE_SPECS="${PACKAGE_SPECS:-${PACKAGE_NAME}:${PACKAGE_DIR}}"
 OPENWRT_VERSION="${OPENWRT_VERSION:-25.12.4}"
 OPENWRT_TARGET="${OPENWRT_TARGET:-rockchip/armv8}"
