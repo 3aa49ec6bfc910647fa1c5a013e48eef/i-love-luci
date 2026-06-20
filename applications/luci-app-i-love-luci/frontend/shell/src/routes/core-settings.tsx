@@ -2704,6 +2704,9 @@ function CertDefaultsEditor({ certs, onSaved }: { certs: ConfigSection[]; onSave
 					<Field label="Location" target="cert-location">
 						<Input id="cert-location" onChange={(event) => updateField("location", event.target.value)} value={values.location} />
 					</Field>
+					<Field label="Organization" target="cert-organization">
+						<Input id="cert-organization" onChange={(event) => updateField("organization", event.target.value)} value={values.organization} />
+					</Field>
 					<Field label="Common name" target="cert-common-name">
 						<Input id="cert-common-name" onChange={(event) => updateField("commonname", event.target.value)} value={values.commonname} />
 					</Field>
@@ -2962,6 +2965,7 @@ function certDefaultsValues(section: ConfigSection): UhttpdCertDefaultsInput {
 		country: rawValue(section.values.country),
 		state: rawValue(section.values.state),
 		location: rawValue(section.values.location),
+		organization: rawValue(section.values.organization),
 		commonname: rawValue(section.values.commonname),
 	};
 }

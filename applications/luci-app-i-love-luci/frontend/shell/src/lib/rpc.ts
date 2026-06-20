@@ -607,6 +607,7 @@ export type UhttpdCertDefaultsInput = {
 	country: string;
 	state: string;
 	location: string;
+	organization: string;
 	commonname: string;
 };
 

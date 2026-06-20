@@ -4635,6 +4635,7 @@ function save_uhttpd_cert_defaults(config) {
 		country: clean_uci_value(config.country || ''),
 		state: clean_uci_value(config.state || ''),
 		location: clean_uci_value(config.location || ''),
+		organization: clean_uci_value(config.organization || ''),
 		commonname: clean_uci_value(config.commonname || '')
 	};
 
@@ -4662,7 +4663,7 @@ function save_uhttpd_cert_defaults(config) {
 			sections: collect_system_settings_sections()
 		};
 
-	for (let key in ['ec_curve', 'state', 'location', 'commonname']) {
+	for (let key in ['ec_curve', 'state', 'location', 'organization', 'commonname']) {
 		let value = next[key];
 
 		if (replace(value, /[^A-Za-z0-9 .,:_@/+()-]/g, '') != value)
