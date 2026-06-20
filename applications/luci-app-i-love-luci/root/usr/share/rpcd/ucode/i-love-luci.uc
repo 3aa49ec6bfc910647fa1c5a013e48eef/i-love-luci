@@ -4917,11 +4917,14 @@ function save_adblock_fast_config(config, feeds) {
 			};
 
 	let existing = {};
+	let existing_order = [];
 	uci.foreach('adblock-fast', 'file_url', function(section) {
 		existing[section['.name']] = true;
+		push(existing_order, section['.name']);
 	});
 
 	let keep = {};
+	let next_order = [];
 	let validated = [];
 
 	for (let row in feeds) {
@@ -4975,6 +4978,7 @@ function save_adblock_fast_config(config, feeds) {
 	}
 
 	let changed = false;
+	let config_changed = false;
 
 	for (let key, value in next_config) {
 		let current = uci.get('adblock-fast', config_section, key) || '';
@@ -4982,6 +4986,7 @@ function save_adblock_fast_config(config, feeds) {
 		if (key == 'allowed_domain' || key == 'blocked_domain') {
 			if (!uci_list_equal(current, value)) {
 				changed = true;
+				config_changed = true;
 				set_uci_option('adblock-fast', config_section, key, value);
 			}
 			continue;
@@ -4989,6 +4994,7 @@ function save_adblock_fast_config(config, feeds) {
 
 		if (current != value) {
 			changed = true;
+			config_changed = true;
 			set_uci_option('adblock-fast', config_section, key, value);
 		}
 	}
@@ -4999,9 +5005,11 @@ function save_adblock_fast_config(config, feeds) {
 		if (!item.is_existing) {
 			section = uci.add('adblock-fast', 'file_url');
 			changed = true;
+			config_changed = true;
 		}
 
 		keep[section] = true;
+		push(next_order, section);
 
 		for (let key, value in item.next) {
 			let current = uci.get('adblock-fast', section, key) || '';
@@ -5012,6 +5020,7 @@ function save_adblock_fast_config(config, feeds) {
 
 			if (current != value) {
 				changed = true;
+				config_changed = true;
 				set_uci_option('adblock-fast', section, key, value);
 			}
 		}
@@ -5021,11 +5030,43 @@ function save_adblock_fast_config(config, feeds) {
 		if (!keep[section]) {
 			uci.delete('adblock-fast', section);
 			changed = true;
+			config_changed = true;
 		}
 	}
 
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
 	if (changed) {
-		uci.commit('adblock-fast');
+		if (config_changed)
+			uci.commit('adblock-fast');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder adblock-fast.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit adblock-fast >/dev/null 2>&1 || true');
+		}
+
 		system('/etc/init.d/adblock-fast reload >/dev/null 2>&1 || /etc/init.d/adblock-fast restart >/dev/null 2>&1 || true');
 	}
 

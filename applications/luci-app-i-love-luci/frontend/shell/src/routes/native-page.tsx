@@ -1492,6 +1492,21 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 		setFeedRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
 	}
 
+	function moveFeed(index: number, direction: -1 | 1) {
+		setFeedRows((current) => {
+			const nextIndex = index + direction;
+
+			if (nextIndex < 0 || nextIndex >= current.length) {
+				return current;
+			}
+
+			const next = [...current];
+			const [row] = next.splice(index, 1);
+			next.splice(nextIndex, 0, row);
+			return next;
+		});
+	}
+
 	function reset() {
 		setValues(savedValues);
 		setFeedRows(savedFeedRows);
@@ -1601,6 +1616,7 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 									<th className="px-3 py-2 font-medium">Name</th>
 									<th className="px-3 py-2 font-medium">URL</th>
 									<th className="px-3 py-2 font-medium">Size</th>
+									<th className="px-3 py-2 text-right font-medium">Order</th>
 									<th className="w-12 px-3 py-2" />
 								</tr>
 							</thead>
@@ -1638,6 +1654,30 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 												<Input inputMode="numeric" onChange={(event) => updateFeed(index, "size", event.target.value)} value={feed.size} />
 											</td>
 											<td className="px-3 py-2 text-right">
+												<div className="inline-flex gap-1">
+													<Button
+														aria-label="Move feed up"
+														disabled={index === 0}
+														onClick={() => moveFeed(index, -1)}
+														size="icon"
+														type="button"
+														variant="ghost"
+													>
+														<ArrowUp className="size-4" />
+													</Button>
+													<Button
+														aria-label="Move feed down"
+														disabled={index === feedRows.length - 1}
+														onClick={() => moveFeed(index, 1)}
+														size="icon"
+														type="button"
+														variant="ghost"
+													>
+														<ArrowDown className="size-4" />
+													</Button>
+												</div>
+											</td>
+											<td className="px-3 py-2 text-right">
 												<Button aria-label="Remove feed" onClick={() => removeFeed(index)} size="icon" type="button" variant="ghost">
 													<Trash2 className="size-4" />
 												</Button>
@@ -1646,7 +1686,7 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 									))
 								) : (
 									<tr>
-										<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
+										<td className="px-3 py-6 text-muted-foreground" colSpan={7}>
 											No feed URLs configured.
 										</td>
 									</tr>
