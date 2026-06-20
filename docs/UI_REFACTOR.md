@@ -743,6 +743,15 @@ Audit decision:
 
 The compatibility layer needs a repeatable audit, not a one-time manual check. The audit should run against the router and later become a smoke-test script.
 
+Mandatory workstream:
+
+- Perform a full route audit across every installed LuCI route before release.
+- Confirm compat is configured and working for every current LuCI app, including all child routes exposed by those apps.
+- Confirm every route migrated to a native I Love LuCI screen is recorded in the route inventory, mapped back to its LuCI source route or workflow, and covered by native route tests.
+- Harden the LuCI app adapter so current and future installed LuCI apps are discovered from menu/ACL metadata instead of hard-coded route lists.
+- Prove future app install handling is seamless: install a LuCI app from the standard OpenWrt feed, refresh menu/cache state, verify it appears in sidebar/search, verify it opens through compat without code changes, then uninstall it and verify the route disappears cleanly.
+- Treat adapter robustness as a release gate: unknown apps must degrade to LuCI compat, not broken native screens or missing navigation entries.
+
 The audit has two equally important outcomes:
 
 - every installed LuCI route must have a working compatibility path
@@ -901,6 +910,7 @@ Router smoke tests should be manual at first. Add scheduled or self-hosted CI on
 9. CI updates to build frontend assets before package build.
 10. Router install instructions and rollback path.
 11. Documented test plan with secondary `uhttpd` test-port workflow.
+12. Full route/app compatibility audit proving current LuCI apps, future installed LuCI apps, and migrated native I Love LuCI routes all resolve through the correct adapter or compat path.
 
 ## Open Questions
 
