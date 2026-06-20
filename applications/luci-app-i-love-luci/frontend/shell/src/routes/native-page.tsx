@@ -30,6 +30,13 @@ type PageMeta = {
 	badge?: string;
 };
 
+type PackageEntry = {
+	name: string;
+	version: string;
+	description: string;
+	line: string;
+};
+
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
@@ -133,7 +140,7 @@ export function NativePage() {
 			<PageHeader meta={meta} loading={loading} />
 
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
-			{page === "packages" ? <LineList title="Installed packages" lines={data?.lines ?? []} /> : null}
+			{page === "packages" ? <PackageInventory lines={data?.lines ?? []} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
 			{page === "crontab" && data?.page === "crontab" ? (
 				<TextFileEditor
@@ -559,36 +566,106 @@ function ConfigTable({ sections }: { sections: ConfigSection[] }) {
 	);
 }
 
-function LineList({ title, lines }: { title: string; lines: string[] }) {
+function PackageInventory({ lines }: { lines: string[] }) {
 	const [query, setQuery] = useState("");
+	const packages = useMemo(() => lines.map(parsePackageLine), [lines]);
 	const filtered = useMemo(() => {
 		const needle = query.trim().toLowerCase();
-		return lines.filter((line) => !needle || line.toLowerCase().includes(needle));
-	}, [lines, query]);
+		return packages.filter(
+			(pkg) =>
+				!needle ||
+				pkg.name.toLowerCase().includes(needle) ||
+				pkg.version.toLowerCase().includes(needle) ||
+				pkg.description.toLowerCase().includes(needle),
+		);
+	}, [packages, query]);
+	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
+	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
 	return (
-		<Panel
-			title={
-				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<span>{title}</span>
-					<div className="relative w-full sm:w-72">
-						<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-						<Input className="pl-9" placeholder="Filter" value={query} onChange={(event) => setQuery(event.target.value)} />
-					</div>
-				</div>
-			}
-		>
-			<div>
-				<div className="grid max-h-[28rem] gap-1 overflow-y-auto text-sm">
-					{filtered.map((line) => (
-						<div className="rounded-md bg-secondary px-3 py-2 font-mono text-xs" key={line}>
-							{line}
-						</div>
-					))}
-				</div>
+		<div className="grid gap-4">
+			<div className="grid gap-3 sm:grid-cols-3">
+				<MetricBlock label="Installed packages" value={packages.length} />
+				<MetricBlock label="LuCI packages" value={luciCount} />
+				<MetricBlock label="Kernel modules" value={kernelCount} />
 			</div>
-		</Panel>
+			<Panel
+				title={
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<span>Installed packages</span>
+						<div className="relative w-full sm:w-72">
+							<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+							<Input
+								className="pl-9"
+								placeholder="Filter packages"
+								value={query}
+								onChange={(event) => setQuery(event.target.value)}
+							/>
+						</div>
+					</div>
+				}
+				flush
+			>
+				<div className="overflow-x-auto">
+					<table className="w-full min-w-[58rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Package</th>
+								<th className="px-3 py-2 font-medium">Version</th>
+								<th className="px-3 py-2 font-medium">Description</th>
+							</tr>
+						</thead>
+						<tbody>
+							{filtered.length ? (
+								filtered.map((pkg) => (
+									<tr className="border-b align-top last:border-0" key={pkg.line}>
+										<td className="px-3 py-3 font-medium">{pkg.name}</td>
+										<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
+										<td className="px-3 py-3">{pkg.description || "none"}</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+										No packages match the filter.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+			</Panel>
+		</div>
 	);
+}
+
+function MetricBlock({ label, value }: { label: string; value: number }) {
+	return (
+		<div className="rounded-md border bg-card p-3 text-sm">
+			<div className="text-xs uppercase text-muted-foreground">{label}</div>
+			<div className="mt-1 text-2xl font-semibold">{value}</div>
+		</div>
+	);
+}
+
+function parsePackageLine(line: string): PackageEntry {
+	const match = /^(.+)-([0-9][^ ]*) - (.*)$/.exec(line);
+
+	if (!match) {
+		return {
+			name: line,
+			version: "unknown",
+			description: "",
+			line,
+		};
+	}
+
+	return {
+		name: match[1],
+		version: match[2],
+		description: match[3],
+		line,
+	};
 }
 
 function TextFileEditor({

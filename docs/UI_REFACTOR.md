@@ -544,7 +544,7 @@ Converted to native React/Vite surfaces:
 - `/admin/system/admin/uhttpd`: uHTTPd service status and UCI summary.
 - `/admin/system/admin/repokeys`: installed package repository public keys.
 - `/admin/system/attendedsysupgrade` and children: guarded firmware compatibility context and attended sysupgrade configuration. Auto mode defaults to LuCI compat until native image build, progress, package retention, rollback, and flash confirmation reach parity.
-- `/admin/system/package-manager`: installed package inventory. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
+- `/admin/system/package-manager`: parsed installed package inventory with package/version/description table, client filter, and package family counts. Auto mode defaults to LuCI compat until native package search/install/remove/update reaches parity.
 - `/admin/system/startup`: init script enabled/running state with native enable, disable, start, stop, and restart actions.
 - `/admin/system/crontab`: root crontab editor with cron reload after save.
 - `/admin/system/flash`: read-only filesystem and flash partition overview.
@@ -576,6 +576,7 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.
 - Browser smoke test loaded `#/core/firewall` on `172.16.172.1` with the `1.0.0-r4-native13` bundle and rendered firewall defaults, 3 zones, 3 zone forwardings, and 9 traffic rules.
 - Browser smoke test loaded `#/core/system` on `172.16.172.1` with the `1.0.0-r4-native14` bundle and rendered system identity, NTP servers, SSH access, uHTTPd listeners, LEDs, and certificate defaults.
+- Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native15` bundle and rendered 186 installed packages, 31 LuCI packages, 30 kernel modules, and a parsed package/version/description table.
 
 Remaining legacy or partial gaps:
 
@@ -586,7 +587,7 @@ Remaining legacy or partial gaps:
 - System administration is native read-only for summary views. Hostname/timezone/logging/NTP/Dropbear/uHTTPd/LED/certificate edits remain LuCI compat until generic form/save/apply parity is complete.
 - Attended sysupgrade has a native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, and flash handoff still need dedicated UX and rollback checks before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native actions need dedicated confirmation RPCs, progress reporting, and rollback messaging.
-- Package install/remove/update remains LuCI compat by default. Current native package screen is inventory-only and available only when a route is explicitly forced to modern.
+- Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory with client filtering and is available only when a route is explicitly forced to modern.
 - Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Generic service lifecycle and UCI summaries exist as native previews, but native config forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native.
 
