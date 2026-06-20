@@ -79,7 +79,7 @@ const nativeRoutes = {
 	'/admin/services/banip/processing_log': { status: 'partial', nativePath: '/native/service/banip/processing_log', autoMode: 'legacy' },
 	'/admin/services/adblock-fast': { status: 'partial', nativePath: '/native/service/adblock-fast', autoMode: 'legacy' },
 	'/admin/services/upnp': { status: 'supported', nativePath: '/native/service/upnpd' },
-	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd', autoMode: 'legacy' }
+	'/admin/services/uhttpd': { status: 'supported', nativePath: '/native/service/uhttpd' }
 };
 const servicePackages = {
 	'adblock-fast': {
