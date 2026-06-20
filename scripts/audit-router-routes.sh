@@ -179,8 +179,8 @@ compat_exact = {
 for item in visible:
 	path = item.get("path", "")
 	if path in compat_exact or any(path.startswith(prefix) for prefix in compat_prefixes):
-		if item.get("configuredMode", "auto") == "auto" and item.get("effectiveMode") != "legacy":
-			failures.append(f"{path}: LuCI app route should default to compat in auto mode")
+		if item.get("configuredMode", "auto") == "auto" and item.get("nativeStatus") != "supported" and item.get("effectiveMode") != "legacy":
+			failures.append(f"{path}: incomplete LuCI app route should default to compat in auto mode")
 		if not item.get("nativePath") and item.get("nativeStatus") in {"supported", "partial"}:
 			failures.append(f"{path}: native-capable app route has no native preview path")
 

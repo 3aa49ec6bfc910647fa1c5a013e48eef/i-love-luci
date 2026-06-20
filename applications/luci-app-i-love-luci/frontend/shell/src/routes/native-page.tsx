@@ -1,4 +1,4 @@
-import { Download, Play, Plus, Power, Search, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Play, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -734,6 +734,7 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 	const [args, setArgs] = useState("");
 	const [running, setRunning] = useState(false);
 	const [result, setResult] = useState<CustomCommandResult | null>(null);
+	const publicLinks = command.public ? customCommandPublicLinks(command.id, args) : null;
 
 	async function run() {
 		setRunning(true);
@@ -778,6 +779,18 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 					Run
 				</Button>
 			</div>
+			{publicLinks ? (
+				<div className="flex flex-wrap gap-2 text-xs">
+					<a className="inline-flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 font-medium hover:bg-secondary" href={publicLinks.display} target="_blank" rel="noreferrer">
+						<ExternalLink className="size-3.5" />
+						Public display
+					</a>
+					<a className="inline-flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 font-medium hover:bg-secondary" href={publicLinks.download} target="_blank" rel="noreferrer">
+						<Download className="size-3.5" />
+						Public download
+					</a>
+				</div>
+			) : null}
 			{result ? (
 				<div className="grid gap-2">
 					<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -803,6 +816,17 @@ function CustomCommandRunner({ command }: { command: CustomCommand }) {
 			) : null}
 		</div>
 	);
+}
+
+function customCommandPublicLinks(id: string, args: string) {
+	const path = window.location.pathname.replace(/\/admin(?:\/.*)?$/, "") || "/cgi-bin/luci";
+	const query = args ? `?args=${encodeURIComponent(args)}` : "";
+	const encodedId = encodeURIComponent(id);
+
+	return {
+		download: `${window.location.origin}${path}/command/${encodedId}${query}`,
+		display: `${window.location.origin}${path}/command/${encodedId}s${query}`,
+	};
 }
 
 function downloadCommandResult(command: CustomCommand, result: CustomCommandResult) {
