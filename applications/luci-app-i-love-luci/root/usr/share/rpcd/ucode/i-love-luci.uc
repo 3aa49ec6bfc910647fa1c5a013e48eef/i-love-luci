@@ -4499,6 +4499,29 @@ function set_router_password(username, password, confirm) {
 	};
 }
 
+function reboot_confirm(confirm) {
+	confirm = trim('' + (confirm || ''));
+
+	let board = ubus.call('system', 'board') || {};
+	let hostname = board.hostname || '';
+
+	if (!length(hostname) || confirm != hostname)
+		return {
+			accepted: false,
+			message: 'Type the router hostname exactly to confirm reboot.',
+			hostname
+		};
+
+	system('(sleep 2; reboot) >/dev/null 2>&1 &');
+
+	return {
+		accepted: true,
+		message: 'Reboot scheduled.',
+		hostname,
+		delay: 2
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -5342,6 +5365,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(set_router_password(request.args.username || 'root', request.args.password || '', request.args.confirm || ''));
+		}
+	},
+
+	reboot_confirm: {
+		args: {
+			confirm: ''
+		},
+		call: function(request) {
+			return respond(reboot_confirm(request.args.confirm || ''));
 		}
 	},
 

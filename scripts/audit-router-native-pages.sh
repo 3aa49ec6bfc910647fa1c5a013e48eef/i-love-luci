@@ -52,6 +52,8 @@ echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
 echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
+echo '---ILOVELUCI-REBOOT-REJECT---'
+ubus call luci.iloveluci reboot_confirm \"{\\\"confirm\\\":\\\"__audit_do_not_reboot__\\\"}\"
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-RELEASE---'
@@ -301,6 +303,12 @@ if not changes or not changes.get("ok"):
 	failures.append("changes_list did not return ok")
 elif not isinstance(changes.get("data", {}).get("changes"), list):
 	failures.append("changes_list did not return a changes array")
+
+reboot_reject = json_after_marker("---ILOVELUCI-REBOOT-REJECT---")
+if not reboot_reject or not reboot_reject.get("ok"):
+	failures.append("reboot_confirm reject check did not return ok")
+elif reboot_reject.get("data", {}).get("accepted") is not False:
+	failures.append("reboot_confirm accepted invalid confirmation")
 
 package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
 if not package_search or not package_search.get("ok"):

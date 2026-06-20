@@ -53,6 +53,7 @@
 					"password_set",
 					"package_action",
 					"rc_local_save",
+					"reboot_confirm",
 					"service_action",
 					"ssh_keys_save",
 					"startup_action",

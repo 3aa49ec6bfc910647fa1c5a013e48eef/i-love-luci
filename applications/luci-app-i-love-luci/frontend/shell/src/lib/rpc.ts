@@ -359,6 +359,13 @@ export type NativeService = {
 	running?: boolean;
 };
 
+export type RebootResult = {
+	accepted: boolean;
+	message: string;
+	hostname?: string;
+	delay?: number;
+};
+
 export type DropbearConfigInput = {
 	enable: string;
 	Port: string;
@@ -1517,6 +1524,18 @@ export async function setRouterPassword(
 		return {
 			saved: false,
 			message: "Password change failed.",
+		};
+	}
+}
+
+export async function confirmReboot(confirm: string): Promise<RebootResult> {
+	try {
+		return await callBridge<RebootResult>("reboot_confirm", { confirm });
+	}
+	catch {
+		return {
+			accepted: false,
+			message: "Reboot request failed.",
 		};
 	}
 }

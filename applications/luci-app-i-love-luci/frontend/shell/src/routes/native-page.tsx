@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+	confirmReboot,
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
@@ -4494,6 +4495,29 @@ function passwordStrength(value: string) {
 
 function RebootPanel({ data }: { data: NativePageData | null }) {
 	const uptime = commandOutput(data?.commands ?? [], "System uptime").trim();
+	const hostname = data?.board?.hostname ?? "";
+	const [confirm, setConfirm] = useState("");
+	const [submitting, setSubmitting] = useState(false);
+	const canSubmit = Boolean(hostname) && confirm === hostname && !submitting;
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+
+		if (!canSubmit) {
+			return;
+		}
+
+		setSubmitting(true);
+		const result = await confirmReboot(confirm);
+		setSubmitting(false);
+
+		if (!result.accepted) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+	}
 
 	return (
 		<div className="grid gap-4">
@@ -4502,20 +4526,37 @@ function RebootPanel({ data }: { data: NativePageData | null }) {
 				empty="No reboot context available."
 				rows={[
 					["Uptime", uptime || "unknown"],
-					["Action state", "disabled until confirm RPC exists"],
+					["Confirmation", hostname ? `type ${hostname}` : "hostname unavailable"],
 				]}
 				title="Reboot context"
 			/>
 			<Panel title="Reboot guard">
-				<div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-					<p className="text-muted-foreground">
-						Reboot will be enabled after a dedicated confirm/apply RPC is added and tested. Use legacy LuCI for now.
+				<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+					<p className="text-sm text-muted-foreground">
+						Type the router hostname exactly to reboot. The request is sent through a dedicated confirm RPC.
 					</p>
-					<Button disabled variant="outline">
-						<Power className="mr-1 size-4" />
-						Reboot disabled
-					</Button>
-				</div>
+					<div className="grid gap-2 sm:max-w-md">
+						<label className="text-sm font-medium" htmlFor="reboot-confirm">
+							Router hostname
+						</label>
+						<Input
+							autoComplete="off"
+							id="reboot-confirm"
+							onChange={(event) => setConfirm(event.target.value)}
+							placeholder={hostname || "router hostname"}
+							value={confirm}
+						/>
+					</div>
+					<div className="flex justify-end gap-2">
+						<Button disabled={!confirm || submitting} onClick={() => setConfirm("")} type="button" variant="outline">
+							Cancel
+						</Button>
+						<Button disabled={!canSubmit} type="submit" variant="destructive">
+							<Power className="mr-1 size-4" />
+							Reboot
+						</Button>
+					</div>
+				</form>
 			</Panel>
 		</div>
 	);
