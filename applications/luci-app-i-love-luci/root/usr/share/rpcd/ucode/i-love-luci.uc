@@ -5236,12 +5236,32 @@ function save_adblock_fast_config(config, feeds) {
 	let config_section = first_uci_section('adblock-fast', 'adblock-fast') || uci.add('adblock-fast', 'adblock-fast');
 	let allowed_domains = split_uci_lines(config.allowed_domain || '');
 	let blocked_domains = split_uci_lines(config.blocked_domain || '');
+	let dnsmasq_instances = split_uci_lines(config.dnsmasq_instance || '');
+	let force_dns_ports = split_uci_lines(config.force_dns_port || '');
 	let next_config = {
 		enabled: zero_one(config.enabled),
 		dns: clean_uci_value(config.dns || ''),
+		dnsmasq_config_file_url: clean_uci_value(config.dnsmasq_config_file_url || ''),
+		dnsmasq_instance: dnsmasq_instances,
 		force_dns: zero_one(config.force_dns),
+		force_dns_port: force_dns_ports,
 		parallel_downloads: clean_uci_value(config.parallel_downloads || ''),
+		verbosity: clean_uci_value(config.verbosity || ''),
 		auto_update_enabled: zero_one(config.auto_update_enabled),
+		config_update_enabled: zero_one(config.config_update_enabled),
+		config_update_url: clean_uci_value(config.config_update_url || ''),
+		ipv6_enabled: zero_one(config.ipv6_enabled),
+		download_timeout: clean_uci_value(config.download_timeout || ''),
+		pause_timeout: clean_uci_value(config.pause_timeout || ''),
+		curl_max_file_size: clean_uci_value(config.curl_max_file_size || ''),
+		curl_retry: clean_uci_value(config.curl_retry || ''),
+		compressed_cache: zero_one(config.compressed_cache),
+		compressed_cache_dir: clean_uci_value(config.compressed_cache_dir || ''),
+		dnsmasq_sanity_check: zero_one(config.dnsmasq_sanity_check),
+		dnsmasq_validity_check: zero_one(config.dnsmasq_validity_check),
+		debug_init_script: zero_one(config.debug_init_script),
+		rpcd_token: clean_uci_value(config.rpcd_token || ''),
+		led: clean_uci_value(config.led || ''),
 		allowed_domain: allowed_domains,
 		blocked_domain: blocked_domains
 	};
@@ -5254,10 +5274,48 @@ function save_adblock_fast_config(config, feeds) {
 			...adblock_fast_save_state()
 		};
 
-	if (!valid_numeric_value(next_config.parallel_downloads))
+	for (let key in ['parallel_downloads', 'verbosity', 'download_timeout', 'pause_timeout', 'curl_max_file_size', 'curl_retry']) {
+		if (!valid_numeric_value(next_config[key]))
+			return {
+				saved: false,
+				message: 'AdBlock Fast numeric settings must be numeric.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+	}
+
+	for (let key in ['compressed_cache_dir']) {
+		if (replace(next_config[key], /[^A-Za-z0-9_./:-]/g, '') != next_config[key])
+			return {
+				saved: false,
+				message: 'AdBlock Fast path settings contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+	}
+
+	for (let key in ['dnsmasq_config_file_url', 'config_update_url']) {
+		if (replace(next_config[key], /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\\]-]/g, '') != next_config[key])
+			return {
+				saved: false,
+				message: 'AdBlock Fast URL settings contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+	}
+
+	if (replace(next_config.led, /[^A-Za-z0-9_.:-]/g, '') != next_config.led)
 		return {
 			saved: false,
-			message: 'AdBlock Fast parallel downloads must be numeric.',
+			message: 'AdBlock Fast LED contains unsupported characters.',
+			changed: false,
+			...adblock_fast_save_state()
+		};
+
+	if (replace(next_config.rpcd_token, /[^A-Za-z0-9_.:@/+()-]/g, '') != next_config.rpcd_token)
+		return {
+			saved: false,
+			message: 'AdBlock Fast RPC token contains unsupported characters.',
 			changed: false,
 			...adblock_fast_save_state()
 		};
@@ -5276,6 +5334,24 @@ function save_adblock_fast_config(config, feeds) {
 			return {
 				saved: false,
 				message: 'Blocked domain entries contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+	for (let instance in dnsmasq_instances)
+		if (!length(instance) || replace(instance, /[^A-Za-z0-9_.*+-]/g, '') != instance)
+			return {
+				saved: false,
+				message: 'dnsmasq instance entries contain unsupported characters.',
+				changed: false,
+				...adblock_fast_save_state()
+			};
+
+	for (let port in force_dns_ports)
+		if (!valid_numeric_value(port))
+			return {
+				saved: false,
+				message: 'Force DNS ports must be numeric.',
 				changed: false,
 				...adblock_fast_save_state()
 			};
@@ -5343,11 +5419,20 @@ function save_adblock_fast_config(config, feeds) {
 
 	let changed = false;
 	let config_changed = false;
+	let preserve_missing_default = {
+		auto_update_enabled: '0',
+		config_update_enabled: '0',
+		compressed_cache: '0',
+		debug_init_script: '0',
+		dnsmasq_sanity_check: '1',
+		dnsmasq_validity_check: '0',
+		ipv6_enabled: '0'
+	};
 
 	for (let key, value in next_config) {
 		let current = uci.get('adblock-fast', config_section, key) || '';
 
-		if (key == 'allowed_domain' || key == 'blocked_domain') {
+		if (key == 'allowed_domain' || key == 'blocked_domain' || key == 'dnsmasq_instance' || key == 'force_dns_port') {
 			if (!uci_list_equal(current, value)) {
 				changed = true;
 				config_changed = true;
@@ -5355,6 +5440,9 @@ function save_adblock_fast_config(config, feeds) {
 			}
 			continue;
 		}
+
+		if (!length(current) && preserve_missing_default[key] != null && value == preserve_missing_default[key])
+			continue;
 
 		if (current != value) {
 			changed = true;

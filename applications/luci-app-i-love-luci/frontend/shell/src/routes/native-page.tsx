@@ -1580,9 +1580,120 @@ function AdblockFastPanel({ config, feeds }: { config: ConfigSection | undefined
 							<option value="1">enabled</option>
 						</select>
 					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Verbosity</span>
+						<select
+							className="h-9 rounded-md border bg-card px-2 text-sm"
+							onChange={(event) => update("verbosity", event.target.value)}
+							value={values.verbosity}
+						>
+							<option value="0">quiet</option>
+							<option value="1">normal</option>
+							<option value="2">verbose</option>
+						</select>
+					</label>
+				</div>
+
+				<div className="grid gap-3 md:grid-cols-3">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Config update</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("config_update_enabled", event.target.value)} value={values.config_update_enabled}>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm md:col-span-2">
+						<span className="font-medium">Config update URL</span>
+						<Input onChange={(event) => update("config_update_url", event.target.value)} value={values.config_update_url} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">IPv6 lists</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("ipv6_enabled", event.target.value)} value={values.ipv6_enabled}>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Download timeout</span>
+						<Input inputMode="numeric" onChange={(event) => update("download_timeout", event.target.value)} value={values.download_timeout} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Pause timeout</span>
+						<Input inputMode="numeric" onChange={(event) => update("pause_timeout", event.target.value)} value={values.pause_timeout} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Curl retry</span>
+						<Input inputMode="numeric" onChange={(event) => update("curl_retry", event.target.value)} value={values.curl_retry} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Curl max file size</span>
+						<Input inputMode="numeric" onChange={(event) => update("curl_max_file_size", event.target.value)} value={values.curl_max_file_size} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Compressed cache</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("compressed_cache", event.target.value)} value={values.compressed_cache}>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Cache directory</span>
+						<Input onChange={(event) => update("compressed_cache_dir", event.target.value)} value={values.compressed_cache_dir} />
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">dnsmasq sanity check</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("dnsmasq_sanity_check", event.target.value)} value={values.dnsmasq_sanity_check}>
+							<option value="1">enabled</option>
+							<option value="0">disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">dnsmasq domain validation</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("dnsmasq_validity_check", event.target.value)} value={values.dnsmasq_validity_check}>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Debug init script</span>
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => update("debug_init_script", event.target.value)} value={values.debug_init_script}>
+							<option value="0">disabled</option>
+							<option value="1">enabled</option>
+						</select>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Status LED</span>
+						<Input onChange={(event) => update("led", event.target.value)} value={values.led} />
+					</label>
+					<label className="grid gap-2 text-sm md:col-span-2">
+						<span className="font-medium">RPC token</span>
+						<Input onChange={(event) => update("rpcd_token", event.target.value)} value={values.rpcd_token} />
+					</label>
 				</div>
 
 				<div className="grid gap-3 md:grid-cols-2">
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">dnsmasq instances</span>
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => update("dnsmasq_instance", event.target.value)}
+							spellCheck={false}
+							value={values.dnsmasq_instance}
+						/>
+					</label>
+					<label className="grid gap-2 text-sm">
+						<span className="font-medium">Force DNS ports</span>
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => update("force_dns_port", event.target.value)}
+							spellCheck={false}
+							value={values.force_dns_port}
+						/>
+					</label>
+					<label className="grid gap-2 text-sm md:col-span-2">
+						<span className="font-medium">Dnsmasq config file URL</span>
+						<Input onChange={(event) => update("dnsmasq_config_file_url", event.target.value)} value={values.dnsmasq_config_file_url} />
+					</label>
 					<label className="grid gap-2 text-sm">
 						<span className="font-medium">Allowed domains</span>
 						<textarea
@@ -2760,9 +2871,27 @@ function adblockFastConfigValues(config: ConfigSection | undefined): AdblockFast
 	return {
 		enabled: configValue(config, "enabled") === "0" ? "0" : "1",
 		dns: configValue(config, "dns") || "dnsmasq.servers",
+		dnsmasq_config_file_url: configValue(config, "dnsmasq_config_file_url"),
+		dnsmasq_instance: textareaConfigList(config?.values.dnsmasq_instance),
 		force_dns: configValue(config, "force_dns") === "0" ? "0" : "1",
+		force_dns_port: textareaConfigList(config?.values.force_dns_port),
 		parallel_downloads: configValue(config, "parallel_downloads") || "1",
+		verbosity: configValue(config, "verbosity") || "2",
 		auto_update_enabled: configValue(config, "auto_update_enabled") === "1" ? "1" : "0",
+		config_update_enabled: configValue(config, "config_update_enabled") === "1" ? "1" : "0",
+		config_update_url: configValue(config, "config_update_url"),
+		ipv6_enabled: configValue(config, "ipv6_enabled") === "1" ? "1" : "0",
+		download_timeout: configValue(config, "download_timeout") || "10",
+		pause_timeout: configValue(config, "pause_timeout") || "20",
+		curl_max_file_size: configValue(config, "curl_max_file_size"),
+		curl_retry: configValue(config, "curl_retry") || "3",
+		compressed_cache: configValue(config, "compressed_cache") === "1" ? "1" : "0",
+		compressed_cache_dir: configValue(config, "compressed_cache_dir") || "/etc",
+		dnsmasq_sanity_check: configValue(config, "dnsmasq_sanity_check") === "0" ? "0" : "1",
+		dnsmasq_validity_check: configValue(config, "dnsmasq_validity_check") === "1" ? "1" : "0",
+		debug_init_script: configValue(config, "debug_init_script") === "1" ? "1" : "0",
+		rpcd_token: configValue(config, "rpcd_token"),
+		led: configValue(config, "led"),
 		allowed_domain: textareaConfigList(config?.values.allowed_domain),
 		blocked_domain: textareaConfigList(config?.values.blocked_domain),
 	};

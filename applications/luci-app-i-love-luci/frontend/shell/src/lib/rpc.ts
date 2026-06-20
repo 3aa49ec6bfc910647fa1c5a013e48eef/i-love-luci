@@ -555,9 +555,27 @@ export type UpnpdActiveRuleDeleteResult = {
 export type AdblockFastConfigInput = {
 	enabled: string;
 	dns: string;
+	dnsmasq_config_file_url: string;
+	dnsmasq_instance: string;
 	force_dns: string;
+	force_dns_port: string;
 	parallel_downloads: string;
+	verbosity: string;
 	auto_update_enabled: string;
+	config_update_enabled: string;
+	config_update_url: string;
+	ipv6_enabled: string;
+	download_timeout: string;
+	pause_timeout: string;
+	curl_max_file_size: string;
+	curl_retry: string;
+	compressed_cache: string;
+	compressed_cache_dir: string;
+	dnsmasq_sanity_check: string;
+	dnsmasq_validity_check: string;
+	debug_init_script: string;
+	rpcd_token: string;
+	led: string;
 	allowed_domain: string;
 	blocked_domain: string;
 };
