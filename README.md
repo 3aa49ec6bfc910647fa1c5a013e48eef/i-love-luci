@@ -149,7 +149,7 @@ Rules:
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 24 is used for the frontend build.
 
-Stable package version is `1.0.0-1`. Test builds use `PKG_RELEASE=<GitHub run number>`, producing upgradeable test packages without changing the stable semver base.
+Stable package version is `1.0.0-r2`. Test builds use `PKG_RELEASE=<GitHub run number>`, producing upgradeable test packages without changing the stable semver base.
 
 ## OpenWrt Source Integration
 
