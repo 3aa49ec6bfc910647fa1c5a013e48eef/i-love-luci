@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ -f "${ROOT_DIR}/.env" ]; then
+	set -a
+	# shellcheck disable=SC1091
+	. "${ROOT_DIR}/.env"
+	set +a
+fi
+
+: "${OPENWRT_HOST:?OPENWRT_HOST is required}"
+: "${OPENWRT_USER:=root}"
+: "${OPENWRT_PASSWORD:?OPENWRT_PASSWORD is required}"
+
+TMP_OUTPUT="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-native-audit.XXXXXX")"
+trap 'rm -f "${TMP_OUTPUT}"' EXIT
+
+if ! command -v expect >/dev/null 2>&1; then
+	echo "expect is required for password-based router audit" >&2
+	exit 2
+fi
+
+export OPENWRT_HOST OPENWRT_USER OPENWRT_PASSWORD
+
+expect <<'EOF' > "${TMP_OUTPUT}"
+set timeout 90
+set host $env(OPENWRT_HOST)
+set user $env(OPENWRT_USER)
+set pass $env(OPENWRT_PASSWORD)
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host "cat <<'REMOTE' >/tmp/i-love-luci-native-audit.sh
+#!/bin/sh
+pages='status-routes firewall-status logs processes connections wireless diagnostics attendedsysupgrade packages startup crontab sshkeys repokeys leds flash services reboot'
+services='adblock-fast banip upnpd commands uhttpd dropbear'
+echo '---ILOVELUCI-MENU---'
+ubus call luci.iloveluci menu_tree
+for page in \$pages; do
+	printf '%s\n' \"---ILOVELUCI-NATIVE-PAGE:\$page---\"
+	ubus call luci.iloveluci native_page \"{\\\"page\\\":\\\"\$page\\\"}\"
+done
+for service in \$services; do
+	printf '%s\n' \"---ILOVELUCI-SERVICE:\$service---\"
+	ubus call luci.iloveluci service_detail \"{\\\"id\\\":\\\"\$service\\\"}\"
+done
+echo '---ILOVELUCI-CONSOLE---'
+ubus call luci.iloveluci console_status
+echo '---ILOVELUCI-RELEASE---'
+cat /etc/openwrt_release 2>/dev/null || true
+rm -f /tmp/i-love-luci-native-audit.sh
+REMOTE
+sh /tmp/i-love-luci-native-audit.sh"
+expect {
+	-re "assword:" { send "$pass\r"; exp_continue }
+	eof
+}
+EOF
+
+python3 - "${TMP_OUTPUT}" <<'PY'
+import json
+import sys
+
+raw = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+
+expected_pages = {
+	"status-routes": {"commands": ["IPv4 routes", "IPv6 routes", "IPv4 rules", "IPv6 rules"]},
+	"firewall-status": {"commands": ["nftables ruleset"]},
+	"logs": {"commands": ["System log", "Kernel log"]},
+	"processes": {"commands": ["Processes"]},
+	"connections": {"commands": ["Active sockets"]},
+	"wireless": {"commands": ["Wireless devices", "Wireless status"]},
+	"diagnostics": {"commands": ["Routing table", "DNS servers"]},
+	"attendedsysupgrade": {"commands": ["Current firmware", "Upgrade helper"]},
+	"packages": {"lines": True, "commands": ["Available upgrades"]},
+	"startup": {"services": True},
+	"crontab": {"text": True},
+	"sshkeys": {"text": True},
+	"repokeys": {"commands": ["Repository public keys"]},
+	"leds": {"commands": ["LED sysfs state"]},
+	"flash": {"commands": ["Mounted filesystems", "Flash partitions"]},
+	"services": {"services": True},
+	"reboot": {"commands": ["System uptime"]},
+}
+
+expected_services = {
+	"adblock-fast": {"sections": True},
+	"banip": {"sections": True},
+	"upnpd": {"sections": True},
+	"commands": {"customCommands": True},
+	"uhttpd": {"sections": True},
+	"dropbear": {"sections": True},
+}
+
+def json_after_marker(marker):
+	idx = raw.rfind(marker)
+	if idx < 0:
+		return None
+
+	start = raw.find("{", idx)
+	if start < 0:
+		return None
+
+	depth = 0
+	in_string = False
+	escaped = False
+
+	for end in range(start, len(raw)):
+		ch = raw[end]
+		if in_string:
+			if escaped:
+				escaped = False
+			elif ch == "\\":
+				escaped = True
+			elif ch == '"':
+				in_string = False
+		else:
+			if ch == '"':
+				in_string = True
+			elif ch == "{":
+				depth += 1
+			elif ch == "}":
+				depth -= 1
+				if depth == 0:
+					try:
+						return json.loads(raw[start : end + 1])
+					except json.JSONDecodeError:
+						return None
+
+	return None
+
+failures = []
+warnings = []
+
+menu = json_after_marker("---ILOVELUCI-MENU---")
+if not menu or not menu.get("data", {}).get("items"):
+	failures.append("menu_tree did not return visible menu data")
+
+for page, rules in expected_pages.items():
+	payload = json_after_marker(f"---ILOVELUCI-NATIVE-PAGE:{page}---")
+	if not payload or not payload.get("ok"):
+		failures.append(f"{page}: native_page did not return ok")
+		continue
+
+	data = payload.get("data") or {}
+	if data.get("page") != page:
+		failures.append(f"{page}: returned page={data.get('page')!r}")
+
+	command_titles = {command.get("title") for command in data.get("commands") or []}
+	for title in rules.get("commands", []):
+		if title not in command_titles:
+			failures.append(f"{page}: missing command data {title!r}")
+
+	if rules.get("services") and not data.get("services"):
+		failures.append(f"{page}: expected services data")
+
+	if rules.get("lines") and not data.get("lines"):
+		failures.append(f"{page}: expected package line data")
+
+	if rules.get("text") and "text" not in data:
+		failures.append(f"{page}: expected text field")
+
+for service, rules in expected_services.items():
+	payload = json_after_marker(f"---ILOVELUCI-SERVICE:{service}---")
+	if not payload or not payload.get("ok"):
+		failures.append(f"{service}: service_detail did not return ok")
+		continue
+
+	data = payload.get("data") or {}
+	if data.get("id") != service:
+		failures.append(f"{service}: returned id={data.get('id')!r}")
+
+	if rules.get("sections") and not data.get("sections"):
+		failures.append(f"{service}: expected UCI sections")
+
+	if rules.get("customCommands") and "customCommands" not in data:
+		failures.append(f"{service}: expected customCommands field")
+
+	init = data.get("init")
+	if service != "commands" and (not init or "enabled" not in init or "running" not in init):
+		failures.append(f"{service}: missing init enabled/running state")
+
+console = json_after_marker("---ILOVELUCI-CONSOLE---")
+if not console or not console.get("ok"):
+	warnings.append("console_status did not return ok")
+else:
+	console_data = console.get("data") or {}
+	if not console_data.get("available"):
+		warnings.append("console_status reports ttyd unavailable")
+	if console_data.get("enabled") and not console_data.get("url"):
+		failures.append("console_status enabled but missing URL")
+
+print("I Love LuCI native page audit")
+print(f"native_pages={len(expected_pages)} service_adapters={len(expected_services)}")
+
+if warnings:
+	print("\nWarnings:")
+	for warning in warnings:
+		print(f"- {warning}")
+
+if failures:
+	print("\nFailures:")
+	for failure in failures:
+		print(f"- {failure}")
+	sys.exit(1)
+
+print("\nPASS: native page audit checks passed")
+PY

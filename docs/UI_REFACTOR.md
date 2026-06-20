@@ -610,6 +610,7 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/packages` on `172.16.172.1` with the `1.0.0-r4-native24` bundle and rendered available upgrades from `apk version -l '<'` as package/installed/available rows without raw package-manager warnings or `<pre>` output.
 - Browser smoke tests loaded `#/native/service/adblock-fast`, `#/native/service/banip`, `#/native/service/upnpd`, `#/native/service/dropbear`, and `#/native/service/uhttpd` with the `1.0.0-r4-native25` bundle and confirmed structured service-specific summaries render without raw `<pre>` output. Service running-state detection was corrected to use full `ubus service list` plus init `status` fallback; uHTTPd and AdBlock Fast now show `running` on the router.
 - Route audit on `172.16.172.1` with `1.0.0-r4-native25` passed: `visible_routes=60`, `modern=42`, `legacy=18`, `native_status supported=20`, `partial=40`, `unsupported=0`, `menu_files=15`, `luci_apps=9`, `compat_default_routes=18`.
+- Native page audit on `172.16.172.1` passed with `scripts/audit-router-native-pages.sh`: `native_pages=17`, `service_adapters=6`. The audit calls every current native page RPC, every current service adapter, and `console_status`, then fails if required data sources disappear.
 
 Remaining legacy or partial gaps:
 
@@ -776,6 +777,12 @@ Required tooling:
   - dead native targets
   - partial routes that incorrectly default to modern
   - LuCI app routes without compat fallback
+- `scripts/audit-router-native-pages.sh` calls representative `native_page`, `service_detail`, and `console_status` RPCs on the router and reports:
+  - native page RPC failures
+  - missing command/section/service/text/package data for known native routes
+  - service adapter detail failures
+  - missing service enabled/running state
+  - console bridge availability/URL regressions
 - Add browser smoke coverage for representative route types:
   - supported native core route
   - partial native preview forced to modern
