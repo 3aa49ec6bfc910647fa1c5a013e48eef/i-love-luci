@@ -3432,12 +3432,94 @@ function save_uhttpd_config(config) {
 	uci.load('uhttpd');
 
 	let section = first_uci_section('uhttpd', 'uhttpd') || 'main';
-	let redirect_https = zero_one(config.redirect_https);
-	let current = uci.get('uhttpd', section, 'redirect_https') || '0';
-	let changed = current != redirect_https;
+	let listen_http = config.listen_http == null ? normalize_uci_list(uci.get('uhttpd', section, 'listen_http') || []) : split_uci_lines(config.listen_http || '');
+	let listen_https = config.listen_https == null ? normalize_uci_list(uci.get('uhttpd', section, 'listen_https') || []) : split_uci_lines(config.listen_https || '');
+	let next = {
+		redirect_https: zero_one(config.redirect_https),
+		home: config.home == null ? (uci.get('uhttpd', section, 'home') || '') : clean_uci_value(config.home || ''),
+		rfc1918_filter: config.rfc1918_filter == null ? (uci.get('uhttpd', section, 'rfc1918_filter') || '') : zero_one(config.rfc1918_filter),
+		max_requests: config.max_requests == null ? (uci.get('uhttpd', section, 'max_requests') || '') : clean_uci_value(config.max_requests || ''),
+		max_connections: config.max_connections == null ? (uci.get('uhttpd', section, 'max_connections') || '') : clean_uci_value(config.max_connections || ''),
+		cert: config.cert == null ? (uci.get('uhttpd', section, 'cert') || '') : clean_uci_value(config.cert || ''),
+		key: config.key == null ? (uci.get('uhttpd', section, 'key') || '') : clean_uci_value(config.key || ''),
+		cgi_prefix: config.cgi_prefix == null ? (uci.get('uhttpd', section, 'cgi_prefix') || '') : clean_uci_value(config.cgi_prefix || ''),
+		script_timeout: config.script_timeout == null ? (uci.get('uhttpd', section, 'script_timeout') || '') : clean_uci_value(config.script_timeout || ''),
+		network_timeout: config.network_timeout == null ? (uci.get('uhttpd', section, 'network_timeout') || '') : clean_uci_value(config.network_timeout || ''),
+		http_keepalive: config.http_keepalive == null ? (uci.get('uhttpd', section, 'http_keepalive') || '') : clean_uci_value(config.http_keepalive || ''),
+		tcp_keepalive: config.tcp_keepalive == null ? (uci.get('uhttpd', section, 'tcp_keepalive') || '') : zero_one(config.tcp_keepalive),
+		ubus_prefix: config.ubus_prefix == null ? (uci.get('uhttpd', section, 'ubus_prefix') || '') : clean_uci_value(config.ubus_prefix || '')
+	};
+
+	for (let value in listen_http)
+		if (replace(value, /[^A-Za-z0-9:.\\[\\]_-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'HTTP listener contains unsupported characters.',
+				changed: false,
+				section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+				init: fast_service_state('uhttpd')
+			};
+
+	for (let value in listen_https)
+		if (replace(value, /[^A-Za-z0-9:.\\[\\]_-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'HTTPS listener contains unsupported characters.',
+				changed: false,
+				section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+				init: fast_service_state('uhttpd')
+			};
+
+	for (let key in ['max_requests', 'max_connections', 'script_timeout', 'network_timeout', 'http_keepalive']) {
+		if (!valid_numeric_value(next[key]))
+			return {
+				saved: false,
+				message: 'uHTTPd limits and timeouts must be numeric.',
+				changed: false,
+				section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+				init: fast_service_state('uhttpd')
+			};
+	}
+
+	for (let key in ['home', 'cert', 'key', 'cgi_prefix', 'ubus_prefix']) {
+		if (replace(next[key], /[^A-Za-z0-9_./:-]/g, '') != next[key])
+			return {
+				saved: false,
+				message: 'uHTTPd path fields contain unsupported characters.',
+				changed: false,
+				section: (collect_uci_config('uhttpd', ['uhttpd']) || [])[0] || null,
+				init: fast_service_state('uhttpd')
+			};
+	}
+
+	let changed = false;
+
+	if (!uci_list_equal(uci.get('uhttpd', section, 'listen_http') || [], listen_http)) {
+		changed = true;
+		if (length(listen_http))
+			uci.set('uhttpd', section, 'listen_http', listen_http);
+		else
+			uci.delete('uhttpd', section, 'listen_http');
+	}
+
+	if (!uci_list_equal(uci.get('uhttpd', section, 'listen_https') || [], listen_https)) {
+		changed = true;
+		if (length(listen_https))
+			uci.set('uhttpd', section, 'listen_https', listen_https);
+		else
+			uci.delete('uhttpd', section, 'listen_https');
+	}
+
+	for (let key, value in next) {
+		let current = uci.get('uhttpd', section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			set_uci_option('uhttpd', section, key, value);
+		}
+	}
 
 	if (changed) {
-		uci.set('uhttpd', section, 'redirect_https', redirect_https);
 		uci.commit('uhttpd');
 		system('/etc/init.d/uhttpd reload >/dev/null 2>&1 || /etc/init.d/uhttpd restart >/dev/null 2>&1');
 	}

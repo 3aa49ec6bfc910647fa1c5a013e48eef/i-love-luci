@@ -1186,6 +1186,10 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
 	const current = section ?? config;
 
+	function update<K extends keyof UhttpdConfigInput>(key: K, value: UhttpdConfigInput[K]) {
+		setValues((currentValues) => ({ ...currentValues, [key]: value }));
+	}
+
 	async function save() {
 		setSaving(true);
 		const result = await saveUhttpdConfig(values);
@@ -1206,12 +1210,98 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 	return (
 		<div className="grid gap-4">
 			<Panel title="HTTP(S) access">
-				<div className="grid max-w-xl gap-4">
-					<label className="grid gap-2 text-sm">
+				<div className="grid max-w-4xl gap-4">
+					<div className="grid gap-3 md:grid-cols-2">
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">HTTP listeners</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("listen_http", event.target.value)}
+								spellCheck={false}
+								value={values.listen_http}
+							/>
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">HTTPS listeners</span>
+							<textarea
+								className="min-h-20 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => update("listen_https", event.target.value)}
+								spellCheck={false}
+								value={values.listen_https}
+							/>
+						</label>
+					</div>
+					<div className="grid gap-3 md:grid-cols-3">
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Document root</span>
+							<Input onChange={(event) => update("home", event.target.value)} value={values.home} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">CGI prefix</span>
+							<Input onChange={(event) => update("cgi_prefix", event.target.value)} value={values.cgi_prefix} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Ubus prefix</span>
+							<Input onChange={(event) => update("ubus_prefix", event.target.value)} value={values.ubus_prefix} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Certificate</span>
+							<Input onChange={(event) => update("cert", event.target.value)} value={values.cert} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Private key</span>
+							<Input onChange={(event) => update("key", event.target.value)} value={values.key} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">RFC1918 filter</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("rfc1918_filter", event.target.value)}
+								value={values.rfc1918_filter}
+							>
+								<option value="1">enabled</option>
+								<option value="0">disabled</option>
+							</select>
+						</label>
+					</div>
+					<div className="grid gap-3 md:grid-cols-3">
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Max requests</span>
+							<Input inputMode="numeric" onChange={(event) => update("max_requests", event.target.value)} value={values.max_requests} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Max connections</span>
+							<Input inputMode="numeric" onChange={(event) => update("max_connections", event.target.value)} value={values.max_connections} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Script timeout</span>
+							<Input inputMode="numeric" onChange={(event) => update("script_timeout", event.target.value)} value={values.script_timeout} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">Network timeout</span>
+							<Input inputMode="numeric" onChange={(event) => update("network_timeout", event.target.value)} value={values.network_timeout} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">HTTP keepalive</span>
+							<Input inputMode="numeric" onChange={(event) => update("http_keepalive", event.target.value)} value={values.http_keepalive} />
+						</label>
+						<label className="grid gap-2 text-sm">
+							<span className="font-medium">TCP keepalive</span>
+							<select
+								className="h-9 rounded-md border bg-card px-2 text-sm"
+								onChange={(event) => update("tcp_keepalive", event.target.value)}
+								value={values.tcp_keepalive}
+							>
+								<option value="1">enabled</option>
+								<option value="0">disabled</option>
+							</select>
+						</label>
+					</div>
+					<label className="grid max-w-xl gap-2 text-sm">
 						<span className="font-medium">Redirect to HTTPS</span>
 						<select
 							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => setValues({ redirect_https: event.target.value })}
+							onChange={(event) => update("redirect_https", event.target.value)}
 							value={values.redirect_https}
 						>
 							<option value="0">disabled</option>
@@ -1249,6 +1339,20 @@ function UhttpdAccessPanel({ cert, config }: { cert: ConfigSection | undefined; 
 function uhttpdFormValues(config: ConfigSection | undefined): UhttpdConfigInput {
 	return {
 		redirect_https: enabledText(configValue(config, "redirect_https")) === "enabled" ? "1" : "0",
+		listen_http: joinConfigValue(config?.values.listen_http),
+		listen_https: joinConfigValue(config?.values.listen_https),
+		home: configValue(config, "home"),
+		rfc1918_filter: configValue(config, "rfc1918_filter") === "0" ? "0" : "1",
+		max_requests: configValue(config, "max_requests"),
+		max_connections: configValue(config, "max_connections"),
+		cert: configValue(config, "cert"),
+		key: configValue(config, "key"),
+		cgi_prefix: configValue(config, "cgi_prefix"),
+		script_timeout: configValue(config, "script_timeout"),
+		network_timeout: configValue(config, "network_timeout"),
+		http_keepalive: configValue(config, "http_keepalive"),
+		tcp_keepalive: configValue(config, "tcp_keepalive") === "0" ? "0" : "1",
+		ubus_prefix: configValue(config, "ubus_prefix"),
 	};
 }
 

@@ -364,6 +364,20 @@ export type LedConfigResult = {
 
 export type UhttpdConfigInput = {
 	redirect_https: string;
+	listen_http: string;
+	listen_https: string;
+	home: string;
+	rfc1918_filter: string;
+	max_requests: string;
+	max_connections: string;
+	cert: string;
+	key: string;
+	cgi_prefix: string;
+	script_timeout: string;
+	network_timeout: string;
+	http_keepalive: string;
+	tcp_keepalive: string;
+	ubus_prefix: string;
 };
 
 export type UhttpdConfigResult = {
