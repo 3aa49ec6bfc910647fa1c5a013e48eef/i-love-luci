@@ -17,7 +17,7 @@ import { Bar, Doughnut, Line } from "react-chartjs-2";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDashboardStatus, type DashboardStatus, type DeviceStatus } from "@/lib/rpc";
+import { getDashboardStatus, type DashboardStatus, type DeviceStatus, type NetworkInterfaceStatus } from "@/lib/rpc";
 
 ChartJS.register(
 	ArcElement,
@@ -163,7 +163,8 @@ export function DashboardPage() {
 			}
 
 			const nextRates = computeRates(nextStatus, previousStatus.current, now, previousTime.current);
-			const totals = nextRates.reduce(
+			const nextTrafficRates = selectTrafficRates(nextRates, nextStatus.interfaces);
+			const totals = nextTrafficRates.reduce(
 				(total, rate) => ({
 					rxMbps: total.rxMbps + rate.rxMbps,
 					txMbps: total.txMbps + rate.txMbps,
@@ -205,8 +206,12 @@ export function DashboardPage() {
 	const load5 = normaliseLoad(status.system.load?.[1]);
 	const load15 = normaliseLoad(status.system.load?.[2]);
 	const activeDevices = rates.filter((rate) => rate.carrier || rate.rxMbps > 0 || rate.txMbps > 0);
-	const totalRx = rates.reduce((sum, rate) => sum + rate.rxMbps, 0);
-	const totalTx = rates.reduce((sum, rate) => sum + rate.txMbps, 0);
+	const trafficRates = selectTrafficRates(rates, status.interfaces);
+	const totalRx = trafficRates.reduce((sum, rate) => sum + rate.rxMbps, 0);
+	const totalTx = trafficRates.reduce((sum, rate) => sum + rate.txMbps, 0);
+	const trafficDetail = trafficRates.length
+		? `WAN ${trafficRates.map((rate) => rate.name).join(", ")}`
+		: "Live aggregate";
 
 	const bandwidthData = useMemo<ChartData<"line">>(
 		() => ({
@@ -281,8 +286,8 @@ export function DashboardPage() {
 			</div>
 
 			<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-				<MetricCard icon={Network} label="Download" value={formatMbps(totalRx)} detail="Live aggregate" />
-				<MetricCard icon={Activity} label="Upload" value={formatMbps(totalTx)} detail="Live aggregate" />
+				<MetricCard icon={Network} label="Download" value={formatMbps(totalRx)} detail={trafficDetail} />
+				<MetricCard icon={Activity} label="Upload" value={formatMbps(totalTx)} detail={trafficDetail} />
 				<MetricCard icon={MemoryStick} label="Memory" value={`${memory.percent.toFixed(0)}%`} detail={formatBytes(memory.used)} />
 				<MetricCard icon={Cpu} label="CPU load" value={load1.toFixed(2)} detail="1 minute average" />
 			</div>
@@ -477,6 +482,41 @@ function isDashboardDevice(name: string, device: DeviceStatus) {
 	}
 
 	return Boolean(device.statistics && !device["bridge-members"]?.length);
+}
+
+function selectTrafficRates(rates: DeviceRate[], interfaces?: NetworkInterfaceStatus[]) {
+	const deviceNames = defaultRouteDeviceNames(interfaces);
+	const selectedRates = deviceNames
+		.map((name) => rates.find((rate) => rate.name === name))
+		.filter((rate): rate is DeviceRate => Boolean(rate));
+
+	return selectedRates.length ? selectedRates : rates;
+}
+
+function defaultRouteDeviceNames(interfaces?: NetworkInterfaceStatus[]) {
+	const names = new Set<string>();
+
+	for (const iface of interfaces ?? []) {
+		if (!iface.up || !isInternetFacingInterface(iface)) {
+			continue;
+		}
+
+		const deviceName = iface.l3_device || iface.device;
+
+		if (deviceName && deviceName !== "lo") {
+			names.add(deviceName);
+		}
+	}
+
+	return [...names];
+}
+
+function isInternetFacingInterface(iface: NetworkInterfaceStatus) {
+	if (iface.route?.some((route) => route.mask === 0 && (route.target === "0.0.0.0" || route.target === "::"))) {
+		return true;
+	}
+
+	return /^(wan|wwan|lte|cellular|modem)/i.test(iface.interface ?? "");
 }
 
 function memoryUsage(status: DashboardStatus) {

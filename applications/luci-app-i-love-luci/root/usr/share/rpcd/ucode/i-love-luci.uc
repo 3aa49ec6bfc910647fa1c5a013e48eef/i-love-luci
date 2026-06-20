@@ -44,10 +44,13 @@ const methods = {
 
 	dashboard_status: {
 		call: function() {
+			const interfaces = ubus.call('network.interface', 'dump') || {};
+
 			return respond({
 				collectedAt: time(),
 				board: ubus.call('system', 'board') || {},
 				system: ubus.call('system', 'info') || {},
+				interfaces: interfaces.interface || [],
 				devices: ubus.call('network.device', 'status') || {}
 			});
 		}

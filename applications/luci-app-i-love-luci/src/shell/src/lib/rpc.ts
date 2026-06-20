@@ -75,10 +75,25 @@ export type DeviceStatus = {
 	};
 };
 
+export type NetworkInterfaceRoute = {
+	target?: string;
+	mask?: number;
+};
+
+export type NetworkInterfaceStatus = {
+	interface?: string;
+	up?: boolean;
+	l3_device?: string;
+	device?: string;
+	proto?: string;
+	route?: NetworkInterfaceRoute[];
+};
+
 export type DashboardStatus = {
 	collectedAt?: number;
 	board: BoardInfo;
 	system: SystemInfo;
+	interfaces?: NetworkInterfaceStatus[];
 	devices: Record<string, DeviceStatus>;
 };
 
