@@ -217,6 +217,14 @@ scp -O dist/openwrt/24.10.7/rockchip-armv8/luci-app-i-love-luci_*.ipk root@192.1
 ssh root@192.168.1.1 'opkg install /tmp/luci-app-i-love-luci_*.ipk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
 ```
 
+After install, run the route compatibility audit:
+
+```sh
+OPENWRT_HOST=192.168.1.1 OPENWRT_USER=root OPENWRT_PASSWORD='router-password' scripts/audit-router-routes.sh
+```
+
+The audit verifies that visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, incomplete LuCI app routes default to compat mode, and installed `luci-app-*` routes remain discoverable for current and future app installs.
+
 ## Secondary uhttpd Testing
 
 For safer router testing, run a secondary `uhttpd` instance on port `8081` so the main LuCI admin session remains available.

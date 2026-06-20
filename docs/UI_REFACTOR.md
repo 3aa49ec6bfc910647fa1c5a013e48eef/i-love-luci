@@ -701,7 +701,7 @@ Future app handling:
 
 Required tooling:
 
-- Add a router-side or local script that calls `ubus call luci.iloveluci menu_tree`, compares it with installed LuCI menu files, and reports:
+- `scripts/audit-router-routes.sh` calls `ubus call luci.iloveluci menu_tree`, compares it with installed LuCI menu files, and reports:
   - missing routes
   - dead legacy targets
   - dead native targets
@@ -717,6 +717,7 @@ Required tooling:
 Acceptance gate:
 
 - The standalone split is not ready until this audit passes for currently installed LuCI apps and at least one newly installed LuCI app after installation.
+- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=41`, `legacy=19`, `menu_files=15`, and `luci_apps=9`.
 
 Final release/test gate:
 
