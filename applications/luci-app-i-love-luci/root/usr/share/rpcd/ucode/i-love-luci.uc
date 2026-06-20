@@ -3837,8 +3837,13 @@ function set_uci_option(package_name, section, option, value) {
 		uci.set(package_name, section, option, value);
 }
 
+let save_dropbear_config_rows;
+
 function save_dropbear_config(config) {
 	config ||= {};
+
+	if (type(config.rows) == 'array')
+		return save_dropbear_config_rows(config.rows);
 
 	let section = first_uci_section('dropbear', 'dropbear') || uci.add('dropbear', 'dropbear');
 	let port = int(config.Port || config.port || 22);
@@ -3885,6 +3890,124 @@ function save_dropbear_config(config) {
 		init: fast_service_state('dropbear')
 	};
 }
+
+save_dropbear_config_rows = function(rows) {
+	rows ||= [];
+	uci.load('dropbear');
+
+	if (!length(rows))
+		return {
+			saved: false,
+			message: 'At least one SSH access instance is required.',
+			changed: false,
+			section: null,
+			sections: collect_uci_config('dropbear', ['dropbear']),
+			init: fast_service_state('dropbear')
+		};
+
+	let existing = {};
+	uci.foreach('dropbear', 'dropbear', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let keep = {};
+	let validated = [];
+
+	for (let row in rows) {
+		let section = replace(trim('' + (row?.section || '')), /[\r\n]/g, '');
+		let is_existing = length(section) && existing[section] == true;
+		let port = int(row?.Port || row?.port || 22);
+		let iface = trim('' + (row?.Interface || ''));
+
+		if (length(section) && !is_existing)
+			return {
+				saved: false,
+				message: 'SSH access instance no longer exists. Refresh and try again.',
+				changed: false,
+				section: null,
+				sections: collect_uci_config('dropbear', ['dropbear']),
+				init: fast_service_state('dropbear')
+			};
+
+		if (port < 1 || port > 65535)
+			return {
+				saved: false,
+				message: 'SSH port must be between 1 and 65535.',
+				changed: false,
+				section: null,
+				sections: collect_uci_config('dropbear', ['dropbear']),
+				init: fast_service_state('dropbear')
+			};
+
+		if (length(iface) && replace(iface, /[^A-Za-z0-9_.: -]/g, '') != iface)
+			return {
+				saved: false,
+				message: 'SSH listen interface contains unsupported characters.',
+				changed: false,
+				section: null,
+				sections: collect_uci_config('dropbear', ['dropbear']),
+				init: fast_service_state('dropbear')
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			next: {
+				enable: zero_one(row?.enable),
+				Port: '' + port,
+				PasswordAuth: on_off(row?.PasswordAuth),
+				RootPasswordAuth: on_off(row?.RootPasswordAuth),
+				GatewayPorts: on_off(row?.GatewayPorts) == 'on' ? 'on' : '',
+				Interface: iface
+			}
+		});
+	}
+
+	let changed = false;
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('dropbear', 'dropbear');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		for (let key, value in item.next) {
+			let current = uci.get('dropbear', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				set_uci_option('dropbear', section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dropbear', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dropbear');
+		system('/etc/init.d/dropbear reload >/dev/null 2>&1 || /etc/init.d/dropbear restart >/dev/null 2>&1');
+	}
+
+	let sections = collect_uci_config('dropbear', ['dropbear']);
+
+	return {
+		saved: true,
+		message: changed ? 'SSH access saved and reloaded.' : 'SSH access already up to date.',
+		changed,
+		section: (sections || [])[0] || null,
+		sections,
+		init: fast_service_state('dropbear')
+	};
+};
 
 function clean_uci_value(value) {
 	value = trim('' + (value || ''));
@@ -6058,7 +6181,19 @@ const methods = {
 			config: {}
 		},
 		call: function(request) {
-			return respond(save_dropbear_config(request.args.config || {}));
+			try {
+				return respond(save_dropbear_config(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'SSH access save failed: ' + e,
+					changed: false,
+					section: null,
+					sections: collect_uci_config('dropbear', ['dropbear']),
+					init: fast_service_state('dropbear')
+				});
+			}
 		}
 	},
 

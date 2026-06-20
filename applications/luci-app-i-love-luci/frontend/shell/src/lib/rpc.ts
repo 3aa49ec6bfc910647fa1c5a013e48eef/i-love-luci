@@ -394,6 +394,7 @@ export type ConfigBackupResult = {
 };
 
 export type DropbearConfigInput = {
+	section?: string;
 	enable: string;
 	Port: string;
 	PasswordAuth: string;
@@ -407,6 +408,7 @@ export type DropbearConfigResult = {
 	message: string;
 	changed: boolean;
 	section: ConfigSection | null;
+	sections?: ConfigSection[];
 	init: ServiceState | null;
 };
 
@@ -1223,6 +1225,22 @@ export async function saveDropbearConfig(config: DropbearConfigInput): Promise<D
 			message: "SSH access save failed.",
 			changed: false,
 			section: null,
+			init: null,
+		};
+	}
+}
+
+export async function saveDropbearConfigs(rows: DropbearConfigInput[]): Promise<DropbearConfigResult> {
+	try {
+		return await callBridge<DropbearConfigResult>("dropbear_config_save", { config: { rows } });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "SSH access save failed.",
+			changed: false,
+			section: null,
+			sections: [],
 			init: null,
 		};
 	}

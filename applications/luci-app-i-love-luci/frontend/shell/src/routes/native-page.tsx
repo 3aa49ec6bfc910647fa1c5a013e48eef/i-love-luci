@@ -19,7 +19,7 @@ import {
 	saveBanipConfig,
 	saveBanipFile,
 	saveCustomCommands,
-	saveDropbearConfig,
+	saveDropbearConfigs,
 	saveLedConfig,
 	savePackageFeeds,
 	saveUpnpdConfig,
@@ -1228,9 +1228,9 @@ function ServiceSpecificSummary({ service }: { service: NativeService }) {
 	}
 
 	if (service.id === "dropbear") {
-		const config = firstSection(sections, "dropbear");
+		const configs = sections.filter((section) => section.type === "dropbear");
 
-		return <DropbearAccessPanel config={config} />;
+		return <DropbearAccessPanel configs={configs} />;
 	}
 
 	if (service.id === "uhttpd") {
@@ -1915,20 +1915,31 @@ function UpnpdAccessPanel({
 	);
 }
 
-function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) {
-	const initial = useMemo(() => dropbearFormValues(config), [config]);
+function DropbearAccessPanel({ configs }: { configs: ConfigSection[] }) {
+	const initial = useMemo(() => {
+		const rows = configs.length ? configs.map(dropbearFormValues) : [newDropbearRow()];
+		return rows;
+	}, [configs]);
 	const [values, setValues] = useState(initial);
 	const [savedValues, setSavedValues] = useState(initial);
 	const [saving, setSaving] = useState(false);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
 
-	function update<K extends keyof DropbearConfigInput>(key: K, value: DropbearConfigInput[K]) {
-		setValues((current) => ({ ...current, [key]: value }));
+	function update<K extends keyof DropbearConfigInput>(index: number, key: K, value: DropbearConfigInput[K]) {
+		setValues((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)));
+	}
+
+	function addInstance() {
+		setValues((current) => [...current, newDropbearRow()]);
+	}
+
+	function removeInstance(index: number) {
+		setValues((current) => current.filter((_, rowIndex) => rowIndex !== index));
 	}
 
 	async function save() {
 		setSaving(true);
-		const result = await saveDropbearConfig(values);
+		const result = await saveDropbearConfigs(values);
 		setSaving(false);
 
 		if (!result.saved) {
@@ -1936,7 +1947,8 @@ function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) 
 			return;
 		}
 
-		const nextValues = dropbearFormValues(result.section ?? config);
+		const sections = result.sections?.length ? result.sections : result.section ? [result.section] : configs;
+		const nextValues = sections.length ? sections.map(dropbearFormValues) : [newDropbearRow()];
 		setValues(nextValues);
 		setSavedValues(nextValues);
 		toast.success(result.message);
@@ -1945,72 +1957,96 @@ function DropbearAccessPanel({ config }: { config: ConfigSection | undefined }) 
 	return (
 		<Panel title="SSH access">
 			<div className="grid max-w-3xl gap-4">
-				<div className="grid gap-3 sm:grid-cols-2">
-					<label className="grid gap-2 text-sm">
-						<span className="font-medium">Enabled</span>
-						<select
-							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => update("enable", event.target.value)}
-							value={values.enable}
-						>
-							<option value="1">enabled</option>
-							<option value="0">disabled</option>
-						</select>
-					</label>
-					<label className="grid gap-2 text-sm">
-						<span className="font-medium">Port</span>
-						<Input
-							inputMode="numeric"
-							max={65535}
-							min={1}
-							onChange={(event) => update("Port", event.target.value)}
-							type="number"
-							value={values.Port}
-						/>
-					</label>
-					<label className="grid gap-2 text-sm">
-						<span className="font-medium">Password authentication</span>
-						<select
-							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => update("PasswordAuth", event.target.value)}
-							value={values.PasswordAuth}
-						>
-							<option value="on">enabled</option>
-							<option value="off">disabled</option>
-						</select>
-					</label>
-					<label className="grid gap-2 text-sm">
-						<span className="font-medium">Root password login</span>
-						<select
-							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => update("RootPasswordAuth", event.target.value)}
-							value={values.RootPasswordAuth}
-						>
-							<option value="on">enabled</option>
-							<option value="off">disabled</option>
-						</select>
-					</label>
-					<label className="grid gap-2 text-sm">
-						<span className="font-medium">Gateway ports</span>
-						<select
-							className="h-9 rounded-md border bg-card px-2 text-sm"
-							onChange={(event) => update("GatewayPorts", event.target.value)}
-							value={values.GatewayPorts}
-						>
-							<option value="off">disabled</option>
-							<option value="on">enabled</option>
-						</select>
-					</label>
-					<label className="grid gap-2 text-sm sm:col-span-2">
-						<span className="font-medium">Listen interface</span>
-						<Input
-							onChange={(event) => update("Interface", event.target.value)}
-							placeholder="All interfaces"
-							value={values.Interface}
-						/>
-					</label>
-				</div>
+				{values.map((row, index) => (
+					<div className="grid gap-3 rounded-md border bg-card p-3" key={row.section || `new-${index}`}>
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<div className="text-sm font-semibold">Instance {index + 1}</div>
+								<div className="text-xs text-muted-foreground">{row.section || "new listener"}</div>
+							</div>
+							<Button
+								aria-label="Remove SSH instance"
+								disabled={values.length <= 1 || saving}
+								onClick={() => removeInstance(index)}
+								size="icon"
+								type="button"
+								variant="outline"
+							>
+								<Trash2 className="h-4 w-4" />
+							</Button>
+						</div>
+						<div className="grid gap-3 sm:grid-cols-2">
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Enabled</span>
+								<select
+									className="h-9 rounded-md border bg-card px-2 text-sm"
+									onChange={(event) => update(index, "enable", event.target.value)}
+									value={row.enable}
+								>
+									<option value="1">enabled</option>
+									<option value="0">disabled</option>
+								</select>
+							</label>
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Port</span>
+								<Input
+									inputMode="numeric"
+									max={65535}
+									min={1}
+									onChange={(event) => update(index, "Port", event.target.value)}
+									type="number"
+									value={row.Port}
+								/>
+							</label>
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Password authentication</span>
+								<select
+									className="h-9 rounded-md border bg-card px-2 text-sm"
+									onChange={(event) => update(index, "PasswordAuth", event.target.value)}
+									value={row.PasswordAuth}
+								>
+									<option value="on">enabled</option>
+									<option value="off">disabled</option>
+								</select>
+							</label>
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Root password login</span>
+								<select
+									className="h-9 rounded-md border bg-card px-2 text-sm"
+									onChange={(event) => update(index, "RootPasswordAuth", event.target.value)}
+									value={row.RootPasswordAuth}
+								>
+									<option value="on">enabled</option>
+									<option value="off">disabled</option>
+								</select>
+							</label>
+							<label className="grid gap-2 text-sm">
+								<span className="font-medium">Gateway ports</span>
+								<select
+									className="h-9 rounded-md border bg-card px-2 text-sm"
+									onChange={(event) => update(index, "GatewayPorts", event.target.value)}
+									value={row.GatewayPorts}
+								>
+									<option value="off">disabled</option>
+									<option value="on">enabled</option>
+								</select>
+							</label>
+							<label className="grid gap-2 text-sm sm:col-span-2">
+								<span className="font-medium">Listen interface</span>
+								<Input
+									onChange={(event) => update(index, "Interface", event.target.value)}
+									placeholder="All interfaces"
+									value={row.Interface}
+								/>
+							</label>
+						</div>
+					</div>
+				))}
 				<div className="flex justify-end gap-2">
+					<Button disabled={saving} onClick={addInstance} type="button" variant="outline">
+						<Plus className="h-4 w-4" />
+						Add instance
+					</Button>
 					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
 						Cancel
 					</Button>
@@ -2438,12 +2474,25 @@ function normalizeUpnpdRule(rule: UpnpdRule): UpnpdRule {
 
 function dropbearFormValues(config: ConfigSection | undefined): DropbearConfigInput {
 	return {
+		section: config?.name ?? "",
 		enable: configValue(config, "enable") === "0" ? "0" : "1",
 		Port: configValue(config, "Port") || "22",
 		PasswordAuth: dropbearOnOff(configValue(config, "PasswordAuth") || "on"),
 		RootPasswordAuth: dropbearOnOff(configValue(config, "RootPasswordAuth") || "on"),
 		GatewayPorts: dropbearOnOff(configValue(config, "GatewayPorts") || "off"),
 		Interface: configValue(config, "Interface"),
+	};
+}
+
+function newDropbearRow(): DropbearConfigInput {
+	return {
+		section: "",
+		enable: "1",
+		Port: "22",
+		PasswordAuth: "on",
+		RootPasswordAuth: "on",
+		GatewayPorts: "off",
+		Interface: "",
 	};
 }
 
