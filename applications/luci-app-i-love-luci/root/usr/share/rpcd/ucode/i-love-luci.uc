@@ -81,12 +81,12 @@ const nativeRoutes = {
 	'/admin/services/uhttpd': { status: 'partial', nativePath: '/native/service/uhttpd', autoMode: 'legacy' }
 };
 const servicePackages = {
-	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'] },
-	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'] },
+	'adblock-fast': { package: 'adblock-fast', init: 'adblock-fast', title: 'AdBlock Fast', sections: ['adblock-fast', 'file_url'], logPattern: 'adblock-fast' },
+	banip: { package: 'banip', init: 'banip', title: 'banIP', sections: ['banip'], logPattern: 'banip' },
 	commands: { package: 'luci', init: null, title: 'Custom Commands', sections: ['command'] },
-	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'] },
-	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'] },
-	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'] }
+	dropbear: { package: 'dropbear', init: 'dropbear', title: 'Dropbear SSH', sections: ['dropbear'], logPattern: 'dropbear' },
+	uhttpd: { package: 'uhttpd', init: 'uhttpd', title: 'uHTTPd', sections: ['uhttpd', 'cert', 'cert_defaults'], logPattern: 'uhttpd' },
+	upnpd: { package: 'upnpd', init: 'miniupnpd', title: 'UPnP IGD & PCP', sections: ['upnpd', 'perm_rule'], logPattern: 'miniupnpd|upnpd' }
 };
 const routeModes = {
 	auto: true,
@@ -937,6 +937,21 @@ function revert_uci_changes() {
 	return length(rows);
 }
 
+function service_logs(meta) {
+	if (!meta?.logPattern)
+		return {};
+
+	let grep = join(' ', quote_command_args(['grep', '-Ei', meta.logPattern]));
+	let output = shell_output(`logread 2>/dev/null | ${grep} | tail -n 80`);
+
+	if (!length(trim(output)))
+		return {};
+
+	return {
+		activity: output
+	};
+}
+
 function service_detail(id) {
 	let meta = servicePackages[id] || null;
 
@@ -958,7 +973,7 @@ function service_detail(id) {
 		init: fast_service_state(meta.init),
 		sections: collect_uci_config(meta.package, meta.sections || []),
 		customCommands: id == 'commands' ? custom_command_entries() : [],
-		logs: {}
+		logs: service_logs(meta)
 	};
 }
 

@@ -585,10 +585,10 @@ Converted to native React/Vite surfaces:
 - `/admin/system/commands` and children: modern custom command dashboard can list and execute configured LuCI commands by section id, with UCI summary. Auto mode still defaults to LuCI compat until command add/edit/delete and download/public-link parity are complete.
 - `/admin/system/i-love-luci-theme`: native I Love LuCI settings.
 - `/admin/services`: service overview with native lifecycle actions where an init script exists. The root services route is native by default; service-app child routes still default to LuCI compat until adapter parity is proven.
-- `/admin/services/banip` and child routes: service status, lifecycle actions, banIP policy summary, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/adblock-fast`: service status, lifecycle actions, AdBlock Fast settings, feed-source table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/upnp`: service status, lifecycle actions, UPnP permission-rule table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
-- `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, listener/web-server summary, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/banip` and child routes: service status, lifecycle actions, banIP policy summary, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/adblock-fast`: service status, lifecycle actions, AdBlock Fast settings, feed-source table, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/upnp`: service status, lifecycle actions, UPnP permission-rule table, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
+- `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, listener/web-server summary, service activity log table, and UCI summary are available as native preview; auto mode defaults to LuCI compat.
 
 Validation on `172.16.172.1`:
 
@@ -622,6 +622,7 @@ Validation on `172.16.172.1`:
 - HTTP route smoke on `172.16.172.1` passed with `scripts/smoke-router-http-routes.sh`: `visible_routes=60`, `native_shell_checks=42`, `legacy_route_checks=18`. The smoke test verifies the React/Vite login shell, authenticates through standard LuCI form fields, checks the app shell, and fetches every visible legacy compat target for dispatch/login regressions.
 - Pending-change bridge now reads real `uci changes` output and exposes a header dialog with config/action/section/option/value rows plus guarded discard. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native26` bundle created a harmless `i-love-luci.codex_probe` pending change, verified the `2 pending` chip and dialog, discarded through the UI, and confirmed `uci changes` was empty after discard.
 - Package manager native preview now includes read-only available package-feed search through `package_search`. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native27` bundle searched for `luci-app`, confirmed `luci-app-banip` rendered in structured rows, and confirmed package-manager warnings are separated from table data.
+- Generic service adapters now include service activity from `logread` where a known init/service pattern exists. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native28` bundle loaded `#/native/service/adblock-fast`, confirmed the activity log renders as a structured log table, and confirmed the old generic output panel is not used for that service log.
 
 Remaining legacy or partial gaps:
 
@@ -633,7 +634,7 @@ Remaining legacy or partial gaps:
 - Attended sysupgrade has a structured native guarded/read-only preview. Auto mode uses LuCI compat. Image requests, build progress, package compatibility replacement, flash handoff, and rollback checks still need dedicated RPCs before enabling native default.
 - Firmware backup/flash and reboot destructive actions remain guarded/read-only. Native flash now has structured storage visibility, but backup/download, image upload, sysupgrade validation, flash confirmation, progress reporting, and rollback messaging still need dedicated RPCs.
 - Package install/remove/update remains LuCI compat by default. Current native package screen is parsed read-only inventory, available-upgrades visibility, and available feed search with client filtering; it is available only when a route is explicitly forced to modern.
-- Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Native preview pages now include service-specific status summaries, lifecycle controls, and structured UCI-derived tables, but native config edit/apply forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
+- Advanced service editors for banIP, AdBlock Fast, UPnP, Dropbear, and uHTTPd remain LuCI compat by default unless explicit native mode is selected. Native preview pages now include service-specific status summaries, lifecycle controls, structured service logs, and structured UCI-derived tables, but native config edit/apply forms should be adapter-based and should land only after pending-change/apply flow is complete. Custom commands now have a native execution preview, but config editing, download behavior, and public link generation still require LuCI compat.
 - Native text-output debt remains only where output shape is intentionally arbitrary, such as custom commands from user configuration. These now render in a structured line table; future work should add command-specific renderers for commonly configured commands where practical.
 - Save/apply, apply unchecked, reset, and page-specific form validation are not yet universally native. Pending-change listing and discard now work through the native shell; applying changes remains guarded until the rollback/confirm flow is implemented and tested.
 

@@ -354,7 +354,6 @@ export function NativeServicePage() {
 	}, [service]);
 
 	const sections = detail?.sections ?? [];
-	const logs = Object.entries(detail?.logs ?? {}).filter(([, value]) => value);
 
 	return (
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
@@ -370,8 +369,24 @@ export function NativeServicePage() {
 			{detail?.id === "commands" ? <CustomCommandsPanel commands={detail.customCommands ?? []} /> : null}
 			{detail ? <ServiceSpecificSummary service={detail} /> : null}
 			<ConfigTable sections={sections} />
-			{logs.map(([name, text]) => (
-				<TextPanel key={name} title={pageTitle(name)} text={text} />
+			<ServiceLogTables logs={detail?.logs ?? {}} />
+		</div>
+	);
+}
+
+function ServiceLogTables({ logs }: { logs: Record<string, string> }) {
+	const entries = Object.entries(logs)
+		.map(([name, text]) => ({ name, entries: parseSystemLogs(text) }))
+		.filter((log) => log.entries.length);
+
+	if (!entries.length) {
+		return null;
+	}
+
+	return (
+		<div className="grid gap-4">
+			{entries.map((log) => (
+				<LogTable entries={log.entries} key={log.name} title={`${pageTitle(log.name)} log`} />
 			))}
 		</div>
 	);
