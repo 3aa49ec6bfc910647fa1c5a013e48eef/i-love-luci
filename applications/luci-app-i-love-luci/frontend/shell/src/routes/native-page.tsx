@@ -23,6 +23,8 @@ import {
 	saveLedConfig,
 	savePackageFeeds,
 	saveUpnpdConfig,
+	removeUhttpdCertificate,
+	saveUhttpdCertificateFile,
 	saveUhttpdConfigs,
 	runServiceAction,
 	runStartupAction,
@@ -52,6 +54,7 @@ import {
 	type UpnpdConfigInput,
 	type UpnpdActiveRule,
 	type UpnpdRule,
+	type UhttpdCertificateFileStatus,
 	type UhttpdConfigInput,
 } from "@/lib/rpc";
 
@@ -2166,7 +2169,11 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 	const initial = useMemo(() => (configs.length ? configs.map(uhttpdFormValues) : [newUhttpdRow()]), [configs]);
 	const [values, setValues] = useState(initial);
 	const [savedValues, setSavedValues] = useState(initial);
+	const [certificateFiles, setCertificateFiles] = useState<UhttpdCertificateFileStatus[]>([]);
+	const [certUpload, setCertUpload] = useState<UhttpdUploadState>({ filename: "i-love-luci-uhttpd.crt", text: "" });
+	const [keyUpload, setKeyUpload] = useState<UhttpdUploadState>({ filename: "i-love-luci-uhttpd.key", text: "" });
 	const [saving, setSaving] = useState(false);
+	const [uploading, setUploading] = useState<"cert" | "key" | null>(null);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
 	const current = configs[0];
 
@@ -2180,6 +2187,65 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 
 	function removeInstance(index: number) {
 		setValues((currentValues) => currentValues.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	function updateFromSections(sections: ConfigSection[] | undefined) {
+		if (!sections?.length) {
+			return;
+		}
+
+		const nextValues = sections.map(uhttpdFormValues);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+	}
+
+	async function uploadCertificate(kind: "cert" | "key") {
+		const upload = kind === "cert" ? certUpload : keyUpload;
+		setUploading(kind);
+		const result = await saveUhttpdCertificateFile(kind, upload.filename, upload.text);
+		setUploading(null);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		if (result.files) {
+			setCertificateFiles(result.files);
+		}
+
+		if (result.path) {
+			update(0, kind === "cert" ? "cert" : "key", result.path);
+		}
+
+		toast.success(result.message);
+	}
+
+	async function removeCertificate(action: "remove_files" | "remove_config") {
+		const message =
+			action === "remove_config"
+				? "Remove configured certificate, key, and HTTPS listeners?"
+				: "Remove the configured certificate and key files?";
+
+		if (!window.confirm(message)) {
+			return;
+		}
+
+		setUploading(action === "remove_config" ? "key" : "cert");
+		const result = await removeUhttpdCertificate(action);
+		setUploading(null);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		if (result.files) {
+			setCertificateFiles(result.files);
+		}
+
+		updateFromSections(result.sections);
+		toast.success(result.message);
 	}
 
 	async function save() {
@@ -2238,6 +2304,35 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 					</div>
 				</div>
 			</Panel>
+			<Panel title="Certificate files">
+				<div className="grid gap-4">
+					<div className="grid gap-3 md:grid-cols-2">
+						<UhttpdUploadBox
+							disabled={uploading !== null}
+							kind="cert"
+							onChange={setCertUpload}
+							onUpload={() => void uploadCertificate("cert")}
+							state={certUpload}
+						/>
+						<UhttpdUploadBox
+							disabled={uploading !== null}
+							kind="key"
+							onChange={setKeyUpload}
+							onUpload={() => void uploadCertificate("key")}
+							state={keyUpload}
+						/>
+					</div>
+					<UhttpdCertificateFileTable files={certificateFiles.length ? certificateFiles : currentCertificateFiles(values[0])} />
+					<div className="flex flex-wrap justify-end gap-2">
+						<Button disabled={uploading !== null} onClick={() => void removeCertificate("remove_files")} type="button" variant="outline">
+							Remove certificate files
+						</Button>
+						<Button disabled={uploading !== null} onClick={() => void removeCertificate("remove_config")} type="button" variant="destructive">
+							Remove certificate configuration
+						</Button>
+					</div>
+				</div>
+			</Panel>
 			<SimpleValueTable
 				columns={["Setting", "Value"]}
 				empty="No uHTTPd configuration found."
@@ -2254,6 +2349,109 @@ function UhttpdAccessPanel({ cert, configs }: { cert: ConfigSection | undefined;
 			/>
 		</div>
 	);
+}
+
+type UhttpdUploadState = {
+	filename: string;
+	text: string;
+};
+
+function UhttpdUploadBox({
+	disabled,
+	kind,
+	onChange,
+	onUpload,
+	state,
+}: {
+	disabled: boolean;
+	kind: "cert" | "key";
+	onChange: (state: UhttpdUploadState) => void;
+	onUpload: () => void;
+	state: UhttpdUploadState;
+}) {
+	const title = kind === "cert" ? "HTTPS certificate" : "HTTPS private key";
+
+	async function selectFile(file: File | undefined) {
+		if (!file) {
+			return;
+		}
+
+		onChange({
+			filename: file.name,
+			text: await file.text(),
+		});
+	}
+
+	return (
+		<div className="grid gap-3 rounded-md border bg-card p-3">
+			<div>
+				<div className="text-sm font-semibold">{title}</div>
+				<div className="text-xs text-muted-foreground">PEM text is stored under /etc/luci-uploads.</div>
+			</div>
+			<label className="grid gap-2 text-sm">
+				<span className="font-medium">File</span>
+				<Input accept=".crt,.pem,.key" disabled={disabled} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
+			</label>
+			<label className="grid gap-2 text-sm">
+				<span className="font-medium">Saved filename</span>
+				<Input disabled={disabled} onChange={(event) => onChange({ ...state, filename: event.target.value })} value={state.filename} />
+			</label>
+			<textarea
+				className="min-h-28 rounded-md border bg-card px-3 py-2 font-mono text-xs outline-none focus-visible:border-ring"
+				disabled={disabled}
+				onChange={(event) => onChange({ ...state, text: event.target.value })}
+				placeholder={kind === "cert" ? "-----BEGIN CERTIFICATE-----" : "-----BEGIN PRIVATE KEY-----"}
+				spellCheck={false}
+				value={state.text}
+			/>
+			<Button disabled={disabled || !state.text.trim()} onClick={onUpload} type="button" variant="outline">
+				Upload {kind === "cert" ? "certificate" : "private key"}
+			</Button>
+		</div>
+	);
+}
+
+function UhttpdCertificateFileTable({ files }: { files: UhttpdCertificateFileStatus[] }) {
+	return (
+		<div className="overflow-x-auto rounded-md border">
+			<table className="w-full min-w-[28rem] text-left text-sm">
+				<thead className="border-b text-xs uppercase text-muted-foreground">
+					<tr>
+						<th className="px-3 py-2 font-medium">File</th>
+						<th className="px-3 py-2 font-medium">Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					{files.map((file) => (
+						<tr className="border-b last:border-0" key={`${file.title}.${file.path}`}>
+							<td className="px-3 py-2">
+								<div className="font-medium">{file.title}</div>
+								<div className="font-mono text-xs text-muted-foreground">{file.path || "not configured"}</div>
+							</td>
+							<td className="px-3 py-2 text-muted-foreground">{file.exists ? `${file.size} bytes` : "not present"}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function currentCertificateFiles(row: UhttpdConfigInput | undefined): UhttpdCertificateFileStatus[] {
+	return [
+		{
+			title: "HTTPS certificate",
+			path: row?.cert || "",
+			exists: false,
+			size: 0,
+		},
+		{
+			title: "HTTPS private key",
+			path: row?.key || "",
+			exists: false,
+			size: 0,
+		},
+	];
 }
 
 function UhttpdInstanceFields({

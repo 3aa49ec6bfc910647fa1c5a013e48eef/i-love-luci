@@ -472,6 +472,26 @@ export type UhttpdConfigResult = {
 	init: ServiceState | null;
 };
 
+export type UhttpdCertificateFileStatus = {
+	title: string;
+	path: string;
+	exists: boolean;
+	size: number;
+};
+
+export type UhttpdCertificateFileResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	kind?: "cert" | "key";
+	path?: string;
+	size?: number;
+	section: ConfigSection | null;
+	sections?: ConfigSection[];
+	files?: UhttpdCertificateFileStatus[];
+	init: ServiceState | null;
+};
+
 export type UpnpdConfigInput = {
 	enabled: string;
 	enable_upnp: string;
@@ -1288,6 +1308,38 @@ export async function saveUhttpdConfigs(rows: UhttpdConfigInput[]): Promise<Uhtt
 		return {
 			saved: false,
 			message: "HTTP access save failed.",
+			changed: false,
+			section: null,
+			sections: [],
+			init: null,
+		};
+	}
+}
+
+export async function saveUhttpdCertificateFile(kind: "cert" | "key", filename: string, text: string): Promise<UhttpdCertificateFileResult> {
+	try {
+		return await callBridge<UhttpdCertificateFileResult>("uhttpd_certificate_file_save", { kind, filename, text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Certificate file save failed.",
+			changed: false,
+			section: null,
+			sections: [],
+			init: null,
+		};
+	}
+}
+
+export async function removeUhttpdCertificate(action: "remove_files" | "remove_config"): Promise<UhttpdCertificateFileResult> {
+	try {
+		return await callBridge<UhttpdCertificateFileResult>("uhttpd_certificate_remove", { action, confirm: "remove" });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Certificate removal failed.",
 			changed: false,
 			section: null,
 			sections: [],

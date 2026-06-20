@@ -4905,6 +4905,144 @@ function banip_save_state() {
 	};
 }
 
+function uhttpd_cert_file_status(path, title) {
+	path = clean_uci_value(path || '');
+	let info = length(path) ? stat(path) : null;
+
+	return {
+		title,
+		path,
+		exists: info?.type == 'file',
+		size: info?.size || 0
+	};
+}
+
+function uhttpd_cert_result(saved, message, changed, extra) {
+	uci.load('uhttpd');
+	let sections = collect_uci_config('uhttpd', ['uhttpd']);
+	let main = sections?.[0] || null;
+	let cert = main?.values?.cert || '';
+	let key = main?.values?.key || '';
+
+	let result = {
+		saved,
+		message,
+		changed,
+		section: main,
+		sections,
+		files: [
+			uhttpd_cert_file_status(cert, 'HTTPS certificate'),
+			uhttpd_cert_file_status(key, 'HTTPS private key')
+		],
+		init: fast_service_state('uhttpd')
+	};
+
+	if (extra)
+		for (let k, v in extra)
+			result[k] = v;
+
+	return result;
+}
+
+function safe_uhttpd_upload_path(filename, kind) {
+	filename = clean_uci_value(filename || '');
+	let parts = split(filename, '/');
+	filename = parts[length(parts) - 1] || '';
+	filename = replace(filename, /[^A-Za-z0-9_.-]/g, '-');
+
+	if (!length(filename))
+		filename = kind == 'key' ? 'i-love-luci-uhttpd.key' : 'i-love-luci-uhttpd.crt';
+
+	return '/etc/luci-uploads/' + filename;
+}
+
+function save_uhttpd_certificate_file(kind, filename, text) {
+	kind = kind == 'key' ? 'key' : 'cert';
+	text = '' + (text || '');
+
+	if (!length(trim(text)))
+		return uhttpd_cert_result(false, 'Certificate file content is empty.', false, null);
+
+	if (length(text) > 131072)
+		return uhttpd_cert_result(false, 'Certificate file is too large.', false, null);
+
+	if (kind == 'cert' && !match(text, /-----BEGIN [A-Z ]*CERTIFICATE-----/))
+		return uhttpd_cert_result(false, 'Certificate upload currently expects PEM text.', false, null);
+
+	if (kind == 'key' && !match(text, /-----BEGIN [A-Z ]*PRIVATE KEY-----/))
+		return uhttpd_cert_result(false, 'Private key upload currently expects PEM text.', false, null);
+
+	let path = safe_uhttpd_upload_path(filename, kind);
+	let current = readfile(path) || '';
+	let changed = current != text;
+
+	if (changed) {
+		system('mkdir -p /etc/luci-uploads >/dev/null 2>&1');
+		writefile(path, text);
+		system('chmod 0600 ' + quote_command_args([path])[0] + ' >/dev/null 2>&1 || true');
+	}
+
+	return uhttpd_cert_result(true, changed ? 'Certificate file uploaded.' : 'Certificate file already up to date.', changed, {
+		kind,
+		path,
+		size: length(text)
+	});
+}
+
+function removable_uhttpd_cert_path(path) {
+	path = clean_uci_value(path || '');
+
+	if (!length(path))
+		return false;
+
+	return path == '/etc/uhttpd.crt' || path == '/etc/uhttpd.key' || index(path, '/etc/luci-uploads/') == 0;
+}
+
+function remove_uhttpd_certificate_files(action, confirm) {
+	action = action == 'remove_config' ? 'remove_config' : 'remove_files';
+
+	if (confirm != 'remove')
+		return uhttpd_cert_result(false, 'Certificate removal requires confirmation.', false, null);
+
+	uci.load('uhttpd');
+	let section = first_uci_section('uhttpd', 'uhttpd') || 'main';
+	let cert = uci.get('uhttpd', section, 'cert') || '';
+	let key = uci.get('uhttpd', section, 'key') || '';
+	let changed = false;
+
+	for (let path in [cert, key]) {
+		if (removable_uhttpd_cert_path(path)) {
+			system('rm -f -- ' + quote_command_args([path])[0] + ' >/dev/null 2>&1 || true');
+			changed = true;
+		}
+	}
+
+	if (action == 'remove_config') {
+		if (length(cert)) {
+			uci.delete('uhttpd', section, 'cert');
+			changed = true;
+		}
+
+		if (length(key)) {
+			uci.delete('uhttpd', section, 'key');
+			changed = true;
+		}
+
+		if (uci.get('uhttpd', section, 'listen_https')) {
+			uci.delete('uhttpd', section, 'listen_https');
+			changed = true;
+		}
+
+		if (changed)
+			uci.commit('uhttpd');
+	}
+
+	if (changed)
+		system('/etc/init.d/uhttpd restart >/dev/null 2>&1 || true');
+
+	return uhttpd_cert_result(true, changed ? 'Certificate files removed and web server restarted.' : 'Certificate files already absent.', changed, null);
+}
+
 function save_banip_config(config) {
 	config ||= {};
 	uci.load('banip');
@@ -6540,6 +6678,37 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_uhttpd_config(request.args.config || {}));
+		}
+	},
+
+	uhttpd_certificate_file_save: {
+		args: {
+			kind: 'cert',
+			filename: '',
+			text: ''
+		},
+		call: function(request) {
+			try {
+				return respond(save_uhttpd_certificate_file(request.args.kind || 'cert', request.args.filename || '', request.args.text || ''));
+			}
+			catch (e) {
+				return respond(uhttpd_cert_result(false, 'Certificate file save failed: ' + e, false, null));
+			}
+		}
+	},
+
+	uhttpd_certificate_remove: {
+		args: {
+			action: 'remove_files',
+			confirm: ''
+		},
+		call: function(request) {
+			try {
+				return respond(remove_uhttpd_certificate_files(request.args.action || 'remove_files', request.args.confirm || ''));
+			}
+			catch (e) {
+				return respond(uhttpd_cert_result(false, 'Certificate removal failed: ' + e, false, null));
+			}
 		}
 	},
 
