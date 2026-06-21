@@ -9,6 +9,7 @@ import {
 	getConsoleLaunch,
 	getConsoleStatus,
 	pollConsole,
+	resizeConsole,
 	writeConsole,
 	type ConsoleLaunch,
 	type ConsoleStatus,
@@ -80,7 +81,7 @@ export function ConsolePage() {
 	const isTunnel = (launch?.transport ?? status?.transport) === "tunnel";
 
 	return (
-		<div className="mx-auto grid h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-7xl grid-rows-[auto_minmax(0,1fr)] gap-3 sm:h-[calc(100dvh-7rem)] sm:max-h-[calc(100dvh-7rem)]">
+		<div className="mx-auto grid h-[clamp(20rem,calc(100dvh-12rem),48rem)] min-h-0 w-full max-w-7xl grid-rows-[auto_minmax(0,1fr)] gap-3">
 			<div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
 				<div className="flex min-w-0 items-center gap-2 sm:gap-3">
 					<div className="grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground sm:size-9">
@@ -147,7 +148,21 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 	const [input, setInput] = useState("");
 	const [active, setActive] = useState(true);
 	const outputRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 	const delay = Math.max(100, pollAfterMs ?? 200);
+	const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+		window.requestAnimationFrame(() => {
+			const element = outputRef.current;
+			if (!element) {
+				return;
+			}
+
+			element.scrollTo({
+				top: element.scrollHeight,
+				behavior,
+			});
+		});
+	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -198,8 +213,52 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 			return;
 		}
 
-		element.scrollTop = element.scrollHeight;
-	}, [output, active]);
+		scrollToBottom();
+	}, [active, output, scrollToBottom]);
+
+	useEffect(() => {
+		const element = outputRef.current;
+
+		if (!element || !active) {
+			return;
+		}
+
+		let frame = 0;
+		let previousSize = "";
+		const sendSize = () => {
+			const rect = element.getBoundingClientRect();
+			const columns = clamp(Math.floor(rect.width / 7.5), 40, 180);
+			const rows = clamp(Math.floor(rect.height / 17), 12, 80);
+			const nextSize = `${columns}:${rows}`;
+
+			if (nextSize === previousSize) {
+				return;
+			}
+
+			previousSize = nextSize;
+			void resizeConsole(sessionId, columns, rows);
+			scrollToBottom();
+		};
+		const scheduleSize = () => {
+			if (frame) {
+				window.cancelAnimationFrame(frame);
+			}
+			frame = window.requestAnimationFrame(sendSize);
+		};
+		const observer = new ResizeObserver(scheduleSize);
+
+		observer.observe(element);
+		scheduleSize();
+		window.addEventListener("resize", scheduleSize);
+
+		return () => {
+			observer.disconnect();
+			window.removeEventListener("resize", scheduleSize);
+			if (frame) {
+				window.cancelAnimationFrame(frame);
+			}
+		};
+	}, [active, scrollToBottom, sessionId]);
 
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -209,25 +268,35 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 		const value = `${input}\n`;
 		setInput("");
 		await writeConsole(sessionId, value);
+		scrollToBottom("smooth");
 	}
 
 	return (
-		<div className="flex size-full min-h-0 flex-col bg-black text-xs text-zinc-100 sm:text-sm">
-			<div ref={outputRef} className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono leading-relaxed sm:p-4">
+		<div className="flex size-full min-h-0 flex-col bg-black text-[11px] text-zinc-100 sm:text-xs">
+			<div ref={outputRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words p-2.5 font-mono leading-snug sm:p-3">
 				{output || "Opening router shell..."}
 			</div>
-			<form className="flex border-t border-zinc-800" onSubmit={(event) => void submit(event)}>
+			<form className="sticky bottom-0 flex shrink-0 border-t border-zinc-800 bg-black" onSubmit={(event) => void submit(event)}>
 				<input
-					className="min-w-0 flex-1 bg-black px-3 py-2 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-500 sm:px-4 sm:py-3 sm:text-sm"
+					ref={inputRef}
+					className="min-w-0 flex-1 bg-black px-3 py-2 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
 					disabled={!active}
 					onChange={(event) => setInput(event.target.value)}
+					onFocus={() => {
+						scrollToBottom();
+						window.setTimeout(() => inputRef.current?.scrollIntoView({ block: "nearest" }), 50);
+					}}
 					placeholder={active ? "Type a command" : "Console session ended"}
 					value={input}
 				/>
-				<Button className="m-1.5 h-8 px-3 text-xs sm:m-2 sm:h-9 sm:px-4 sm:text-sm" disabled={!active || !input} type="submit" variant="secondary">
+				<Button className="m-1.5 h-8 px-3 text-xs" disabled={!active || !input} type="submit" variant="secondary">
 					Send
 				</Button>
 			</form>
 		</div>
 	);
+}
+
+function clamp(value: number, min: number, max: number) {
+	return Math.min(max, Math.max(min, value));
 }

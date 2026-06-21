@@ -3531,6 +3531,10 @@ function packageConfirmationTarget(request: PackageActionRequest) {
 	return request.name || request.action;
 }
 
+function isRemotePackageSource(value: string) {
+	return /^https?:\/\/[A-Za-z0-9._~:/?#=@&%+;,!$()*-]+$/.test(value);
+}
+
 function PackageActionOutput({ result }: { result: PackageActionResult | null }) {
 	if (!result) {
 		return null;
@@ -3659,6 +3663,8 @@ function ManualPackagePlanner({
 	const [suggestions, setSuggestions] = useState<PackageI18nSuggestionResult | null>(null);
 	const [selectedTranslations, setSelectedTranslations] = useState<string[]>([]);
 	const translationRows = useMemo(() => (suggestions?.lines ?? []).map(parsePackageLine), [suggestions?.lines]);
+	const manualSource = name.trim();
+	const remoteSource = isRemotePackageSource(manualSource);
 
 	function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -3741,7 +3747,7 @@ function ManualPackagePlanner({
 				<div className="flex flex-col gap-1">
 					<div>Manual package install</div>
 					<div className="text-xs font-normal text-muted-foreground">
-						Plan package-name, URL, uploaded `.apk`, or uploaded `.ipk` installs. Uploaded package files can be installed after staging.
+						Plan or apply package-name, URL, uploaded `.apk`, or uploaded `.ipk` installs with typed confirmation.
 					</div>
 				</div>
 			}
@@ -3754,6 +3760,20 @@ function ManualPackagePlanner({
 					</Button>
 					<Button disabled={busy === `install:${name.trim()}:plan`} type="submit" variant="outline">
 						Plan install
+					</Button>
+					<Button
+						disabled={!manualSource || busy === `install:${manualSource}:apply`}
+						onClick={() =>
+							void onRunAction("install", manualSource, false, {
+								overwrite,
+								i18nPackages: selectedTranslations,
+								allowRemote: remoteSource,
+							})
+						}
+						type="button"
+						variant="outline"
+					>
+						Install source
 					</Button>
 				</div>
 				{suggestions ? (
@@ -3793,7 +3813,7 @@ function ManualPackagePlanner({
 					<div className="font-medium">Package file</div>
 					<Input accept=".apk,.ipk" disabled={staging} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
 					<div className="text-xs text-muted-foreground">
-						File is staged under `/tmp` for planning or guarded install. URL-based install uses the full software workflow. Upload limit is {formatBytes(packageUploadLimit)}.
+						File is staged under `/tmp` for planning or guarded install. URL and package-name installs use the same confirmation dialog. Upload limit is {formatBytes(packageUploadLimit)}.
 					</div>
 				</div>
 				<label className="inline-flex items-center gap-2 text-sm">

@@ -453,6 +453,7 @@ export type PackageActionOptions = {
 	autoremove?: boolean;
 	i18nPackages?: string[];
 	allowUntrusted?: boolean;
+	allowRemote?: boolean;
 };
 
 export type PackageFileStageResult = {

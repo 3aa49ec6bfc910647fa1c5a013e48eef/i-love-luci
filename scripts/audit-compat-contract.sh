@@ -151,6 +151,9 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
 			if "Package state fingerprint" not in text:
 				failures.append(f"{relative_path}: package manager output must show package state fingerprints")
+			for required_package_install_term in ("Install source", "allowRemote: remoteSource", "isRemotePackageSource"):
+				if required_package_install_term not in text:
+					failures.append(f"{relative_path}: package manager manual install apply missing {required_package_install_term}")
 			package_inventory_match = re.search(r"function PackageInventory\([^)]*\) \{(?P<body>.*?)\nfunction PackageActionOutput", text, re.S)
 			if not package_inventory_match:
 				failures.append(f"{relative_path}: expected PackageInventory guard target")
@@ -208,6 +211,9 @@ for base in scan_roots:
 			for required_package_state_term in ("package_state_snapshot", "stateBefore", "stateAfter", "databaseHash", "luciAppCount"):
 				if required_package_state_term not in text:
 					failures.append(f"{relative_path}: package actions must retain rollback fingerprint term {required_package_state_term}")
+			for required_remote_install_term in ("allow_remote", "remote_package_url", "remote_package_install_command", "uclient-fetch", "valid_package_reference(name, simulate, allow_remote)"):
+				if required_remote_install_term not in text:
+					failures.append(f"{relative_path}: package actions must support guarded remote URL install term {required_remote_install_term}")
 		if relative_path == rpc_types_file:
 			status_type = re.search(r"export type ConsoleStatus = \{(?P<body>.*?)\n\};", text, re.S)
 			if not status_type:
@@ -227,6 +233,8 @@ for base in scan_roots:
 			for required_package_state_term in ("PackageStateSnapshot", "stateBefore?", "stateAfter?", "databaseHash", "packageCount", "luciAppCount"):
 				if required_package_state_term not in text:
 					failures.append(f"{relative_path}: package action contract must expose package state fingerprint term {required_package_state_term}")
+			if "allowRemote?" not in text:
+				failures.append(f"{relative_path}: package action options must expose allowRemote")
 		if relative_path == rpc_acl_file:
 			for required_console_acl in ("console_poll", "console_write", "console_resize", "console_close"):
 				if required_console_acl not in text:
@@ -329,6 +337,8 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: current compatibility model must keep the three-outcome route contract")
 			if "package state fingerprints before/after actions" not in text:
 				failures.append(f"{relative_path}: package manager promotion evidence must document package state fingerprints")
+			if "guarded package-name/URL/staged-file install apply with typed confirmation" not in text:
+				failures.append(f"{relative_path}: package manager promotion evidence must document guarded URL install apply")
 			coverage_match = re.search(
 				r"Converted to native React/Vite surfaces:\n(?P<body>.*?)(?=\nInstalled LuCI app renderer policy:)",
 				text,
