@@ -681,6 +681,45 @@ function command_exists(name) {
 	return system(`command -v ${name} >/dev/null 2>&1`) == 0;
 }
 
+function json_from_command(command, fallback) {
+	let output = trim(shell_output(command));
+
+	if (!length(output))
+		return fallback;
+
+	try {
+		return json(output);
+	}
+	catch (e) {
+		return fallback;
+	}
+}
+
+function console_helper_available() {
+	if (!command_exists('i-love-luci-console'))
+		return false;
+
+	let status = json_from_command('/usr/sbin/i-love-luci-console status', {});
+	return status?.available == true;
+}
+
+function console_helper_call(argv, fallback) {
+	if (!command_exists('i-love-luci-console'))
+		return fallback;
+
+	return json_from_command(join(' ', quote_command_args(['/usr/sbin/i-love-luci-console', ...argv])), fallback);
+}
+
+function hex_encode_text(text) {
+	text = '' + (text || '');
+	let out = '';
+
+	for (let offset = 0; offset < length(text); offset++)
+		out += sprintf('%02x', ord(text, offset));
+
+	return out;
+}
+
 function safe_init_name(name) {
 	name = name || '';
 
@@ -11240,6 +11279,20 @@ const methods = {
 
 	console_status: {
 		call: function() {
+			let helper = console_helper_call(['status'], null);
+
+			if (helper?.available == true) {
+				return respond({
+					available: true,
+					enabled: true,
+					transport: 'tunnel',
+					tunnelAvailable: true,
+					requiresDirectConnectivity: false,
+					maxSessions: helper.maxSessions || 4,
+					idleTimeout: helper.idleTimeout || 600
+				});
+			}
+
 			uci.load('ttyd');
 
 			let section = null;
@@ -11268,6 +11321,16 @@ const methods = {
 
 	console_launch: {
 		call: function() {
+			let helper = console_helper_call(['launch'], null);
+
+			if (helper?.available == true && helper?.sessionId) {
+				helper.transport = 'tunnel';
+				helper.tunnelAvailable = true;
+				helper.requiresDirectConnectivity = false;
+				helper.enabled = true;
+				return respond(helper);
+			}
+
 			uci.load('ttyd');
 
 			let section = null;
@@ -11321,8 +11384,10 @@ const methods = {
 			session_id: '',
 			sequence: 0
 		},
-		call: function() {
-			return respond({
+		call: function(request) {
+			let result = console_helper_call(['poll', request.args.session_id || '', '' + (request.args.sequence || 0)], null);
+
+			return respond(result || {
 				available: false,
 				active: false,
 				output: '',
@@ -11337,8 +11402,10 @@ const methods = {
 			session_id: '',
 			input: ''
 		},
-		call: function() {
-			return respond({
+		call: function(request) {
+			let result = console_helper_call(['write', request.args.session_id || '', hex_encode_text(request.args.input || '')], null);
+
+			return respond(result || {
 				available: false,
 				accepted: false,
 				message: 'Console tunnel helper is not installed.'
@@ -11352,8 +11419,15 @@ const methods = {
 			columns: 80,
 			rows: 24
 		},
-		call: function() {
-			return respond({
+		call: function(request) {
+			let result = console_helper_call([
+				'resize',
+				request.args.session_id || '',
+				'' + (request.args.columns || 80),
+				'' + (request.args.rows || 24)
+			], null);
+
+			return respond(result || {
 				available: false,
 				accepted: false,
 				message: 'Console tunnel helper is not installed.'
@@ -11365,8 +11439,10 @@ const methods = {
 		args: {
 			session_id: ''
 		},
-		call: function() {
-			return respond({
+		call: function(request) {
+			let result = console_helper_call(['close', request.args.session_id || ''], null);
+
+			return respond(result || {
 				available: false,
 				accepted: false,
 				message: 'Console tunnel helper is not installed.'
