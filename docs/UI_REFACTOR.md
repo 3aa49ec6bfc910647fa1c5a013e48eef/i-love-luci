@@ -1136,7 +1136,7 @@ Security gap:
 
 Preferred future helper:
 
-- Build a uHTTPd tunnel module/helper rather than a LuCI RPC, CGI, ucode, or ubus route. Standard uHTTPd CGI/ucode/ubus handlers do not provide a reverse WebSocket proxy for ttyd.
+- Build a uHTTPd tunnel through an upstream uHTTPd enhancement or a rebuilt uHTTPd package rather than a LuCI RPC, CGI, ucode, or ubus route. Standard uHTTPd CGI/ucode/ubus handlers do not provide a reverse WebSocket proxy for ttyd, and current uHTTPd only loads hard-coded plugins rather than arbitrary third-party proxy modules from UCI.
 - Bind ttyd to a UNIX socket such as `/var/run/i-love-luci/ttyd.sock`, or to loopback only if UNIX-socket proxying is not available.
 - Start ttyd with its reverse-proxy auth mode (`--auth-header`) and a base path for the mounted console route. The stock OpenWrt ttyd init script does not expose these options today, so I Love LuCI needs either a companion init script or an upstream init enhancement before tunnel mode can be enabled.
 - Add a LuCI-session-protected console gateway under the I Love LuCI app, for example `/cgi-bin/luci/admin/i-love-luci/console/<token>`.
@@ -1146,7 +1146,7 @@ Preferred future helper:
 - Keep ttyd running `/bin/login -f root` behind the gateway so the terminal still does not prompt for router credentials, but never expose the helper ttyd credential to browser history, logs, or page JavaScript.
 - Reject cross-origin requests and set `Cache-Control: no-store` on every console-token response.
 
-Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be treated as a convenience bridge, not a hardened remote console. Public release hardening should use the session-bound proxy/token gateway above; per-launch ttyd credential rotation only reduces exposure duration, it does not remove credential exposure.
+Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be treated as a convenience bridge, not a hardened remote console. Public release hardening should use the session-bound proxy/token gateway above; per-launch ttyd credential rotation only reduces exposure duration, it does not remove credential exposure. See [CONSOLE_TUNNEL.md](CONSOLE_TUNNEL.md) for the tunnel design and implementation constraints found on the `172.16.172.1` test router.
 
 Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
 

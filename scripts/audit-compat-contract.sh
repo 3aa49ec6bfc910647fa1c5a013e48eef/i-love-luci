@@ -233,6 +233,16 @@ for base in scan_roots:
 			required_model = "User routing has only three outcomes: supported native route, LuCI compat route, or intentionally hidden route."
 			if required_model not in text:
 				failures.append(f"{relative_path}: current compatibility model must keep the three-outcome route contract")
+		if relative_path == Path("docs/CONSOLE_TUNNEL.md"):
+			for required_console_doc_term in (
+				'transport: "direct"',
+				"tunnelAvailable: false",
+				"requiresDirectConnectivity: true",
+				"current uHTTPd source loads only hard-coded plugins",
+				"not sufficient for a ttyd tunnel",
+			):
+				if required_console_doc_term not in text:
+					failures.append(f"{relative_path}: missing console tunnel constraint {required_console_doc_term}")
 		archived_history = False
 		for line_no, line in enumerate(text.splitlines(), 1):
 			if path.name == "UI_REFACTOR.md" and line.startswith("Historical validation notes below"):
