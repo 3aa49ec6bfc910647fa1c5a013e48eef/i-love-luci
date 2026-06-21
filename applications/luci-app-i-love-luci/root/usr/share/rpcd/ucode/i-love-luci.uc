@@ -653,6 +653,19 @@ function base64_decode(data) {
 	return output;
 }
 
+function split_lines(text) {
+	let lines = split('' + (text || ''), '\n');
+	let out = [];
+
+	for (let line in lines) {
+		line = trim(line);
+		if (length(line))
+			push(out, line);
+	}
+
+	return out;
+}
+
 function safe_read(path) {
 	try {
 		return readfile(path) || '';
@@ -8378,20 +8391,89 @@ function create_config_backup(dry_run) {
 	};
 }
 
-function flash_backup_context() {
-	let list = command_exists('sysupgrade') ? split(trim(shell_output('/sbin/sysupgrade -l 2>/dev/null')), '\n') : [];
-	let filtered = [];
+function flash_storage_size(procmtd, procpart) {
+	let kernsize = 0;
+	let rootsize = 0;
+	let wholesize = 0;
 
-	for (let line in list) {
-		line = trim(line);
-		if (length(line))
-			push(filtered, line);
+	for (let line in split('' + (procmtd || ''), '\n')) {
+		let match_line = match(line, /^mtd\d+: ([0-9a-f]+) [0-9a-f]+ "(.+)"$/);
+		let size = match_line ? int(match_line[1], 16) : 0;
+		let name = match_line ? match_line[2] : '';
+
+		if ((name == 'linux' || name == 'firmware') && size > wholesize)
+			wholesize = size;
+		else if (name == 'kernel' || name == 'kernel0')
+			kernsize = size;
+		else if (name == 'rootfs' || name == 'rootfs0' || name == 'ubi' || name == 'ubi0')
+			rootsize = size;
 	}
+
+	if (wholesize > 0)
+		return wholesize;
+
+	if (kernsize > 0 && rootsize > kernsize)
+		return kernsize + rootsize;
+
+	for (let line in split('' + (procpart || ''), '\n')) {
+		let match_line = match(line, /^\s*\d+\s+\d+\s+(\d+)\s+(\S+)$/);
+		if (!match_line)
+			continue;
+
+		let size = int(match_line[1], 10);
+		let name = match_line[2];
+
+		if (!match(name, /\d/) && size > 2048 && wholesize == 0)
+			wholesize = size * 1024;
+	}
+
+	return wholesize;
+}
+
+function safe_filename(value) {
+	value = replace(trim('' + (value || 'openwrt')), /[^A-Za-z0-9_.-]/g, '-');
+	return length(value) ? value : 'openwrt';
+}
+
+function flash_mtd_blocks(procmtd) {
+	let blocks = [];
+	let hostname = safe_filename(((ubus.call('system', 'board') || {}).hostname) || 'openwrt');
+
+	for (let line in split('' + (procmtd || ''), '\n')) {
+		let match_line = match(line, /^mtd(\d+):\s+([0-9a-f]+)\s+([0-9a-f]+)\s+"(.+?)"$/);
+		if (!match_line)
+			continue;
+
+		let number = match_line[1];
+		let name = match_line[4];
+
+		push(blocks, {
+			id: number,
+			name,
+			size: int(match_line[2], 16),
+			eraseSize: int(match_line[3], 16),
+			path: `/dev/mtdblock${number}`,
+			filename: `${hostname}.mtd${number}.${safe_filename(name)}.bin`
+		});
+	}
+
+	return blocks;
+}
+
+function flash_backup_context() {
+	let proc_mtd = readfile('/proc/mtd') || '';
+	let proc_partitions = readfile('/proc/partitions') || '';
+	let proc_mounts = readfile('/proc/mounts') || '';
+
+	let backup_list = command_exists('sysupgrade') ? split_lines(shell_output('/sbin/sysupgrade -l 2>/dev/null')) : [];
 
 	return {
 		available: command_exists('sysupgrade'),
-		list: filtered,
-		config: readfile('/etc/sysupgrade.conf') || ''
+		hasRootfsData: match(proc_mtd, /"rootfs_data"/) || match(proc_mounts, /overlayfs:\/overlay \/ /) ? true : false,
+		storageSize: flash_storage_size(proc_mtd, proc_partitions),
+		list: backup_list,
+		config: readfile('/etc/sysupgrade.conf') || '',
+		mtdBlocks: flash_mtd_blocks(proc_mtd)
 	};
 }
 
@@ -8425,6 +8507,301 @@ function save_sysupgrade_config(text) {
 		message: changed ? 'Backup configuration list saved.' : 'Backup configuration list already up to date.',
 		changed,
 		config: normalized
+	};
+}
+
+function restore_backup_validate(filename, data) {
+	if (length('' + (data || '')) > 12 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'Backup archive exceeds the native restore upload limit.',
+			filename: safe_filename(filename || 'backup.tar.gz'),
+			entries: []
+		};
+
+	let decoded = base64_decode(data);
+
+	if (!length(decoded))
+		return {
+			ok: false,
+			message: 'Backup archive is empty or invalid.',
+			filename: safe_filename(filename || 'backup.tar.gz'),
+			entries: []
+		};
+
+	if (length(decoded) > 8 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'Backup archive exceeds the native restore upload limit.',
+			filename: safe_filename(filename || 'backup.tar.gz'),
+			entries: []
+		};
+
+	let path = '/tmp/i-love-luci-restore-backup.tar.gz';
+	let quoted = quote_command_args([path])[0];
+
+	writefile(path, decoded);
+	system(`chmod 0600 ${quoted} >/dev/null 2>&1 || true`);
+
+	let output = shell_output(`/bin/tar -tzf ${quoted} 2>&1 | sed -n "1,300p"`);
+	let code = system(`/bin/tar -tzf ${quoted} >/dev/null 2>&1`);
+
+	if (code != 0) {
+		system(`rm -f ${quoted} >/dev/null 2>&1 || true`);
+		return {
+			ok: false,
+			message: 'Uploaded backup archive is not readable.',
+			filename: safe_filename(filename || 'backup.tar.gz'),
+			entries: split_lines(output)
+		};
+	}
+
+	return {
+		ok: true,
+		message: 'Backup archive is valid. Continue only if you intend to restore and reboot.',
+		filename: safe_filename(filename || 'backup.tar.gz'),
+		entries: split_lines(output)
+	};
+}
+
+function restore_backup_apply(confirm) {
+	if (confirm != 'restore-backup')
+		return {
+			accepted: false,
+			message: 'Restore refused. Exact confirmation is required.'
+		};
+
+	let path = '/tmp/i-love-luci-restore-backup.tar.gz';
+	let quoted = quote_command_args([path])[0];
+	let info = stat(path);
+
+	if (info?.type != 'file')
+		return {
+			accepted: false,
+			message: 'No validated backup archive is staged.'
+		};
+
+	let code = system(`/sbin/sysupgrade --restore-backup ${quoted} >/tmp/i-love-luci-restore.log 2>&1`);
+	if (code != 0)
+		return {
+			accepted: false,
+			message: 'Restore command failed.',
+			output: readfile('/tmp/i-love-luci-restore.log') || ''
+		};
+
+	system('/sbin/reboot >/dev/null 2>&1 &');
+	return {
+		accepted: true,
+		message: 'Backup restore accepted. Router is rebooting.'
+	};
+}
+
+function firstboot_apply(confirm) {
+	if (confirm != 'erase-settings')
+		return {
+			accepted: false,
+			message: 'Factory reset refused. Exact confirmation is required.'
+		};
+
+	system('/sbin/firstboot -r -y >/dev/null 2>&1 &');
+	return {
+		accepted: true,
+		message: 'Factory reset accepted. Router is rebooting.'
+	};
+}
+
+function mtdblock_download(id) {
+	id = '' + (id || '');
+
+	let selected = null;
+	for (let block in flash_mtd_blocks(readfile('/proc/mtd') || '')) {
+		if (block.id == id) {
+			selected = block;
+			break;
+		}
+	}
+
+	if (!selected)
+		return {
+			ok: false,
+			message: 'Unknown MTD block.',
+			filename: '',
+			size: 0,
+			mime: 'application/octet-stream',
+			data: ''
+		};
+
+	let path = selected.path;
+	let info = stat(path);
+
+	if (info?.type != 'block')
+		return {
+			ok: false,
+			message: 'MTD block device is not available.',
+			filename: selected.filename,
+			size: 0,
+			mime: 'application/octet-stream',
+			data: ''
+		};
+
+	if (selected.size > 8 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'MTD block is larger than the native download limit.',
+			filename: selected.filename,
+			size: selected.size,
+			mime: 'application/octet-stream',
+			data: ''
+		};
+
+	let data = base64_encode(readfile(path) || '');
+
+	return {
+		ok: length(data) > 0,
+		message: length(data) > 0 ? 'MTD block captured.' : 'MTD block read failed.',
+		filename: selected.filename,
+		size: selected.size,
+		mime: 'application/octet-stream',
+		data
+	};
+}
+
+function firmware_validate(filename, data) {
+	if (!command_exists('sysupgrade'))
+		return {
+			ok: false,
+			message: 'sysupgrade is not available on this target.',
+			filename: safe_filename(filename || 'firmware.bin'),
+			size: 0,
+			checksum: '',
+			sha256sum: '',
+			valid: false,
+			forceable: false,
+			allowBackup: false,
+			tooBig: false,
+			output: ''
+		};
+
+	if (length('' + (data || '')) > 96 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'Firmware image exceeds the native ubus upload limit. Use LuCI compat for large firmware images.',
+			filename: safe_filename(filename || 'firmware.bin'),
+			size: 0,
+			checksum: '',
+			sha256sum: '',
+			valid: false,
+			forceable: false,
+			allowBackup: false,
+			tooBig: false,
+			output: ''
+		};
+
+	let decoded = base64_decode(data);
+	if (!length(decoded))
+		return {
+			ok: false,
+			message: 'Firmware image is empty or invalid.',
+			filename: safe_filename(filename || 'firmware.bin'),
+			size: 0,
+			checksum: '',
+			sha256sum: '',
+			valid: false,
+			forceable: false,
+			allowBackup: false,
+			tooBig: false,
+			output: ''
+		};
+
+	let path = '/tmp/i-love-luci-firmware.bin';
+	let quoted = quote_command_args([path])[0];
+
+	writefile(path, decoded);
+	system(`chmod 0600 ${quoted} >/dev/null 2>&1 || true`);
+
+	let info = stat(path);
+	let board = ubus.call('system', 'board') || {};
+	let validation = ubus.call('system', 'validate_firmware_image', { path }) || {};
+	let test_output = shell_output(`/sbin/sysupgrade --test ${quoted} 2>&1 | sed -n "1,220p"`);
+	let test_code = system(`/sbin/sysupgrade --test ${quoted} >/dev/null 2>&1`);
+	let storage = flash_storage_size(readfile('/proc/mtd') || '', readfile('/proc/partitions') || '');
+	let size = info?.size || length(decoded);
+	let md5 = trim(shell_output(`md5sum ${quoted} 2>/dev/null | awk '{print $1}'`));
+	let sha256 = trim(shell_output(`sha256sum ${quoted} 2>/dev/null | awk '{print $1}'`));
+
+	return {
+		ok: true,
+		message: test_code == 0 && validation.valid ? 'Firmware image passed validation.' : 'Firmware image requires review before flashing.',
+		filename: safe_filename(filename || 'firmware.bin'),
+		board: board.model || '',
+		size,
+		checksum: md5,
+		sha256sum: sha256,
+		valid: validation.valid ? true : false,
+		forceable: validation.forceable ? true : false,
+		allowBackup: validation.allow_backup ? true : false,
+		tooBig: storage > 0 && size > storage,
+		output: test_output
+	};
+}
+
+function firmware_flash(options) {
+	options ||= {};
+
+	if (options.confirm != 'flash-firmware')
+		return {
+			accepted: false,
+			message: 'Firmware flash refused. Exact confirmation is required.'
+		};
+
+	let path = '/tmp/i-love-luci-firmware.bin';
+	let quoted = quote_command_args([path])[0];
+	let info = stat(path);
+
+	if (info?.type != 'file')
+		return {
+			accepted: false,
+			message: 'No validated firmware image is staged.'
+		};
+
+	let validation = ubus.call('system', 'validate_firmware_image', { path }) || {};
+	let storage = flash_storage_size(readfile('/proc/mtd') || '', readfile('/proc/partitions') || '');
+	let too_big = storage > 0 && info.size > storage;
+
+	if (too_big)
+		return {
+			accepted: false,
+			message: 'Firmware flash refused. Image is larger than available flash storage.'
+		};
+
+	if (!validation.valid && !options.force)
+		return {
+			accepted: false,
+			message: 'Firmware flash refused. Image validation failed.'
+		};
+
+	if (options.force && !validation.forceable)
+		return {
+			accepted: false,
+			message: 'Firmware flash refused. This image is not forceable.'
+		};
+
+	let args = [];
+	if (!options.keep)
+		push(args, '-n');
+	if (options.force)
+		push(args, '--force');
+	if (options.keep && options.skipOriginal)
+		push(args, '-u');
+	if (options.keep && options.backupPackages)
+		push(args, '-k');
+
+	push(args, path);
+
+	system('/sbin/sysupgrade ' + join(' ', quote_command_args(args)) + ' >/dev/null 2>&1 &');
+	return {
+		accepted: true,
+		message: 'Firmware flash accepted. Router is flashing and will reboot.'
 	};
 }
 
@@ -8534,7 +8911,20 @@ function native_page(page) {
 		];
 	}
 	else if (page == 'flash') {
-		data.flashBackup = flash_backup_context();
+		try {
+			data.flashBackup = flash_backup_context();
+		}
+		catch (e) {
+			data.flashBackup = {
+				available: command_exists('sysupgrade'),
+				hasRootfsData: false,
+				storageSize: 0,
+				list: [],
+				config: readfile('/etc/sysupgrade.conf') || '',
+				mtdBlocks: [],
+				error: '' + e
+			};
+		}
 		data.commands = [
 			{ title: 'Mounted filesystems', output: shell_output('df -h') },
 			{ title: 'Flash partitions', output: shell_output('cat /proc/mtd 2>/dev/null || true') }
@@ -9651,6 +10041,62 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(save_sysupgrade_config(request.args.text || ''));
+		}
+	},
+
+	restore_backup_validate: {
+		args: {
+			filename: '',
+			data: ''
+		},
+		call: function(request) {
+			return respond(restore_backup_validate(request.args.filename || '', request.args.data || ''));
+		}
+	},
+
+	restore_backup_apply: {
+		args: {
+			confirm: ''
+		},
+		call: function(request) {
+			return respond(restore_backup_apply(request.args.confirm || ''));
+		}
+	},
+
+	firstboot_apply: {
+		args: {
+			confirm: ''
+		},
+		call: function(request) {
+			return respond(firstboot_apply(request.args.confirm || ''));
+		}
+	},
+
+	mtdblock_download: {
+		args: {
+			id: ''
+		},
+		call: function(request) {
+			return respond(mtdblock_download(request.args.id || ''));
+		}
+	},
+
+	firmware_validate: {
+		args: {
+			filename: '',
+			data: ''
+		},
+		call: function(request) {
+			return respond(firmware_validate(request.args.filename || '', request.args.data || ''));
+		}
+	},
+
+	firmware_flash: {
+		args: {
+			options: {}
+		},
+		call: function(request) {
+			return respond(firmware_flash(request.args.options || {}));
 		}
 	},
 

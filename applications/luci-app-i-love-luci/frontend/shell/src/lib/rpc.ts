@@ -485,10 +485,22 @@ export type ConfigBackupResult = {
 	data: string;
 };
 
+export type FlashMtdBlock = {
+	id: string;
+	name: string;
+	size: number;
+	eraseSize: number;
+	path: string;
+	filename: string;
+};
+
 export type FlashBackupContext = {
 	available: boolean;
+	hasRootfsData?: boolean;
+	storageSize?: number;
 	list: string[];
 	config: string;
+	mtdBlocks?: FlashMtdBlock[];
 };
 
 export type SysupgradeConfigResult = {
@@ -496,6 +508,42 @@ export type SysupgradeConfigResult = {
 	message: string;
 	changed: boolean;
 	config: string;
+};
+
+export type RestoreBackupValidationResult = {
+	ok: boolean;
+	message: string;
+	filename: string;
+	entries: string[];
+};
+
+export type DestructiveActionResult = {
+	accepted: boolean;
+	message: string;
+	output?: string;
+};
+
+export type FirmwareValidationResult = {
+	ok: boolean;
+	message: string;
+	filename: string;
+	board?: string;
+	size: number;
+	checksum: string;
+	sha256sum: string;
+	valid: boolean;
+	forceable: boolean;
+	allowBackup: boolean;
+	tooBig: boolean;
+	output: string;
+};
+
+export type FirmwareFlashOptions = {
+	confirm: "flash-firmware";
+	keep: boolean;
+	force: boolean;
+	skipOriginal: boolean;
+	backupPackages: boolean;
 };
 
 export type DropbearConfigInput = {
@@ -2439,6 +2487,93 @@ export async function saveSysupgradeConfig(text: string): Promise<SysupgradeConf
 			message: "Backup configuration list save failed.",
 			changed: false,
 			config: text,
+		};
+	}
+}
+
+export async function validateRestoreBackup(filename: string, data: string): Promise<RestoreBackupValidationResult> {
+	try {
+		return await callBridge<RestoreBackupValidationResult>("restore_backup_validate", { filename, data });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Backup archive validation failed.",
+			filename,
+			entries: [],
+		};
+	}
+}
+
+export async function applyRestoreBackup(): Promise<DestructiveActionResult> {
+	try {
+		return await callBridge<DestructiveActionResult>("restore_backup_apply", { confirm: "restore-backup" });
+	}
+	catch {
+		return {
+			accepted: false,
+			message: "Backup restore request failed.",
+		};
+	}
+}
+
+export async function applyFactoryReset(): Promise<DestructiveActionResult> {
+	try {
+		return await callBridge<DestructiveActionResult>("firstboot_apply", { confirm: "erase-settings" });
+	}
+	catch {
+		return {
+			accepted: false,
+			message: "Factory reset request failed.",
+		};
+	}
+}
+
+export async function downloadMtdBlock(id: string): Promise<ConfigBackupResult> {
+	try {
+		return await callBridge<ConfigBackupResult>("mtdblock_download", { id });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "MTD block download failed.",
+			filename: "",
+			size: 0,
+			mime: "application/octet-stream",
+			data: "",
+		};
+	}
+}
+
+export async function validateFirmwareImage(filename: string, data: string): Promise<FirmwareValidationResult> {
+	try {
+		return await callBridge<FirmwareValidationResult>("firmware_validate", { filename, data });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Firmware image validation failed.",
+			filename,
+			size: 0,
+			checksum: "",
+			sha256sum: "",
+			valid: false,
+			forceable: false,
+			allowBackup: false,
+			tooBig: false,
+			output: "",
+		};
+	}
+}
+
+export async function flashFirmware(options: FirmwareFlashOptions): Promise<DestructiveActionResult> {
+	try {
+		return await callBridge<DestructiveActionResult>("firmware_flash", { options });
+	}
+	catch {
+		return {
+			accepted: false,
+			message: "Firmware flash request failed.",
 		};
 	}
 }

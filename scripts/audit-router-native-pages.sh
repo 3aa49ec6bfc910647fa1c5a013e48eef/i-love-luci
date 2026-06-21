@@ -263,6 +263,18 @@ for page, rules in expected_pages.items():
 		if not isinstance(data.get(key), dict):
 			failures.append(f"{page}: expected {key} object")
 
+	if page == "flash":
+		backup = data.get("flashBackup") or {}
+		for key in ("available", "hasRootfsData", "storageSize"):
+			if key not in backup:
+				failures.append(f"flash: flashBackup missing {key}")
+		if not isinstance(backup.get("list"), list):
+			failures.append("flash: flashBackup missing backup file list")
+		if not isinstance(backup.get("config"), str):
+			failures.append("flash: flashBackup missing sysupgrade config text")
+		if not isinstance(backup.get("mtdBlocks"), list):
+			failures.append("flash: flashBackup missing mtdBlocks list")
+
 for service, rules in expected_services.items():
 	payload = json_after_marker(f"---ILOVELUCI-SERVICE:{service}---")
 	if not payload or not payload.get("ok"):

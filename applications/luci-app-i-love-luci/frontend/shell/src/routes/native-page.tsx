@@ -5,11 +5,16 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
+	applyFactoryReset,
+	applyRestoreBackup,
 	confirmReboot,
 	createConfigBackup,
 	deleteUpnpdActiveRule,
+	downloadMtdBlock,
+	flashFirmware,
 	getNativePage,
 	getServiceDetail,
 	runCustomCommand,
@@ -27,6 +32,8 @@ import {
 	removeUhttpdCertificate,
 	saveUhttpdCertificateFile,
 	saveUhttpdConfigs,
+	validateFirmwareImage,
+	validateRestoreBackup,
 	runServiceAction,
 	runStartupAction,
 	runDiagnostics,
@@ -44,6 +51,8 @@ import {
 	type CustomCommand,
 	type CustomCommandResult,
 	type DropbearConfigInput,
+	type FirmwareFlashOptions,
+	type FirmwareValidationResult,
 	type InitAction,
 	type LedConfigRow,
 	type NativePageData,
@@ -51,6 +60,7 @@ import {
 	type PackageActionResult,
 	type PackageFeedRow,
 	type PackageSearchResult,
+	type RestoreBackupValidationResult,
 	type ServiceFile,
 	type UpnpdConfigInput,
 	type UpnpdActiveRule,
@@ -92,6 +102,8 @@ type FlashPartitionEntry = {
 	eraseSize: string;
 	name: string;
 };
+
+const nativeFirmwareUploadLimit = 64 * 1024 * 1024;
 
 type RouteEntry = {
 	target: string;
@@ -4993,6 +5005,25 @@ function FlashSummary({ data }: { data: NativePageData }) {
 	const backup = data.flashBackup;
 	const [checkingBackup, setCheckingBackup] = useState(false);
 	const [creatingBackup, setCreatingBackup] = useState(false);
+	const [restoreValidation, setRestoreValidation] = useState<RestoreBackupValidationResult | null>(null);
+	const [restoreConfirm, setRestoreConfirm] = useState("");
+	const [restoreChecking, setRestoreChecking] = useState(false);
+	const [restoreApplying, setRestoreApplying] = useState(false);
+	const [resetConfirm, setResetConfirm] = useState("");
+	const [resetting, setResetting] = useState(false);
+	const [selectedMtd, setSelectedMtd] = useState(backup?.mtdBlocks?.[0]?.id ?? "");
+	const [downloadingMtd, setDownloadingMtd] = useState(false);
+	const [firmwareValidation, setFirmwareValidation] = useState<FirmwareValidationResult | null>(null);
+	const [firmwareConfirm, setFirmwareConfirm] = useState("");
+	const [firmwareChecking, setFirmwareChecking] = useState(false);
+	const [firmwareFlashing, setFirmwareFlashing] = useState(false);
+	const [flashKeep, setFlashKeep] = useState(true);
+	const [flashForce, setFlashForce] = useState(false);
+	const [flashSkipOriginal, setFlashSkipOriginal] = useState(false);
+	const [flashBackupPackages, setFlashBackupPackages] = useState(true);
+
+	const hasRootfsData = Boolean(backup?.hasRootfsData);
+	const mtdBlocks = backup?.mtdBlocks ?? [];
 
 	async function checkBackup() {
 		setCheckingBackup(true);
@@ -5021,6 +5052,116 @@ function FlashSummary({ data }: { data: NativePageData }) {
 		toast.success(`${result.message} ${formatBytes(result.size)}`);
 	}
 
+	async function selectRestoreArchive(file: File | undefined) {
+		if (!file) {
+			return;
+		}
+
+		setRestoreChecking(true);
+		setRestoreConfirm("");
+		const result = await validateRestoreBackup(file.name, await fileToBase64(file));
+		setRestoreChecking(false);
+		setRestoreValidation(result);
+
+		if (result.ok) {
+			toast.success(result.message);
+			return;
+		}
+
+		toast.error(result.message);
+	}
+
+	async function restoreBackup() {
+		setRestoreApplying(true);
+		const result = await applyRestoreBackup();
+		setRestoreApplying(false);
+
+		if (result.accepted) {
+			toast.success(result.message);
+			return;
+		}
+
+		toast.error(result.message);
+	}
+
+	async function factoryReset() {
+		setResetting(true);
+		const result = await applyFactoryReset();
+		setResetting(false);
+
+		if (result.accepted) {
+			toast.success(result.message);
+			return;
+		}
+
+		toast.error(result.message);
+	}
+
+	async function downloadSelectedMtd() {
+		if (!selectedMtd) {
+			toast.error("Select an MTD block first.");
+			return;
+		}
+
+		setDownloadingMtd(true);
+		const result = await downloadMtdBlock(selectedMtd);
+		setDownloadingMtd(false);
+
+		if (!result.ok || !result.data) {
+			toast.error(result.message);
+			return;
+		}
+
+		downloadBase64File(result.filename || "mtdblock.bin", result.mime || "application/octet-stream", result.data);
+		toast.success(`${result.message} ${formatBytes(result.size)}`);
+	}
+
+	async function selectFirmwareImage(file: File | undefined) {
+		if (!file) {
+			return;
+		}
+
+		if (file.size > nativeFirmwareUploadLimit) {
+			toast.error("Firmware image is too large for native ubus upload. Use LuCI compat for this image.");
+			return;
+		}
+
+		setFirmwareChecking(true);
+		setFirmwareConfirm("");
+		setFlashForce(false);
+		const result = await validateFirmwareImage(file.name, await fileToBase64(file));
+		setFirmwareChecking(false);
+		setFirmwareValidation(result);
+
+		if (result.ok) {
+			toast.success(result.message);
+			return;
+		}
+
+		toast.error(result.message);
+	}
+
+	async function startFirmwareFlash() {
+		const options: FirmwareFlashOptions = {
+			confirm: "flash-firmware",
+			keep: flashKeep,
+			force: flashForce,
+			skipOriginal: flashSkipOriginal,
+			backupPackages: flashBackupPackages,
+		};
+
+		setFirmwareFlashing(true);
+		const result = await flashFirmware(options);
+		setFirmwareFlashing(false);
+
+		if (result.accepted) {
+			toast.success(result.message);
+			return;
+		}
+
+		toast.error(result.message);
+	}
+
 	return (
 		<div className="grid gap-4">
 			<div className="grid gap-3 sm:grid-cols-3">
@@ -5043,9 +5184,68 @@ function FlashSummary({ data }: { data: NativePageData }) {
 				}
 			>
 				<p className="text-sm text-muted-foreground">
-					Create an authenticated sysupgrade configuration archive for this router. Firmware image upload and flashing remain guarded.
+					Create an authenticated sysupgrade configuration archive for this router.
 				</p>
 			</Panel>
+			<Panel title="Restore and reset">
+				<div className="grid gap-4 md:grid-cols-2">
+					<div className="grid gap-2 text-sm">
+						<div className="font-medium">Restore backup archive</div>
+						<Input accept=".gz,.tgz,.tar.gz" disabled={restoreChecking || restoreApplying} onChange={(event) => void selectRestoreArchive(event.target.files?.[0])} type="file" />
+						<div className="text-xs text-muted-foreground">Archive is validated before restore. Restore reboots the router.</div>
+					</div>
+					<div className="grid gap-2 text-sm">
+						<div className="font-medium">Factory reset</div>
+						<Input
+							disabled={!hasRootfsData || resetting}
+							onChange={(event) => setResetConfirm(event.target.value)}
+							placeholder="type erase-settings"
+							value={resetConfirm}
+						/>
+						<Button
+							disabled={!hasRootfsData || resetConfirm !== "erase-settings" || resetting}
+							onClick={() => void factoryReset()}
+							type="button"
+							variant="destructive"
+						>
+							Factory reset
+						</Button>
+						<div className="text-xs text-muted-foreground">
+							{hasRootfsData ? "Erases configuration and reboots." : "Factory reset is unavailable on this target."}
+						</div>
+					</div>
+				</div>
+			</Panel>
+			<Panel title="Firmware image">
+				<div className="grid gap-2 text-sm">
+					<Input accept=".bin,.img,.itb,.trx,.tar,.gz" disabled={!backup?.available || firmwareChecking || firmwareFlashing} onChange={(event) => void selectFirmwareImage(event.target.files?.[0])} type="file" />
+					<div className="text-xs text-muted-foreground">
+						Image is staged under /tmp and checked with sysupgrade before flashing. Native upload limit is {formatBytes(nativeFirmwareUploadLimit)}; use LuCI compat for larger images.
+					</div>
+				</div>
+			</Panel>
+			{mtdBlocks.length ? (
+				<Panel
+					title="MTD block download"
+					actions={
+						<Button disabled={!selectedMtd || downloadingMtd} onClick={() => void downloadSelectedMtd()} size="sm" type="button" variant="outline">
+							<Download className="size-4" />
+							Download
+						</Button>
+					}
+				>
+					<div className="grid gap-2 text-sm">
+						<select className="h-9 rounded-md border bg-card px-2 text-sm" onChange={(event) => setSelectedMtd(event.target.value)} value={selectedMtd}>
+							{mtdBlocks.map((block) => (
+								<option key={block.id} value={block.id}>
+									mtd{block.id}: {block.name} ({formatBytes(block.size)})
+								</option>
+							))}
+						</select>
+						<div className="text-xs text-muted-foreground">Raw MTD downloads are intended for recovery/debug workflows.</div>
+					</div>
+				</Panel>
+			) : null}
 			{backup ? (
 				<BackupFileListTable available={backup.available} entries={backup.list} />
 			) : null}
@@ -5059,6 +5259,108 @@ function FlashSummary({ data }: { data: NativePageData }) {
 			) : null}
 			<FilesystemTable entries={filesystems} />
 			<FlashPartitionTable entries={partitions} />
+			<Dialog className="max-w-2xl" onOpenChange={(open) => !open && setRestoreValidation(null)} open={Boolean(restoreValidation)} title="Restore backup archive">
+				{restoreValidation ? (
+					<div className="grid gap-4">
+						<div className="grid gap-1 text-sm">
+							<div className="font-medium">{restoreValidation.filename}</div>
+							<div className={restoreValidation.ok ? "text-muted-foreground" : "text-destructive"}>{restoreValidation.message}</div>
+						</div>
+						<div className="max-h-72 overflow-auto rounded-md border">
+							<table className="w-full text-left text-xs">
+								<tbody>
+									{restoreValidation.entries.length ? (
+										restoreValidation.entries.map((entry) => (
+											<tr className="border-b last:border-0" key={entry}>
+												<td className="px-3 py-2 font-mono">{entry}</td>
+											</tr>
+										))
+									) : (
+										<tr>
+											<td className="px-3 py-6 text-muted-foreground">No archive entries reported.</td>
+										</tr>
+									)}
+								</tbody>
+							</table>
+						</div>
+						<Input disabled={!restoreValidation.ok || restoreApplying} onChange={(event) => setRestoreConfirm(event.target.value)} placeholder="type restore-backup" value={restoreConfirm} />
+						<div className="flex justify-end gap-2">
+							<Button onClick={() => setRestoreValidation(null)} type="button" variant="outline">
+								Cancel
+							</Button>
+							<Button disabled={!restoreValidation.ok || restoreConfirm !== "restore-backup" || restoreApplying} onClick={() => void restoreBackup()} type="button" variant="destructive">
+								Restore and reboot
+							</Button>
+						</div>
+					</div>
+				) : null}
+			</Dialog>
+			<Dialog className="max-w-2xl" onOpenChange={(open) => !open && setFirmwareValidation(null)} open={Boolean(firmwareValidation)} title="Flash firmware image">
+				{firmwareValidation ? (
+					<div className="grid gap-4">
+						<div className="grid gap-1 text-sm">
+							<div className="font-medium">{firmwareValidation.filename}</div>
+							<div className={firmwareValidation.valid && !firmwareValidation.tooBig ? "text-muted-foreground" : "text-destructive"}>{firmwareValidation.message}</div>
+						</div>
+						<SimpleValueTable
+							columns={["Field", "Value"]}
+							empty="No validation details."
+							rows={[
+								["Size", formatBytes(firmwareValidation.size)],
+								["MD5", firmwareValidation.checksum || "unknown"],
+								["SHA256", firmwareValidation.sha256sum || "unknown"],
+								["Valid image", firmwareValidation.valid ? "yes" : "no"],
+								["Allows backup", firmwareValidation.allowBackup ? "yes" : "no"],
+								["Too large", firmwareValidation.tooBig ? "yes" : "no"],
+							]}
+							title="Validation"
+						/>
+						{firmwareValidation.output ? (
+							<div className="max-h-40 overflow-auto rounded-md border bg-secondary/30 p-3 text-xs">
+								{firmwareValidation.output.split("\n").map((line, index) => (
+									<div className="font-mono" key={`${index}.${line}`}>
+										{line || " "}
+									</div>
+								))}
+							</div>
+						) : null}
+						<div className="grid gap-2 text-sm">
+							<label className="flex items-center gap-2">
+								<input checked={flashKeep} disabled={!firmwareValidation.allowBackup} onChange={(event) => setFlashKeep(event.target.checked)} type="checkbox" />
+								Keep current configuration
+							</label>
+							<label className="flex items-center gap-2">
+								<input checked={flashBackupPackages} disabled={!flashKeep} onChange={(event) => setFlashBackupPackages(event.target.checked)} type="checkbox" />
+								Include installed package list in backup
+							</label>
+							<label className="flex items-center gap-2">
+								<input checked={flashSkipOriginal} disabled={!flashKeep} onChange={(event) => setFlashSkipOriginal(event.target.checked)} type="checkbox" />
+								Skip backup files identical to /rom
+							</label>
+							{(!firmwareValidation.valid || firmwareValidation.tooBig) && firmwareValidation.forceable ? (
+								<label className="flex items-center gap-2 text-destructive">
+									<input checked={flashForce} onChange={(event) => setFlashForce(event.target.checked)} type="checkbox" />
+									Force upgrade
+								</label>
+							) : null}
+						</div>
+						<Input disabled={firmwareFlashing} onChange={(event) => setFirmwareConfirm(event.target.value)} placeholder="type flash-firmware" value={firmwareConfirm} />
+						<div className="flex justify-end gap-2">
+							<Button onClick={() => setFirmwareValidation(null)} type="button" variant="outline">
+								Cancel
+							</Button>
+							<Button
+								disabled={firmwareConfirm !== "flash-firmware" || firmwareFlashing || firmwareValidation.tooBig || (!firmwareValidation.valid && !flashForce)}
+								onClick={() => void startFirmwareFlash()}
+								type="button"
+								variant="destructive"
+							>
+								Flash and reboot
+							</Button>
+						</div>
+					</div>
+				) : null}
+			</Dialog>
 		</div>
 	);
 }
@@ -5111,6 +5413,17 @@ function downloadBase64File(filename: string, mime: string, data: string) {
 	anchor.click();
 	anchor.remove();
 	URL.revokeObjectURL(url);
+}
+
+async function fileToBase64(file: File) {
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	let binary = "";
+
+	for (let offset = 0; offset < bytes.length; offset += 8192) {
+		binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
+	}
+
+	return btoa(binary);
 }
 
 function FilesystemTable({ entries }: { entries: FilesystemEntry[] }) {
