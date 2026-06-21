@@ -73,7 +73,7 @@ Then open:
 http://router-address/cgi-bin/luci/admin/i-love-luci
 ```
 
-Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. If you do not want to add the feed, install the matching GitHub Release asset manually with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
+Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. Feed installs pull the `i-love-luci-console` helper through the package dependency. If you do not want to add the feed, install the matching GitHub Release assets manually: install both `i-love-luci-console` and `luci-app-i-love-luci` with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
 
 ## Screenshots
 
@@ -331,6 +331,6 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 ## Security Notes
 
 - The React app is never the source of security truth. Privileged work must go through LuCI, `rpcd`, `ubus`, or OpenWrt services.
-- The web console bridge depends on `ttyd`. Treat the per-launch console credential as sensitive; it is rotated when opened but still appears in the ttyd launch URL.
+- The web console tunnel uses `i-love-luci-console` when installed and running. Terminal I/O stays behind authenticated LuCI RPC calls; direct `ttyd` is retained only as a trusted-LAN fallback when the helper is unavailable.
 - Passkey and MFA support require server-side challenge and secret handling before they are production-ready.
 - Do not commit router credentials, package signing keys, or screenshots containing real hostnames, MACs, leases, addresses, or secrets.
