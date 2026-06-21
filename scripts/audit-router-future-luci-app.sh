@@ -29,6 +29,7 @@ cleanup() {
 	if [ "${installed}" = "1" ]; then
 		apk del "${pkg}" >/dev/null 2>&1 || true
 	fi
+	rm -f /tmp/i-love-luci-future-app-uci-before.txt 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -110,6 +111,14 @@ route_mode_guard_installed_routes() {
 echo "---ILOVELUCI-WORLD-BEFORE---"
 sha256sum /etc/apk/world 2>/dev/null || true
 
+echo "---ILOVELUCI-UCI-CHANGES-BEFORE---"
+uci changes | sort > /tmp/i-love-luci-future-app-uci-before.txt
+cat /tmp/i-love-luci-future-app-uci-before.txt
+if [ -s /tmp/i-love-luci-future-app-uci-before.txt ]; then
+	echo "---ILOVELUCI-UCI-DIRTY-ABORT---"
+	exit 4
+fi
+
 if apk info -e "${pkg}" >/dev/null 2>&1; then
 	echo "---ILOVELUCI-PREINSTALLED---"
 	printf '%s\n' "${pkg}"
@@ -142,8 +151,8 @@ menu_tree_retry
 echo "---ILOVELUCI-WORLD-AFTER---"
 sha256sum /etc/apk/world 2>/dev/null || true
 
-echo "---ILOVELUCI-UCI-CHANGES---"
-uci changes | wc -l
+echo "---ILOVELUCI-UCI-CHANGES-AFTER---"
+uci changes | sort
 SH
 
 python3 - "${REMOTE_SCRIPT}" "${OPENWRT_USER}" "${OPENWRT_PASSWORD}" <<'PY'
@@ -272,7 +281,34 @@ def sha_after(marker):
 	match = re.match(r"([0-9a-f]{64})\s+", line)
 	return match.group(1) if match else ""
 
+def lines_between(start_marker, end_marker=None):
+	start = raw.find(start_marker)
+	if start < 0:
+		return None
+	start += len(start_marker)
+	end = raw.find(end_marker, start) if end_marker else -1
+	text = raw[start:end if end >= 0 else len(raw)]
+	return [
+		line.strip()
+		for line in text.splitlines()
+		if line.strip()
+		and not line.startswith("spawn ")
+		and not line.startswith("Warning:")
+	]
+
 failures = []
+uci_before = lines_between(
+	"---ILOVELUCI-UCI-CHANGES-BEFORE---",
+	"---ILOVELUCI-UCI-DIRTY-ABORT---" if "---ILOVELUCI-UCI-DIRTY-ABORT---" in raw else "---ILOVELUCI-MENU-BEFORE---",
+)
+
+if "---ILOVELUCI-UCI-DIRTY-ABORT---" in raw:
+	print("I Love LuCI future LuCI app audit")
+	print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
+	print("\nFailures:")
+	print("- router has pre-existing pending UCI changes; refusing install/remove mutation audit")
+	raise SystemExit(1)
+
 if router_status != 0:
 	failures.append(f"remote install/remove audit exited with status {router_status}")
 
@@ -350,18 +386,14 @@ world_after = sha_after("---ILOVELUCI-WORLD-AFTER---")
 if world_before and world_after and world_before != world_after:
 	failures.append("apk world hash changed after install/remove cycle")
 
-uci_changes = None
-if "---ILOVELUCI-UCI-CHANGES---" in raw:
-	for line in raw.split("---ILOVELUCI-UCI-CHANGES---", 1)[1].splitlines():
-		line = line.strip()
-		if line.isdigit():
-			uci_changes = int(line)
-			break
+uci_after = lines_between("---ILOVELUCI-UCI-CHANGES-AFTER---")
 
-if uci_changes is None:
-	failures.append("uci changes count was not found")
-elif uci_changes != 0:
-	failures.append(f"uci changes is not clean after install/remove cycle: {uci_changes}")
+if uci_before is None:
+	failures.append("uci changes baseline was not found")
+elif uci_after is None:
+	failures.append("uci changes final state was not found")
+elif uci_before != uci_after:
+	failures.append("uci changes drifted after install/remove cycle")
 
 print("I Love LuCI future LuCI app audit")
 print(f"new_routes={len(new_paths)}")
@@ -370,7 +402,8 @@ if new_paths:
 print(f"http_smoke_checks={len(smoke_ok_paths)}")
 print(f"route_mode_guard_checks={len(guard_checked_paths)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
-print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
+print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
+print(f"uci_changes_preserved={uci_before == uci_after if uci_before is not None and uci_after is not None else 'unknown'}")
 
 if failures:
 	print("\nFailures:")

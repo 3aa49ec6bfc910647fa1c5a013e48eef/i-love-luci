@@ -73,12 +73,15 @@ compat_routes = [
 with open(sys.argv[2], "w", encoding="utf-8") as handle:
 	handle.write("#!/bin/sh\nset -eu\n")
 	handle.write("echo '---ILOVELUCI-ROUTE-MODE-GUARDS---'\n")
+	handle.write("echo '---ILOVELUCI-UCI-CHANGES-BEFORE---'\n")
+	handle.write("uci changes | sort\n")
+	handle.write("echo '---ILOVELUCI-UCI-CHANGES-BEFORE-END---'\n")
 	for path in sorted(filter(None, compat_routes)):
 		payload = json.dumps({"path": path, "mode": "modern"}, separators=(",", ":"))
 		handle.write("printf '%s\\n' " + shlex.quote(f"---ILOVELUCI-ROUTE-MODE:{path}---") + "\n")
 		handle.write("ubus call luci.iloveluci route_mode_set " + shlex.quote(payload) + "\n")
-	handle.write("echo '---ILOVELUCI-UCI-CHANGES---'\n")
-	handle.write("uci changes | wc -l\n")
+	handle.write("echo '---ILOVELUCI-UCI-CHANGES-AFTER---'\n")
+	handle.write("uci changes | sort\n")
 
 print(f"compat_routes={len(compat_routes)}")
 PY
@@ -137,6 +140,21 @@ def json_after_marker(marker):
 		return obj
 	return None
 
+def lines_between(start_marker, end_marker=None):
+	start = guard_raw.find(start_marker)
+	if start < 0:
+		return None
+	start += len(start_marker)
+	end = guard_raw.find(end_marker, start) if end_marker else -1
+	text = guard_raw[start:end if end >= 0 else len(guard_raw)]
+	return [
+		line.strip()
+		for line in text.splitlines()
+		if line.strip()
+		and not line.startswith("spawn ")
+		and not line.startswith("Warning:")
+	]
+
 menu = None
 for obj in extract_json_objects(menu_raw):
 	if isinstance(obj.get("data"), dict) and isinstance(obj["data"].get("items"), list):
@@ -165,24 +183,23 @@ for path in sorted(filter(None, compat_routes)):
 	if data.get("mode") != "modern":
 		failures.append(f"{path}: route_mode_set returned unexpected mode={data.get('mode')!r}")
 
-changes_marker = "---ILOVELUCI-UCI-CHANGES---"
-changes = None
-if changes_marker in guard_raw:
-	after = guard_raw.split(changes_marker, 1)[1]
-	for line in after.splitlines():
-		line = line.strip()
-		if line.isdigit():
-			changes = int(line)
-			break
+uci_before = lines_between(
+	"---ILOVELUCI-UCI-CHANGES-BEFORE---",
+	"---ILOVELUCI-UCI-CHANGES-BEFORE-END---",
+)
+uci_after = lines_between("---ILOVELUCI-UCI-CHANGES-AFTER---")
 
-if changes is None:
-	failures.append("uci changes count was not found")
-elif changes != 0:
-	failures.append(f"uci changes is not clean after route-mode guard checks: {changes}")
+if uci_before is None:
+	failures.append("uci changes baseline was not found")
+elif uci_after is None:
+	failures.append("uci changes final state was not found")
+elif uci_before != uci_after:
+	failures.append("uci changes drifted after route-mode guard checks")
 
 print("I Love LuCI route mode guard audit")
 print(f"compat_routes={len(compat_routes)}")
-print(f"uci_changes={changes if changes is not None else 'unknown'}")
+print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
+print(f"uci_changes_preserved={uci_before == uci_after if uci_before is not None and uci_after is not None else 'unknown'}")
 
 if failures:
 	print("\nFailures:")

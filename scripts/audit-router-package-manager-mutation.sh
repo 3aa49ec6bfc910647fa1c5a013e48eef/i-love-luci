@@ -32,7 +32,7 @@ cleanup() {
 		apk del "${pkg}" >/dev/null 2>&1 || true
 	fi
 	rm -rf /tmp/i-love-luci-package-fetch 2>/dev/null || true
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json /tmp/i-love-luci-package-menu-installed.json /tmp/i-love-luci-package-http-* /tmp/i-love-luci-package-stage-*.json /tmp/i-love-luci-package-fetch.log /tmp/i-love-luci-package-*.apk /tmp/i-love-luci-package-*.ipk 2>/dev/null || true
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json /tmp/i-love-luci-package-menu-installed.json /tmp/i-love-luci-package-http-* /tmp/i-love-luci-package-stage-*.json /tmp/i-love-luci-package-fetch.log /tmp/i-love-luci-package-*.apk /tmp/i-love-luci-package-*.ipk /tmp/i-love-luci-package-uci-before.txt 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -99,6 +99,14 @@ printf '%s\n' "${pkg}"
 
 echo "---ILOVELUCI-WORLD-BEFORE---"
 sha256sum /etc/apk/world 2>/dev/null || true
+
+echo "---ILOVELUCI-UCI-CHANGES-BEFORE---"
+uci changes | sort > /tmp/i-love-luci-package-uci-before.txt
+cat /tmp/i-love-luci-package-uci-before.txt
+if [ -s /tmp/i-love-luci-package-uci-before.txt ]; then
+	echo "---ILOVELUCI-UCI-DIRTY-ABORT---"
+	exit 4
+fi
 
 if apk info -e "${pkg}" >/dev/null 2>&1; then
 	echo "---ILOVELUCI-PREINSTALLED---"
@@ -186,8 +194,8 @@ menu_tree_retry
 echo "---ILOVELUCI-WORLD-AFTER---"
 sha256sum /etc/apk/world 2>/dev/null || true
 
-echo "---ILOVELUCI-UCI-CHANGES---"
-uci changes | wc -l
+echo "---ILOVELUCI-UCI-CHANGES-AFTER---"
+uci changes | sort
 SH
 
 python3 - "${REMOTE_SCRIPT}" "${OPENWRT_USER}" "${OPENWRT_PASSWORD}" <<'PY'
@@ -281,15 +289,6 @@ def sha_after(marker):
 			return match.group(1)
 	return ""
 
-def uci_changes_after(marker):
-	if marker not in raw:
-		return None
-	for line in raw.split(marker, 1)[1].splitlines():
-		line = line.strip()
-		if line.isdigit():
-			return int(line)
-	return None
-
 def lines_after_until(marker, stop_marker):
 	if marker not in raw:
 		return []
@@ -298,7 +297,33 @@ def lines_after_until(marker, stop_marker):
 	text = raw[start:end if end >= 0 else len(raw)]
 	return [line.strip() for line in text.splitlines() if line.strip()]
 
+def lines_between(start_marker, end_marker=None):
+	start = raw.find(start_marker)
+	if start < 0:
+		return None
+	start += len(start_marker)
+	end = raw.find(end_marker, start) if end_marker else -1
+	text = raw[start:end if end >= 0 else len(raw)]
+	return [
+		line.strip()
+		for line in text.splitlines()
+		if line.strip()
+		and not line.startswith("spawn ")
+		and not line.startswith("Warning:")
+	]
+
 failures = []
+uci_before = lines_between(
+	"---ILOVELUCI-UCI-CHANGES-BEFORE---",
+	"---ILOVELUCI-UCI-DIRTY-ABORT---" if "---ILOVELUCI-UCI-DIRTY-ABORT---" in raw else "---ILOVELUCI-MENU-BEFORE---",
+)
+
+if "---ILOVELUCI-UCI-DIRTY-ABORT---" in raw:
+	print("I Love LuCI package-manager mutation audit")
+	print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
+	print("\nFailures:")
+	print("- router has pre-existing pending UCI changes; refusing package-manager mutation audit")
+	raise SystemExit(1)
 
 if router_status != 0:
 	failures.append(f"remote package-manager mutation audit exited with status {router_status}")
@@ -370,11 +395,13 @@ world_after = sha_after("---ILOVELUCI-WORLD-AFTER---")
 if world_before and world_after and world_before != world_after:
 	failures.append("apk world hash changed after native install/remove cycle")
 
-uci_changes = uci_changes_after("---ILOVELUCI-UCI-CHANGES---")
-if uci_changes is None:
-	failures.append("uci changes count was not found")
-elif uci_changes != 0:
-	failures.append(f"uci changes is not clean after native install/remove cycle: {uci_changes}")
+uci_after = lines_between("---ILOVELUCI-UCI-CHANGES-AFTER---")
+if uci_before is None:
+	failures.append("uci changes baseline was not found")
+elif uci_after is None:
+	failures.append("uci changes final state was not found")
+elif uci_before != uci_after:
+	failures.append("uci changes drifted after native install/remove cycle")
 
 print("I Love LuCI package-manager mutation audit")
 print(f"new_routes={len(new_paths)}")
@@ -385,7 +412,8 @@ print(f"remove_ok={bool(remove_result and remove_result.get('ok'))}")
 print(f"staged_install={bool(stage_data.get('ok'))}")
 print(f"http_smoke_checks={len(smoke_ok)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
-print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
+print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
+print(f"uci_changes_preserved={uci_before == uci_after if uci_before is not None and uci_after is not None else 'unknown'}")
 
 if failures:
 	print("\nFailures:")
