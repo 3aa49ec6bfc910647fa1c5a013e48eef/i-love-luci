@@ -79,7 +79,7 @@ export function ConsolePage() {
 					<div>
 						<h1 className="text-lg font-semibold">Router console</h1>
 						<p className="text-sm text-muted-foreground">
-							Session-bound launcher for ttyd. Inline embedding is disabled when ttyd requires helper credentials.
+							Direct ttyd launcher. Same-origin tunnel is planned but is not active in this build.
 						</p>
 					</div>
 				</div>
@@ -109,8 +109,8 @@ export function ConsolePage() {
 						{state === "loading" ? <p>Opening console...</p> : null}
 						{state === "ready" && !embeddedUrl ? (
 							<div className="grid max-w-xl gap-3">
-								<p>Inline console needs a same-origin console proxy before it can avoid browser-visible ttyd credentials.</p>
-								<p>Open console uses the current direct ttyd fallback.</p>
+								<p>Console tunnel is not available yet.</p>
+								<p>Open console uses direct ttyd connectivity on port {launch?.port ?? status?.port ?? "7681"}.</p>
 							</div>
 						) : null}
 						{state === "unavailable" ? (

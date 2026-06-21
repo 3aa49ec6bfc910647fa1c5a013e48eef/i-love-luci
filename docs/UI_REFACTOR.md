@@ -1124,6 +1124,7 @@ Current implementation:
 - `ttyd` is installed as a package dependency and configured by `90_luci-app-i-love-luci`.
 - The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
 - `console_status` returns safe ttyd availability metadata without the helper credential.
+- `console_status` and `console_launch` disclose `transport: direct`, `tunnelAvailable: false`, and `requiresDirectConnectivity: true` until the uHTTPd tunnel helper ships.
 - The header opens the internal `#/console?launch=1` route after explicit user action. The header does not request, hold, or build URLs with helper credentials.
 - `console_launch` reads and rotates the generated ttyd credential from UCI only inside the console route.
 - The console route must not embed ttyd with a `https://user:pass@host/` URL. Chromium blocks embedded-credential subresource requests, and the credential would still be visible in DOM/network state.
@@ -1135,7 +1136,9 @@ Security gap:
 
 Preferred future helper:
 
-- Bind ttyd to localhost or a private interface and remove browser-visible basic-auth credentials from the header flow.
+- Build a uHTTPd tunnel module/helper rather than a LuCI RPC, CGI, ucode, or ubus route. Standard uHTTPd CGI/ucode/ubus handlers do not provide a reverse WebSocket proxy for ttyd.
+- Bind ttyd to a UNIX socket such as `/var/run/i-love-luci/ttyd.sock`, or to loopback only if UNIX-socket proxying is not available.
+- Start ttyd with its reverse-proxy auth mode (`--auth-header`) and a base path for the mounted console route. The stock OpenWrt ttyd init script does not expose these options today, so I Love LuCI needs either a companion init script or an upstream init enhancement before tunnel mode can be enabled.
 - Add a LuCI-session-protected console gateway under the I Love LuCI app, for example `/cgi-bin/luci/admin/i-love-luci/console/<token>`.
 - Issue short-lived, one-time console tokens through `rpcd`; token creation requires a valid LuCI session, user ACL access to `console_status`, and explicit user action from the header button.
 - Store only a hash of the token server-side in `/tmp`, expire it quickly, consume it on first use, and log open/deny events through syslog.

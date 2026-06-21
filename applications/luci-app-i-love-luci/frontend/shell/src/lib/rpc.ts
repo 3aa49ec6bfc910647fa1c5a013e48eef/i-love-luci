@@ -50,6 +50,9 @@ export type AuthSessionProbe = {
 export type ConsoleStatus = {
 	available: boolean;
 	enabled: boolean;
+	transport?: "direct" | "tunnel";
+	tunnelAvailable?: boolean;
+	requiresDirectConnectivity?: boolean;
 	port?: string;
 	ssl?: boolean;
 	path?: string;

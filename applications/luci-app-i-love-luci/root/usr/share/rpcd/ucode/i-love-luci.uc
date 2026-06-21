@@ -11255,6 +11255,9 @@ const methods = {
 			return respond({
 				available: section != null,
 				enabled,
+				transport: 'direct',
+				tunnelAvailable: false,
+				requiresDirectConnectivity: true,
 				port,
 				ssl,
 				path: '/',
@@ -11299,6 +11302,9 @@ const methods = {
 			return respond({
 				available: section != null,
 				enabled,
+				transport: 'direct',
+				tunnelAvailable: false,
+				requiresDirectConnectivity: true,
 				port,
 				ssl,
 				username,

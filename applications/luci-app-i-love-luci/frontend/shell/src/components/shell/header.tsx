@@ -143,8 +143,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 				{consoleStatus?.available && consoleStatus.enabled ? (
 					<div className="grid gap-4 text-sm">
 						<p className="text-muted-foreground">
-							Console service is available on port {consoleStatus.port}. It opens through an I Love LuCI console
-							route so helper credentials are not placed in the browser address bar.
+							Console service is available on port {consoleStatus.port}. This build opens ttyd directly; same-origin
+							tunnelling over uHTTPd is planned but not active.
 						</p>
 						<div className="flex justify-end">
 							<Button variant="outline" onClick={() => void openConsole()}>

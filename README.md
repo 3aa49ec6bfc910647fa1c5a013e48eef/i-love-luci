@@ -19,6 +19,7 @@ Current package shape:
 - The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
 - The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
 - The legacy bridge only works when LuCI is installed.
+- The router console is currently direct `ttyd` access and requires browser connectivity to the ttyd port. Same-origin tunnelling through `uhttpd` is the preferred production design, but it needs a uHTTPd/WebSocket helper before ttyd can be hidden behind the LuCI session without browser-visible helper credentials.
 
 Future-proof target:
 

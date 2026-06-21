@@ -397,6 +397,12 @@ else:
 		warnings.append("console_status reports ttyd unavailable")
 	if console_data.get("enabled") and not console_data.get("url"):
 		failures.append("console_status enabled but missing URL")
+	if console_data.get("enabled") and console_data.get("transport") != "direct":
+		failures.append("console_status must report direct transport until the uHTTPd tunnel helper ships")
+	if console_data.get("enabled") and console_data.get("tunnelAvailable") is not False:
+		failures.append("console_status must not claim tunnel availability before the uHTTPd tunnel helper ships")
+	if console_data.get("enabled") and console_data.get("requiresDirectConnectivity") is not True:
+		failures.append("console_status must disclose direct ttyd connectivity requirement")
 	if console_data.get("username") or console_data.get("password"):
 		failures.append("console_status must not expose helper credentials before explicit console launch")
 	if console_data.get("enabled") and console_data.get("path") != "/":
@@ -409,6 +415,12 @@ else:
 	console_launch_data = console_launch.get("data") or {}
 	if console_launch_data.get("enabled") and not console_launch_data.get("url"):
 		failures.append("console_launch enabled but missing URL")
+	if console_launch_data.get("enabled") and console_launch_data.get("transport") != "direct":
+		failures.append("console_launch must report direct transport until the uHTTPd tunnel helper ships")
+	if console_launch_data.get("enabled") and console_launch_data.get("tunnelAvailable") is not False:
+		failures.append("console_launch must not claim tunnel availability before the uHTTPd tunnel helper ships")
+	if console_launch_data.get("enabled") and console_launch_data.get("requiresDirectConnectivity") is not True:
+		failures.append("console_launch must disclose direct ttyd connectivity requirement")
 	if console_launch_data.get("enabled") and not console_launch_data.get("username"):
 		failures.append("console_launch enabled but missing helper username")
 	if console_launch_data.get("enabled") and not console_launch_data.get("password"):

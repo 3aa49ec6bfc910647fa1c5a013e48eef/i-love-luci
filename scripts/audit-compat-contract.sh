@@ -165,6 +165,9 @@ for base in scan_roots:
 			if not status_type:
 				failures.append(f"{relative_path}: expected ConsoleStatus type")
 			else:
+				for required_console_term in ("transport?", "tunnelAvailable?", "requiresDirectConnectivity?"):
+					if required_console_term not in status_type.group("body"):
+						failures.append(f"{relative_path}: ConsoleStatus must disclose {required_console_term}")
 				for secret_term in ("username", "password"):
 					if secret_term in status_type.group("body"):
 						failures.append(f"{relative_path}: ConsoleStatus must not include helper {secret_term}")
