@@ -1116,6 +1116,8 @@ The server remains the source of truth for authentication. The React form does n
 
 Local login form contract coverage renders the React login form server-side and asserts the LuCI-compatible field names, password-manager autocomplete attributes, current-page POST action, invalid credential message, and absence of the old LuCI `Authorization Required` copy and reset button.
 
+App-level login coverage now renders `App` in login mode and asserts the React login shell appears without the authenticated header, sidebar/menu controls, profile menu, idle chip, or LuCI compat iframe. This guards the requirement that login remains a focused React/Vite screen rather than a shell page with hidden navigation.
+
 The compat contract audit now scans both LuCI `sysauth.ut` templates and fails if they stop loading the React/Vite app bundle, lose login-mode data attributes, lose the mobile viewport lock, or reintroduce legacy login/header UI.
 
 ## Console Access Strategy
