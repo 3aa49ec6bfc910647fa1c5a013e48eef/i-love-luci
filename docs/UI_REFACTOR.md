@@ -817,18 +817,26 @@ Compatibility rule:
 
 - Existing LuCI apps from OpenWrt feeds should remain installable through normal package tooling.
 - If a LuCI app depends on `luci-base`, the compatibility package should satisfy the runtime path by keeping LuCI installed.
-- I Love LuCI should detect the app, add it to navigation/search, and choose the best renderer in this order: native adapter, generic UCI/service adapter, legacy compat frame.
+- I Love LuCI should detect the app, add it to navigation/search, and choose the best user-facing renderer in this order: supported native route with accepted parity, LuCI compat frame, or hidden only when LuCI metadata/ACLs hide it.
 - No route should disappear just because a native adapter does not exist yet.
-- Do not rewrite individual third-party LuCI apps as one-off React pages unless the same adapter pattern can apply to comparable apps.
+- Generic UCI/service/file adapters are migration evidence until parity is accepted. They must not become a partial user route or replace the original LuCI app behavior by themselves.
+- Do not rewrite individual third-party LuCI apps as one-off React pages unless the same adapter pattern can apply to comparable apps and can reach full page parity.
 
 Translation layer scope:
 
 - Menu translation: parse `/usr/share/luci/menu.d/*.json` into I Love LuCI navigation, preserving order, nesting, first-child behavior, ACL visibility, and route titles.
 - ACL/session bridge: map existing LuCI/rpcd permissions into I Love LuCI route availability so users do not see unusable actions.
-- UCI schema adapter: render safe generic summaries/editors for packages that expose standard UCI sections.
-- Service adapter: expose status, start, stop, restart, enable, disable, and relevant logs for packages with init scripts.
-- File adapter: expose whitelisted package files such as banIP allow/block/custom feed lists.
-- Legacy frame fallback: render arbitrary LuCI JS views unchanged when there is no adapter.
+- UCI schema adapter: collect safe generic summaries/editors for packages that expose standard UCI sections as migration evidence.
+- Service adapter: collect status, start, stop, restart, enable, disable, and relevant logs for packages with init scripts as migration evidence.
+- File adapter: collect whitelisted package files such as banIP allow/block/custom feed lists as migration evidence.
+- LuCI compat frame: render arbitrary LuCI JS views unchanged when no supported native route has accepted parity.
+
+Terminology rule:
+
+- Use `LuCI compat route` for any route that opens the original LuCI page through the compatibility layer.
+- Do not describe user-facing routes as partial, preview, partial native, partial modern, or generic-adapter routes.
+- Historical audit labels such as `partial` may appear only inside dated validation notes and must be treated as old internal terminology superseded by `nativeStatus=compat`.
+- Adapter work can be `in-progress adapter evidence`, but the renderer decision remains binary from the user's perspective: supported native route or LuCI compat route.
 
 Limit:
 
@@ -923,6 +931,7 @@ Audit checks:
   - native route when `effectiveMode=modern`
   - LuCI compat route when `effectiveMode=legacy`
   - hidden only when explicitly configured hidden or hidden by LuCI metadata
+- `modern` and `legacy` are internal route-mode values. Product and plan language should describe them as supported native and LuCI compat.
 - Every route with in-progress adapter evidence is treated as clean LuCI compat in user routing: no `nativePath` is advertised, native mode is not selectable, and explicit native mode is rejected by the bridge.
 - Native migration work must be batched one full LuCI page at a time. A route is promoted only after its LuCI source view, fields, actions, ACL/UCI visibility dependencies, save/apply behavior, mobile rendering, and compat fallback are compared and tested together. Do not promote isolated controls from a page when the rest of that page still depends on LuCI.
 - LuCI menu dependency metadata must be honored before a route is shown. If LuCI would hide a route because a required UCI section, ACL, file, executable, or package capability is absent, I Love LuCI must also hide it instead of routing to a broken native or compat page.
@@ -947,7 +956,7 @@ Native migration checks:
 
 LuCI app adapter robustness checks:
 
-- Adapter selection must be deterministic: supported native route first; otherwise LuCI compat. Generic service/UCI/file adapters can collect migration evidence but must not become user routing until parity is accepted.
+- Adapter selection must be deterministic: supported native route first; otherwise LuCI compat. Generic service/UCI/file adapters can collect migration evidence but must not become user routing until full page parity is accepted.
 - Unknown current and future `luci-app-*` packages must be considered supported through compat unless ACL/menu metadata says otherwise.
 - Newly installed LuCI apps must be discovered from live menu/ACL metadata and become usable after cache refresh or service reload, without an I Love LuCI release, manual route entry, or hard-coded package exception.
 - Installing a future LuCI app must not require a code change, rebuild, or manual route mapping for basic navigation and compat rendering.
