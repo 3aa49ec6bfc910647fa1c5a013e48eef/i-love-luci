@@ -58,6 +58,8 @@ echo '---ILOVELUCI-CONFIG-BACKUP-DRY-RUN---'
 ubus call luci.iloveluci config_backup_create \"{\\\"dry_run\\\":true}\"
 echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
 ubus call luci.iloveluci firewall_includes_save
+echo '---ILOVELUCI-NETWORK-INTERFACE-STATUS---'
+ubus call luci.iloveluci network_interface_action '{\"name\":\"lan\",\"action\":\"status\"}'
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-PACKAGE-FILE-STAGE---'
@@ -371,6 +373,18 @@ elif firewall_include_reject.get("data", {}).get("saved") is not True:
 	failures.append("firewall_includes_save empty no-op did not save cleanly")
 elif firewall_include_reject.get("data", {}).get("changed") is not False:
 	failures.append("firewall_includes_save empty no-op reported changes")
+
+network_status = json_after_marker("---ILOVELUCI-NETWORK-INTERFACE-STATUS---")
+if not network_status or not network_status.get("ok"):
+	failures.append("network_interface_action status did not return ok")
+else:
+	network_status_data = network_status.get("data") or {}
+	if network_status_data.get("ok") is not True:
+		failures.append("network_interface_action status failed for lan")
+	if network_status_data.get("name") != "lan":
+		failures.append("network_interface_action status returned wrong interface")
+	if not isinstance(network_status_data.get("state"), dict):
+		failures.append("network_interface_action status did not return state object")
 
 package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
 if not package_search or not package_search.get("ok"):

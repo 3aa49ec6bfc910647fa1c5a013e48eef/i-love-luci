@@ -1112,6 +1112,17 @@ export type NetworkInterfacesResult = {
 	firewallSections?: ConfigSection[];
 };
 
+export type NetworkInterfaceAction = "status" | "up" | "down" | "restart";
+
+export type NetworkInterfaceActionResult = {
+	ok: boolean;
+	name: string;
+	action: NetworkInterfaceAction | string;
+	message: string;
+	state: NetworkInterfaceStatus | null;
+	output?: string;
+};
+
 export type NetworkDeviceConfig = {
 	section: string;
 	name: string;
@@ -2266,6 +2277,21 @@ export async function saveNetworkInterfaces(rows: NetworkInterfaceConfig[]): Pro
 			changed: false,
 			interfaces: [],
 			sections: [],
+		};
+	}
+}
+
+export async function runNetworkInterfaceAction(name: string, action: NetworkInterfaceAction = "status"): Promise<NetworkInterfaceActionResult> {
+	try {
+		return await callBridge<NetworkInterfaceActionResult>("network_interface_action", { name, action });
+	}
+	catch {
+		return {
+			ok: false,
+			name,
+			action,
+			message: "Network interface action failed.",
+			state: null,
 		};
 	}
 }

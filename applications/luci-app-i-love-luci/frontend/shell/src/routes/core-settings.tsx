@@ -37,6 +37,7 @@ import {
 	saveNetworkRoutes,
 	saveSystemSettings,
 	saveUhttpdCertDefaults,
+	runNetworkInterfaceAction,
 	syncSystemTime,
 	type ConfigSection,
 	type CoreSettings,
@@ -63,6 +64,7 @@ import {
 	type FirewallZone,
 	type LuciUiSettingsInput,
 	type NetworkDeviceConfig,
+	type NetworkInterfaceActionResult,
 	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
 	type OdhcpdConfigInput,
@@ -7321,6 +7323,23 @@ function PolicyRuleEditor({
 }
 
 function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStatus[] }) {
+	const [actionBusy, setActionBusy] = useState<string | null>(null);
+	const [actionResult, setActionResult] = useState<NetworkInterfaceActionResult | null>(null);
+
+	async function runStatus(name: string) {
+		setActionBusy(name);
+		const result = await runNetworkInterfaceAction(name, "status");
+		setActionResult(result);
+		setActionBusy(null);
+
+		if (result.ok) {
+			toast.success(result.message);
+		}
+		else {
+			toast.error(result.message);
+		}
+	}
+
 	return (
 		<section className="grid gap-3">
 			<div className="flex items-center justify-between gap-3">
@@ -7337,6 +7356,7 @@ function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStat
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Addresses</th>
 							<th className="px-3 py-2 font-medium">Uptime</th>
+							<th className="px-3 py-2 font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -7376,12 +7396,39 @@ function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStat
 										)}
 									</td>
 									<td className="px-3 py-3 text-muted-foreground">{formatUptime(iface.uptime)}</td>
+									<td className="px-3 py-3">
+										<Button disabled={actionBusy === name} onClick={() => void runStatus(name)} size="sm" type="button" variant="outline">
+											Status
+										</Button>
+									</td>
 								</tr>
 							);
 						})}
 					</tbody>
 				</table>
 			</div>
+			{actionResult ? (
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[32rem] text-left text-sm">
+						<tbody>
+							{[
+								["Interface", actionResult.name],
+								["Action", actionResult.action],
+								["Result", actionResult.message],
+								["Up", actionResult.state?.up ? "yes" : "no"],
+								["Available", actionResult.state?.available === false ? "no" : "yes"],
+								["Device", actionResult.state?.l3_device ?? actionResult.state?.device ?? "none"],
+								["Uptime", formatUptime(actionResult.state?.uptime)],
+							].map(([field, value]) => (
+								<tr className="border-b last:border-0" key={field}>
+									<td className="px-3 py-2 font-medium">{field}</td>
+									<td className="px-3 py-2 font-mono text-xs">{value}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			) : null}
 		</section>
 	);
 }

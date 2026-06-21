@@ -2291,6 +2291,58 @@ function network_interface_rows() {
 	return interfaces;
 }
 
+function network_interface_action(name, action) {
+	name = dhcp_clean_value(name || '');
+	action = trim('' + (action || 'status'));
+
+	if (!valid_network_route_interface(name))
+		return {
+			ok: false,
+			name,
+			action,
+			message: 'Network interface name is invalid.',
+			state: null
+		};
+
+	if (action != 'status' && action != 'up' && action != 'down' && action != 'restart')
+		return {
+			ok: false,
+			name,
+			action,
+			message: 'Unsupported network interface action.',
+			state: null
+		};
+
+	let quoted = quote_command_args([name])[0];
+	let code = 0;
+
+	if (action == 'up')
+		code = system(`ifup ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1`);
+	else if (action == 'down')
+		code = system(`ifdown ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1`);
+	else if (action == 'restart')
+		code = system(`ifdown ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1; ifup ${quoted} >>/tmp/i-love-luci-ifaction.log 2>&1`);
+
+	let state = null;
+	try {
+		state = ubus.call('network.interface.' + name, 'status') || null;
+	}
+	catch (e) {
+		state = null;
+	}
+
+	return {
+		ok: action == 'status' ? state != null : code == 0,
+		name,
+		action,
+		message: action == 'status'
+			? (state != null ? 'Interface status loaded.' : 'Interface status is unavailable.')
+			: (code == 0 ? 'Interface action completed.' : 'Interface action failed.'),
+		state,
+		output: action == 'status' ? '' : (readfile('/tmp/i-love-luci-ifaction.log') || '')
+	};
+}
+
 function update_firewall_zone_networks(interface_name, target_zone) {
 	let changed = false;
 
@@ -9664,6 +9716,27 @@ const methods = {
 					changed: false,
 					interfaces: network_interface_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				});
+			}
+		}
+	},
+
+	network_interface_action: {
+		args: {
+			name: '',
+			action: ''
+		},
+		call: function(request) {
+			try {
+				return respond(network_interface_action(request.args.name || '', request.args.action || 'status'));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					name: request.args.name || '',
+					action: request.args.action || 'status',
+					message: 'Network interface action failed: ' + e,
+					state: null
 				});
 			}
 		}
