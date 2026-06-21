@@ -2,9 +2,9 @@
 
 ## Goal
 
-Build a modern `I Love LuCI` application shell that can sit beside existing LuCI, provide a better UI/UX for core workflows, and bridge back to legacy LuCI apps when a page has not been rebuilt natively.
+Build a modern `I Love LuCI` application shell that can sit beside existing LuCI, provide a better UI/UX for core workflows, and bridge back to LuCI apps when a page has not been rebuilt natively.
 
-The production target is a single package named `luci-app-i-love-luci`. It owns the app shell, static assets, rpcd bridge, settings, and LuCI compatibility layer. The compatibility layer is iframe-backed today, but product language should describe these routes as LuCI compat routes, not partial routes or preview routes.
+The production target is a single package named `luci-app-i-love-luci`. It owns the app shell, static assets, rpcd bridge, settings, and LuCI compatibility layer. The compatibility layer is iframe-backed today and must be treated as a full LuCI route bridge: product language should describe these routes as LuCI compat routes, not partial routes, preview routes, or reduced native replacements.
 
 ## Working Model
 
@@ -12,10 +12,10 @@ Use a hybrid shell:
 
 - Native modern shell: React, Vite, Tailwind CSS v4, shadcn/ui source components, Sonner toasts, lucide icons.
 - OpenWrt integration: LuCI package layout, `rpcd`, `ubus`, UCI, LuCI ACL files, LuCI session cookies.
-- LuCI compatibility: iframe bridge for unknown or unreimplemented LuCI apps.
+- LuCI compatibility: iframe bridge for unknown or unreimplemented LuCI apps, preserving the original LuCI page behavior inside the modern shell.
 - Progressive replacement: rebuild high-value pages as native React routes over time.
 
-This avoids a risky full LuCI fork while allowing the new app to feel like a modern product.
+This avoids a risky full LuCI fork while allowing the new app to feel like a modern product. Compat is the default safety path for all current and future LuCI apps until a native route has proven parity.
 
 ## LuCI Reference Points
 
@@ -180,6 +180,7 @@ Expected behavior:
 - framed LuCI content hides duplicate header/sidebar
 - same LuCI auth/session cookie is reused
 - non-native routes remain functional
+- app-specific LuCI JS, forms, apply flows, query strings, and child routes continue to run through LuCI itself
 
 Pros:
 
@@ -193,13 +194,15 @@ Cons:
 - nested navigation needs synchronization
 - save/apply UI may appear inside iframe until native bridge exists
 
-### Phase 2: Native LuCI View Adapter
+Compat is not a partial native implementation. It does not parse one section of a LuCI app and leave the rest unsupported. If a route is not fully native, the route opens the original LuCI app through compat.
+
+### Phase 2: Native LuCI View Adapter Research
 
 For `action.type = "view"` pages only, test mounting LuCI views into a React-managed container by calling LuCI's `ui.instantiateView(path)`.
 
 This may improve integration but is more brittle than iframe because many LuCI views assume global DOM, LuCI's lifecycle, and form action rows.
 
-Do not rely on this for universal compatibility.
+Do not rely on this for universal compatibility, and do not present it as a product route mode. If this experiment ships, it must still behave as LuCI compat from the user's perspective.
 
 ### Phase 3: Native React Pages
 
@@ -295,7 +298,7 @@ Use LuCI menu metadata for:
 - navigation tree
 - route search
 - ACL-aware visibility
-- legacy fallback routing
+- LuCI compat fallback routing
 
 Native routes get priority. Unknown routes fall back to the LuCI compat frame.
 
@@ -310,6 +313,7 @@ Current compatibility model:
 - Routes with internal adapter evidence must not advertise `nativePath`, must not offer native mode in settings, and must reject native-mode overrides in `rpcd`.
 - The plan should describe these as LuCI compat routes with in-progress adapter evidence, not as a separate user-facing route class.
 - Do not expose any in-between product state for native coverage. Current route metadata uses `nativeStatus=compat` for LuCI compat routes with internal adapter evidence, and the UI/audits must describe them as LuCI compat.
+- Compat routes must load the original LuCI app route in the iframe bridge. They must not use a partial native panel, a read-only preview, or a reduced route-specific shell as the user-facing fallback.
 
 Audit scope:
 
