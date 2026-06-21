@@ -66,7 +66,7 @@ visible = [
 ]
 
 doc_rows = {}
-row_pattern = re.compile(r"^\| `(?P<route>[^`]+)` \| (?P<title>[^|]+) \| (?P<renderer>[^|]+) \| `(?P<target>[^`]+)` \| (?P<notes>.*) \|$")
+row_pattern = re.compile(r"^\| `(?P<route>[^`]+)` \| (?P<title>[^|]+) \| (?P<renderer>[^|]+) \| `(?P<target>[^`]+)` \| (?P<parity>[^|]+) \| (?P<fallback>[^|]+) \| (?P<latest_test>[^|]+) \| (?P<notes>.*) \|$")
 for line in inventory.splitlines():
 	match = row_pattern.match(line.strip())
 	if match:
@@ -87,8 +87,20 @@ for item in visible:
 		failures.append(f"{path}: inventory renderer={row['renderer'].strip()!r}, expected {renderer!r}")
 	if row["target"].strip() != target:
 		failures.append(f"{path}: inventory target={row['target'].strip()!r}, expected {target!r}")
-	if status == "compat" and "user route stays compat" not in row["notes"]:
-		failures.append(f"{path}: compat inventory row must explain that user route stays compat")
+	if renderer == "Native":
+		if row["parity"].strip() != "supported native":
+			failures.append(f"{path}: native inventory row must record supported native parity")
+		if row["fallback"].strip() != "LuCI compat selectable":
+			failures.append(f"{path}: native inventory row must record LuCI compat selectable fallback")
+	else:
+		if row["parity"].strip() != "native parity not proven":
+			failures.append(f"{path}: compat inventory row must record that native parity is not proven")
+		if row["fallback"].strip() != "LuCI compat primary":
+			failures.append(f"{path}: compat inventory row must record LuCI compat as the primary path")
+		if "user route stays compat" not in row["notes"]:
+			failures.append(f"{path}: compat inventory row must explain that user route stays compat")
+	if row["latest_test"].strip() != "live menu audit":
+		failures.append(f"{path}: inventory latest test must be live menu audit")
 
 extra_routes = sorted(set(doc_rows) - {item.get("path", "") for item in visible})
 for path in extra_routes:

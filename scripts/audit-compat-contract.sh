@@ -86,6 +86,8 @@ for base in scan_roots:
 		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
 			if "| LuCI compat |" not in text:
 				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")
+			if "| Route | Title | Renderer | Target | Parity | Fallback | Latest test | Notes |" not in text:
+				failures.append(f"{relative_path}: route inventory must include parity, fallback, and latest test columns")
 			for line_no, line in enumerate(text.splitlines(), 1):
 				if "| LuCI compat |" in line and "user route stays compat" not in line:
 					failures.append(f"{relative_path}:{line_no}: compat route must be documented as user route stays compat")

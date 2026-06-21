@@ -963,6 +963,7 @@ Future app handling:
 
 Required tooling:
 
+- `scripts/generate-route-inventory-doc.sh` refreshes [docs/ROUTE_INVENTORY.md](ROUTE_INVENTORY.md) from live `menu_tree` output before release validation.
 - `scripts/audit-router-routes.sh` calls `ubus call luci.iloveluci menu_tree`, compares it with installed LuCI menu files, and reports:
   - missing routes
   - dead legacy targets
