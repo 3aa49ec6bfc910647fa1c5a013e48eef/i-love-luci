@@ -4,7 +4,7 @@
 
 Build a modern `I Love LuCI` application shell that can sit beside existing LuCI, provide a better UI/UX for core workflows, and bridge back to legacy LuCI apps when a page has not been rebuilt natively.
 
-The production target is a single package named `luci-app-i-love-luci`. It owns the app shell, static assets, rpcd bridge, settings, and legacy iframe compatibility layer.
+The production target is a single package named `luci-app-i-love-luci`. It owns the app shell, static assets, rpcd bridge, settings, and LuCI compatibility layer. The compatibility layer is iframe-backed today, but product language should describe these routes as LuCI compat routes, not partial routes or preview routes.
 
 ## Working Model
 
@@ -12,7 +12,7 @@ Use a hybrid shell:
 
 - Native modern shell: React, Vite, Tailwind CSS v4, shadcn/ui source components, Sonner toasts, lucide icons.
 - OpenWrt integration: LuCI package layout, `rpcd`, `ubus`, UCI, LuCI ACL files, LuCI session cookies.
-- Legacy compatibility: iframe bridge for unknown or unreimplemented LuCI apps.
+- LuCI compatibility: iframe bridge for unknown or unreimplemented LuCI apps.
 - Progressive replacement: rebuild high-value pages as native React routes over time.
 
 This avoids a risky full LuCI fork while allowing the new app to feel like a modern product.
@@ -106,8 +106,8 @@ Create reusable components before pages:
 - `HeaderSearch`: command/search popover with recents and indexed routes.
 - `ProfileMenu`: initials/avatar, account actions, logout.
 - `PendingChangesBadge`: pending UCI changes and apply/discard dialog.
-- `LegacyFrame`: iframe bridge for classic LuCI pages.
-- `LegacyFrameToolbar`: open legacy route, refresh, pop out, copy URL.
+- `LegacyFrame`: iframe-backed LuCI compat route renderer.
+- `LegacyFrameToolbar`: open compat route, refresh, pop out, copy URL.
 - `PageHeader`: title, description, actions.
 - `Section`, `DataTable`, `StatusMetric`, `EmptyState`, `Alert`, `ConfirmDialog`.
 - `FormField`, `SelectField`, `SwitchField`, `PasswordField`, `CodeInput`.
@@ -141,8 +141,8 @@ Required behavior:
 - tab bars and action rows must wrap or scroll horizontally without pushing the page wider than the viewport
 - tables must use responsive column priority, compact density, or horizontal scroll containers instead of clipping content
 - forms must use mobile-safe input sizing and must not trigger browser zoom when focused
-- dialogs, sheets, and toasts must remain visible above legacy iframe content
-- legacy iframe routes must be wrapped so the shell remains usable on small screens
+- dialogs, sheets, and toasts must remain visible above LuCI compat iframe content
+- LuCI compat iframe routes must be wrapped so the shell remains usable on small screens
 
 Minimum test viewports:
 
@@ -157,11 +157,11 @@ The root Vite shell index must set the viewport to:
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 ```
 
-## Legacy Compatibility Bridge
+## LuCI Compatibility Layer
 
-### Phase 1: iframe Bridge
+### Phase 1: Compat iframe
 
-Render unsupported LuCI routes inside an iframe:
+Render non-native LuCI routes inside an iframe-backed compat route:
 
 ```text
 /cgi-bin/luci/admin/network/dhcp
@@ -176,10 +176,10 @@ inside:
 Expected behavior:
 
 - new shell owns header/sidebar/search/profile
-- iframe renders legacy page content
-- legacy theme hides duplicate header/sidebar when framed
+- compat iframe renders original LuCI page content
+- framed LuCI content hides duplicate header/sidebar
 - same LuCI auth/session cookie is reused
-- unsupported routes remain functional
+- non-native routes remain functional
 
 Pros:
 
@@ -189,7 +189,7 @@ Pros:
 
 Cons:
 
-- styling is partially isolated
+- styling is isolated inside the compat frame
 - nested navigation needs synchronization
 - save/apply UI may appear inside iframe until native bridge exists
 
@@ -297,7 +297,7 @@ Use LuCI menu metadata for:
 - ACL-aware visibility
 - legacy fallback routing
 
-Native routes get priority. Unknown routes fall back to `LegacyFrame`.
+Native routes get priority. Unknown routes fall back to the LuCI compat frame.
 
 ### Route and App Compatibility Audit
 
@@ -474,7 +474,7 @@ Verify:
 - app route loads
 - current user/session is detected
 - menu tree endpoint responds
-- legacy iframe can open an existing LuCI page
+- LuCI compat iframe can open an existing LuCI page
 - search indexes menu items
 - toast provider renders top-center toasts
 - pending changes badge reflects UCI changes
@@ -539,7 +539,7 @@ Run Playwright against the secondary port:
 - sidebar opens/closes on mobile
 - search opens and returns results
 - toast appears after a mock save
-- legacy iframe opens `/admin/status/overview`
+- LuCI compat iframe opens `/admin/status/overview`
 - classic LuCI fallback link works
 
 Use environment variables for router target and credentials:
@@ -727,7 +727,7 @@ Historical validation notes below may contain older raw audit labels that predat
 
 Remaining compat gaps:
 
-- Wireless-specific pages have native preview coverage only. The current test router has no `wireless.@wifi-device` UCI sections and lacks `iw`/`iwinfo`, so LuCI wireless routes are now hidden by the same UCI dependency metadata instead of appearing as broken navigation entries. Radio scanning, channel analysis, and association lists still need validation on a router with radios before any wireless route can be promoted.
+- Wireless-specific pages have adapter evidence only. The current test router has no `wireless.@wifi-device` UCI sections and lacks `iw`/`iwinfo`, so LuCI wireless routes are now hidden by the same UCI dependency metadata instead of appearing as broken navigation entries. Radio scanning, channel analysis, and association lists still need validation on a router with radios before any wireless route can be promoted.
 - Network interfaces are native for live status, common existing interface/device editing, static route add/edit/remove, and policy rule add/edit/remove. Interface/device create/delete, advanced protocol-specific forms, reconnect/reload actions, and full save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - DHCP/DNS now has native active lease visibility, common dnsmasq settings, DHCP pool add/edit/remove, static host reservation add/edit/remove, and DNS host record add/edit/remove. Less-common dnsmasq options, odhcpd options, RA flag editing beyond current pool modes, and full save/apply parity remain LuCI compat until a broader generic form/pending-change adapter is complete.
 - Firewall is native for defaults editing, zone add/edit/remove, zone forwarding add/edit/remove, traffic rule add/edit/remove for common rule fields, redirect add/edit/remove for common port-forward/NAT fields, whitelisted UCI include section editing, whitelisted custom nftables file editing, and summary views. Arbitrary include scripts, nft syntax validation, advanced zone/rule/redirect options, validation, and full save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
@@ -750,7 +750,7 @@ Remaining compat gaps:
 - uHTTPd certificate handling now has native PEM certificate/private-key upload to `/etc/luci-uploads`, cert/key path update hints, configured cert/key status, and guarded remove buttons matching the LuCI remove-old/remove-configuration actions. The `1.0.0-r4-native87` deploy compiled router ucode before install, then passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=46`, `legacy=14`, `native_status supported=28`, `partial=32`, `native_preview_routes=60`, `compat_default_routes=14`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=46`, `legacy_route_checks=14`). `uhttpd_certificate_file_save` was exercised with temporary PEM-like certificate and key files under `/etc/luci-uploads`, the guarded removal RPC rejected a missing confirmation, temporary files were removed, exported `uhttpd` checksum stayed `706d4c881377d165e692084b4da2e6ed52fa9e6d3e65b8a7c6a6bdfe6ea1ee74`, and `uci changes=0`.
 - uHTTPd certificate upload now supports binary-safe base64 payloads so DER files can be saved through the native form as well as pasted PEM text. The `1.0.0-r4-native88` deploy compiled router ucode before install, then passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=46`, `legacy=14`, `native_status supported=28`, `partial=32`, `native_preview_routes=60`, `compat_default_routes=14`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=46`, `legacy_route_checks=14`). `uhttpd_certificate_file_save` was exercised with base64 bytes `AAECA/8=`, returned size `5`, wrote a 5-byte file under `/etc/luci-uploads`, then the temporary file was removed with exported `uhttpd` checksum still `706d4c881377d165e692084b4da2e6ed52fa9e6d3e65b8a7c6a6bdfe6ea1ee74` and `uci changes=0`.
 - uHTTPd configured-certificate removal was exercised safely with backed-up router config and copied cert/key files under `/etc/luci-uploads`. Native `remove_files` deleted the configured throwaway files and uHTTPd regenerated them on restart, matching LuCI's remove-old behavior; native `remove_config` deleted the throwaway files and removed the configured cert/key/listen-HTTPS options. After restore, exported `uhttpd` checksum returned to `706d4c881377d165e692084b4da2e6ed52fa9e6d3e65b8a7c6a6bdfe6ea1ee74` with `uci changes=0`. `/admin/services/uhttpd` is now marked supported and defaults to native. The `1.0.0-r4-native89` deploy compiled router ucode before install, then passed route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=29`, `partial=31`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`).
-- AdBlock Fast native preview now covers additional installed LuCI advanced fields: verbosity, config update toggle/URL, IPv6 list toggle, download and pause timeouts, curl retry and file-size limit, compressed cache toggle/directory, dnsmasq sanity/domain validation toggles, debug init script toggle, status LED, RPC token passthrough, dnsmasq instance list, force-DNS ports, and dnsmasq config file URL. The `1.0.0-r4-native90` deploy compiled router ucode before install, then passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=29`, `partial=31`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`). `adblock_fast_config_save` was exercised as a no-op with current router values and all 18 feed rows; exported `adblock-fast` checksum stayed `c65a127cac1861724e1f4ab53e32bb0563edb8e857a4da326c7d03214871e8ac` and `uci changes=0`. AdBlock Fast still defaults to LuCI compat because cron schedule generation, query-log behavior, DNS-backend-specific dynamic picker parity, and RPC token side effects need more evidence before native default promotion.
+- AdBlock Fast adapter evidence now covers additional installed LuCI advanced fields: verbosity, config update toggle/URL, IPv6 list toggle, download and pause timeouts, curl retry and file-size limit, compressed cache toggle/directory, dnsmasq sanity/domain validation toggles, debug init script toggle, status LED, RPC token passthrough, dnsmasq instance list, force-DNS ports, and dnsmasq config file URL. The `1.0.0-r4-native90` deploy compiled router ucode before install, then passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=29`, `partial=31`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`). `adblock_fast_config_save` was exercised as a no-op with current router values and all 18 feed rows; exported `adblock-fast` checksum stayed `c65a127cac1861724e1f4ab53e32bb0563edb8e857a4da326c7d03214871e8ac` and `uci changes=0`. AdBlock Fast still defaults to LuCI compat because cron schedule generation, query-log behavior, DNS-backend-specific dynamic picker parity, and RPC token side effects need more evidence before native default promotion.
 - LED configuration now exposes common LuCI trigger fields for default state, interval, delay-on, and delay-off, and the save bridge refuses an empty LED row payload when existing LED actions are configured. This prevents accidental removal of all LED actions during native route testing. The router passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=29`, `partial=31`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`); the empty LED save guard returned `saved=false`, kept the exported `system` checksum unchanged, and left `uci changes=0`.
 - Network static routes and policy rules now cover the installed LuCI `network/routes.js` fields, including route type, disabled state, on-link, MTU, source address, table selection, rule protocol, jump target, firewall mark, source/destination ports, UID range, suppress-prefix length, invert, and disabled state. The native grids now support add, remove, duplicate, and row ordering; delete-all uses an explicit `allow_empty` bridge flag so accidental empty payloads remain guarded. `/admin/network/routes` is marked supported. The `172.16.172.1` test added and removed temporary disabled route/rule rows through the native RPC, verified the new fields round-tripped, and returned the exported `network` checksum to `a17a63979cfc26787774abd87acc356d3dbb0ac8a28897541bcf7454a07b8e84` with `uci changes=0`. The router passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=30`, `partial=30`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`).
 - Firewall IP sets now cover the installed LuCI `firewall/ipsets.js` workflow for firewall4: name, comment, family, packet-field match list, inline entries, external set reference, storage method, IP range, port range, netmask, max entries, hash size, load file path, timeout, counters, enabled state, add/remove/duplicate, and row ordering. `/admin/network/firewall/ipsets` is marked supported. Delete-all uses an explicit `allow_empty` bridge flag so accidental empty payloads remain guarded. The `172.16.172.1` test added and removed a temporary disabled IP set through the native RPC, verified the new fields round-tripped, and returned the exported `firewall` checksum to `8287ac6222abec8f151c48ff703d8c8bcce9de1bb23dab1a5e8f361311f3ed88` with `uci changes=0`. The router passed lint, unit tests, production build, route audit (`visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=31`, `partial=29`, `native_preview_routes=60`, `compat_default_routes=13`), native page audit (`core_pages=4`, `native_pages=18`, `service_adapters=6`), and HTTP route smoke (`native_shell_checks=47`, `legacy_route_checks=13`).
@@ -907,7 +907,7 @@ Audit inputs:
 - Installed LuCI menu files: `/usr/share/luci/menu.d/*.json`.
 - Installed ACL files: `/usr/share/rpcd/acl.d/*.json`.
 - Installed packages matching `luci-app-*`, LuCI modules, themes, and packages with service/init scripts.
-- I Love LuCI route metadata: `nativeStatus` (`supported`, `compat`, or `unsupported`), `nativeAutoMode`, `configuredMode`, `effectiveMode`, `nativePath`, and legacy target.
+- I Love LuCI route metadata: `nativeStatus` (`supported`, `compat`, or `unsupported`), `nativeAutoMode`, `configuredMode`, `effectiveMode`, `nativePath`, and LuCI compat target.
 
 Audit checks:
 
@@ -989,8 +989,8 @@ Required tooling:
   - login shell missing the React/Vite app bundle
   - authenticated app shell failing to load
   - visible native routes whose shell target fails
-  - visible legacy compat routes that return login, 404, dispatch failure, or HTTP errors
-  - visible legacy iframe source URLs with `iloveluci_frame=1` that return login, 404, dispatch failure, or HTTP errors
+  - visible LuCI compat routes that return login, 404, dispatch failure, or HTTP errors
+  - visible compat iframe source URLs with `iloveluci_frame=1` that return login, 404, dispatch failure, or HTTP errors
 - Add browser smoke coverage for representative route types:
   - supported native core route
   - in-progress adapter evidence route rejecting native-mode override and opening LuCI compat
@@ -1011,7 +1011,7 @@ Acceptance gate:
 - Route metadata now uses `nativeStatus=compat` for LuCI compat routes with adapter evidence. Current route audit reports `route_status supported/compat/unsupported`, not `partial`, while keeping behavior unchanged: only supported routes expose `nativePath`; compat routes open the LuCI compat layer and reject native-mode overrides.
 - Route-mode guard coverage was expanded on `172.16.172.1`: all 15 visible `nativeStatus=compat` routes were tested with `route_mode_set(mode=modern)`, every call returned `saved=false`, and `uci changes=0` remained clean.
 - Future LuCI app compatibility was validated on `172.16.172.1` with `luci-app-example`: installing the package added six `/admin/example*` routes, all reported `nativeStatus=compat`, opened through LuCI compat with no `nativePath`, then package removal removed those routes again, restored `/etc/apk/world`, and left `uci changes=0`.
-- Legacy iframe-source smoke coverage was expanded on `172.16.172.1`: all 15 visible compat routes loaded their direct LuCI iframe source URL with `iloveluci_frame=1` without login redirects, dispatch failures, 404s, or HTTP errors.
+- Compat iframe-source smoke coverage was expanded on `172.16.172.1`: all 15 visible compat routes loaded their direct LuCI iframe source URL with `iloveluci_frame=1` without login redirects, dispatch failures, 404s, or HTTP errors.
 - Local compat/native UI contract coverage was added with `scripts/audit-compat-contract.sh`. It fails if the source/docs reintroduce the old in-between route-status model, if route audit output switches back to old labels, if route mode/status chips are added to route settings, sidebar, or header search UI, if native pages render raw `<pre>` command dumps, or if routing/firewall status pages fall back to generic command-output tables instead of structured route/nftables tables. The current local run passed alongside typecheck, lint, unit tests, route audit, route-mode guard audit, native page audit, HTTP route smoke, and future LuCI app install/remove audit.
 - Current router checkpoint on `172.16.172.1` after attended sysupgrade configuration promotion: route audit passed with `visible_routes=57`, `modern=42`, `legacy=15`, `route_status supported=42 compat=15 unsupported=0`, and `native_paths=42`; route-mode guard rejected native mode for all 15 compat routes with `uci_changes=0`; native page audit passed with `core_pages=4`, `native_pages=18`, and `service_adapters=6`; HTTP smoke passed with `native_shell_checks=42`, `legacy_route_checks=15`, and `legacy_frame_checks=15`; future LuCI app audit installed/removed `luci-app-example`, verified six new compat routes in the flat item index, route index, sidebar tree, and search data, restored `/etc/apk/world`, and left `uci_changes=0`.
 - Remaining LuCI compat routes on the current router are `/admin/network`, `/admin/network/network`, `/admin/services/adblock-fast`, `/admin/services/banip`, `/admin/services/banip/allowlist`, `/admin/services/banip/blocklist`, `/admin/services/banip/feeds`, `/admin/services/banip/firewall_log`, `/admin/services/banip/overview`, `/admin/services/banip/processing_log`, `/admin/services/banip/setreport`, `/admin/system/attendedsysupgrade`, `/admin/system/attendedsysupgrade/overview`, `/admin/system/flash`, and `/admin/system/package-manager`. They remain compat because they are either third-party LuCI app workflows, destructive/long-running system flows, package mutation flows, or network interface flows with unproven protocol-switch/reconnect/save-apply parity.
@@ -1111,7 +1111,7 @@ Router smoke tests should be manual at first. Add scheduled or self-hosted CI on
 
 ## Recommended Delivery Order
 
-1. Build shell and legacy iframe bridge first.
+1. Build shell and LuCI compat iframe bridge first.
 2. Add typed RPC client and session/menu endpoint.
 3. Add toast/pending changes flows.
 4. Add native dashboard/status overview.
