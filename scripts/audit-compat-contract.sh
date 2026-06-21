@@ -32,6 +32,7 @@ route_ui_files = {
 	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header-search.tsx"),
 	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx"),
 }
+native_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/native-page.tsx")
 
 allowed_archived = [
 	"Historical validation notes below may contain older raw audit labels",
@@ -68,6 +69,16 @@ for base in scan_roots:
 			for term in ("nativeStatus", "effectiveMode", "configuredMode"):
 				if term in text:
 					failures.append(f"{relative_path}: navigation/search UI must not display route mode metadata ({term})")
+		if relative_path == native_page_file:
+			if "<pre" in text:
+				failures.append(f"{relative_path}: native pages must not render raw <pre> command dumps")
+			for function_name in ("RoutingSummary", "NftablesSummary"):
+				match = re.search(rf"function {function_name}\([^)]*\) \{{(?P<body>.*?)\nfunction ", text, re.S)
+				if not match:
+					failures.append(f"{relative_path}: expected {function_name} guard target")
+					continue
+				if "OutputLinesTable" in match.group("body"):
+					failures.append(f"{relative_path}: {function_name} must render structured tables, not generic command output")
 		archived_history = False
 		for line_no, line in enumerate(text.splitlines(), 1):
 			if path.name == "UI_REFACTOR.md" and line.startswith("Historical validation notes below"):
@@ -81,10 +92,10 @@ for base in scan_roots:
 					failures.append(f"{path.relative_to(root)}:{line_no}: {message}: {line.strip()}")
 
 if failures:
-	print("FAIL: compat contract audit found stale route terminology", file=sys.stderr)
+	print("FAIL: compat/native UI contract audit found regressions", file=sys.stderr)
 	for failure in failures:
 		print(failure, file=sys.stderr)
 	sys.exit(1)
 
-print("PASS: compat contract terminology is clean")
+print("PASS: compat/native UI contract is clean")
 PY
