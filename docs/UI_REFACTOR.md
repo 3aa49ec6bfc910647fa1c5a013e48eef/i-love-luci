@@ -1077,6 +1077,8 @@ The React login form posts the standard LuCI fields:
 
 The server remains the source of truth for authentication. The React form does not create sessions client-side. Password focus is applied automatically when the username is already populated. The form keeps password-manager compatibility hints in place: explicit current-page `action`, `method="post"`, `autocomplete="on"` on the form, `autocomplete="username"` on `luci_username`, `autocomplete="current-password"` on `luci_password`, required fields, and disabled autocorrect/capitalization/spellcheck for the username. Browser validation confirmed the React login renders, focuses the password field, submits to LuCI, and loads the app dashboard after authentication.
 
+Local login form contract coverage renders the React login form server-side and asserts the LuCI-compatible field names, password-manager autocomplete attributes, current-page POST action, invalid credential message, and absence of the old LuCI `Authorization Required` copy and reset button.
+
 ## Console Access Strategy
 
 Current implementation:
