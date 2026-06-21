@@ -105,7 +105,7 @@ expected_pages = {
 
 expected_core_pages = {
 	"network": {"sections": "network", "arrays": ["networkRoutes", "networkRules"], "required_types": ["interface", "device"]},
-	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools"], "objects": ["dhcpStatus"]},
+	"dhcp": {"sections": "dhcp", "arrays": ["dhcpLeases", "dhcpHosts", "dhcpDomains", "dhcpPools", "dhcpRelays"], "objects": ["dhcpStatus"]},
 	"firewall": {"sections": "firewall", "arrays": ["firewallFiles"], "required_options": ["input", "output", "forward"], "required_types": ["defaults", "zone", "forwarding", "rule"]},
 	"system": {"sections": "system", "required_types": ["system", "timeserver", "led", "dropbear", "uhttpd", "cert"], "required_names": ["main", "apply", "themes"]},
 }

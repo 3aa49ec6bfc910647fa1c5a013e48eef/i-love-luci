@@ -38,6 +38,7 @@
 					"dhcp_domains_save",
 					"dhcp_hosts_save",
 					"dhcp_pools_save",
+					"dhcp_relays_save",
 					"dropbear_config_save",
 					"dnsmasq_config_save",
 					"firewall_defaults_save",

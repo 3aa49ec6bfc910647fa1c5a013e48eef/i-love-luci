@@ -209,6 +209,13 @@ export type DhcpPool = {
 	ra: string;
 };
 
+export type DhcpRelay = {
+	section: string;
+	local_addr: string;
+	server_addr: string;
+	interface: string;
+};
+
 export type DhcpStatus = {
 	dnsmasq?: ServiceState | null;
 	odhcpd?: ServiceState | null;
@@ -264,6 +271,7 @@ export type CoreSettings = {
 	dhcpHosts?: DhcpHost[];
 	dhcpDomains?: DhcpDomain[];
 	dhcpPools?: DhcpPool[];
+	dhcpRelays?: DhcpRelay[];
 	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
 	firewallFiles?: ServiceFile[];
@@ -768,6 +776,14 @@ export type DhcpPoolsResult = {
 	message: string;
 	changed: boolean;
 	pools: DhcpPool[];
+	sections: ConfigSection[];
+};
+
+export type DhcpRelaysResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	relays: DhcpRelay[];
 	sections: ConfigSection[];
 };
 
@@ -1778,6 +1794,21 @@ export async function saveDhcpPools(rows: DhcpPool[]): Promise<DhcpPoolsResult> 
 			message: "DHCP pools save failed.",
 			changed: false,
 			pools: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpRelays(rows: DhcpRelay[]): Promise<DhcpRelaysResult> {
+	try {
+		return await callBridge<DhcpRelaysResult>("dhcp_relays_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP relay save failed.",
+			changed: false,
+			relays: [],
 			sections: [],
 		};
 	}

@@ -796,6 +796,28 @@ function dhcp_domain_records() {
 	return records;
 }
 
+function dhcp_relay_rows() {
+	let relays = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return relays;
+	}
+
+	uci.foreach('dhcp', 'relay', function(section) {
+		push(relays, {
+			section: section['.name'] || '',
+			local_addr: section.local_addr || '',
+			server_addr: section.server_addr || '',
+			interface: section.interface || ''
+		});
+	});
+
+	return relays;
+}
+
 function dhcp_clean_value(value) {
 	value = trim('' + (value || ''));
 	return replace(value, /[\r\n]/g, '');
@@ -944,6 +966,107 @@ function save_dhcp_static_hosts(rows) {
 
 function valid_domain_record_name(value) {
 	return length(value) && replace(value, /[^A-Za-z0-9_.-]/g, '') == value;
+}
+
+function valid_dhcp_relay_addr(value) {
+	return length(value) && replace(value, /[^A-Fa-f0-9:.#%-]/g, '') == value;
+}
+
+function dhcp_relay_family(value) {
+	value = split(value || '', '#')[0];
+	return index(value, ':') > -1 ? 'ipv6' : 'ipv4';
+}
+
+function save_dhcp_relays(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'relay', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'relay';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'relay');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let local_addr = dhcp_clean_value(row?.local_addr || '');
+		let server_addr = dhcp_clean_value(row?.server_addr || '');
+		let iface = dhcp_clean_value(row?.interface || '');
+
+		if (!valid_dhcp_relay_addr(local_addr) || !valid_dhcp_relay_addr(server_addr))
+			return {
+				saved: false,
+				message: 'DHCP relay addresses are required and must be valid address values.',
+				changed: false,
+				relays: dhcp_relay_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+			};
+
+		if (dhcp_relay_family(local_addr) != dhcp_relay_family(server_addr))
+			return {
+				saved: false,
+				message: 'DHCP relay from/to address families must match.',
+				changed: false,
+				relays: dhcp_relay_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+			};
+
+		if (replace(iface, /[^A-Za-z0-9_.:@-]/g, '') != iface)
+			return {
+				saved: false,
+				message: 'DHCP relay reply interface contains unsupported characters.',
+				changed: false,
+				relays: dhcp_relay_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+			};
+
+		let next = {
+			local_addr,
+			server_addr,
+			interface: iface
+		};
+
+		for (let key, value in next) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				dhcp_set_option(section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+		system('/etc/init.d/odhcpd reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP relays saved and services reloaded.' : 'DHCP relays already up to date.',
+		changed,
+		relays: dhcp_relay_rows(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+	};
 }
 
 function save_dhcp_domain_records(rows) {
@@ -7463,6 +7586,7 @@ function build_core_settings(page) {
 		dhcpHosts: [],
 		dhcpDomains: [],
 		dhcpPools: [],
+		dhcpRelays: [],
 		dhcpStatus: {},
 		networkRoutes: [],
 		networkRules: [],
@@ -7473,11 +7597,12 @@ function build_core_settings(page) {
 	};
 
 	if (page == 'dhcp') {
-		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd']);
+		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay']);
 		data.dhcpLeases = dhcp_leases();
 		data.dhcpHosts = dhcp_static_hosts();
 		data.dhcpDomains = dhcp_domain_records();
 		data.dhcpPools = dhcp_pool_rows();
+		data.dhcpRelays = dhcp_relay_rows();
 		data.dhcpStatus = dhcp_status();
 	}
 	else if (page == 'firewall') {
@@ -7719,6 +7844,26 @@ const methods = {
 					changed: false,
 					pools: dhcp_pool_rows(),
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				});
+			}
+		}
+	},
+
+	dhcp_relays_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_relays(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP relay save failed: ' + e,
+					changed: false,
+					relays: dhcp_relay_rows(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
 				});
 			}
 		}

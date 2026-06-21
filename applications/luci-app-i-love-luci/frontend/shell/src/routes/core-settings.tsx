@@ -21,6 +21,7 @@ import {
 	saveDhcpDomains,
 	saveDhcpHosts,
 	saveDhcpPools,
+	saveDhcpRelays,
 	saveDnsmasqConfig,
 	saveOdhcpdConfig,
 	saveLuciUiSettings,
@@ -38,6 +39,7 @@ import {
 	type DhcpHost,
 	type DhcpLease,
 	type DhcpPool,
+	type DhcpRelay,
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
@@ -193,6 +195,7 @@ function DhcpSummary({
 	const staticHosts = settings.dhcpHosts ?? [];
 	const domainRecords = settings.dhcpDomains ?? [];
 	const pools = settings.dhcpPools ?? [];
+	const relays = settings.dhcpRelays ?? [];
 	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
 	const odhcpd = settings.dhcp.find((section) => section.type === "odhcpd") ?? null;
 	const [pendingStaticHost, setPendingStaticHost] = useState<PendingStaticHost | null>(null);
@@ -255,6 +258,16 @@ function DhcpSummary({
 					})
 				}
 				pools={pools}
+			/>
+			<DhcpRelayEditor
+				onSaved={(nextRelays, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpRelays: nextRelays,
+					})
+				}
+				relays={relays}
 			/>
 			<LeaseTable leases={leases} onAddStaticHost={addStaticHostFromLease} />
 			<StaticHostEditor
@@ -923,6 +936,150 @@ function normalizeDhcpPool(pool: DhcpPool): DhcpPool {
 		dhcpv4: pool.dhcpv4 ?? "",
 		dhcpv6: pool.dhcpv6 ?? "",
 		ra: pool.ra ?? "",
+	};
+}
+
+function DhcpRelayEditor({
+	onSaved,
+	relays,
+}: {
+	onSaved: (relays: DhcpRelay[], sections: ConfigSection[]) => void;
+	relays: DhcpRelay[];
+}) {
+	const [rows, setRows] = useState(() => relays.map(normalizeDhcpRelay));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpRelay, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [...current, { section: "", local_addr: "", server_addr: "", interface: "" }]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpRelays(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.relays.map(normalizeDhcpRelay);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">DHCP relay</h2>
+					<p className="text-sm text-muted-foreground">Relay DHCP requests between matching address families.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add relay
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[54rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Relay from</th>
+								<th className="px-3 py-2 font-medium">Relay to address</th>
+								<th className="px-3 py-2 font-medium">Reply interface</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((relay, index) => (
+									<tr className="border-b align-top last:border-0" key={`${relay.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Relay from address"
+												onChange={(event) => updateRow(index, "local_addr", event.target.value)}
+												value={relay.local_addr}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Relay to address"
+												onChange={(event) => updateRow(index, "server_addr", event.target.value)}
+												value={relay.server_addr}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Only accept replies via"
+												onChange={(event) => updateRow(index, "interface", event.target.value)}
+												value={relay.interface}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label="Remove relay"
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+										No DHCP relay entries configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpRelay(relay: DhcpRelay): DhcpRelay {
+	return {
+		section: relay.section ?? "",
+		local_addr: relay.local_addr ?? "",
+		server_addr: relay.server_addr ?? "",
+		interface: relay.interface ?? "",
 	};
 }
 
