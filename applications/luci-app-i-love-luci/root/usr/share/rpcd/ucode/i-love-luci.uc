@@ -826,6 +826,53 @@ function dhcp_relay_rows() {
 	return relays;
 }
 
+function dhcp_boot_rows() {
+	let boots = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return boots;
+	}
+
+	uci.foreach('dhcp', 'boot', function(section) {
+		push(boots, {
+			section: section['.name'] || '',
+			filename: section.filename || '',
+			servername: section.servername || '',
+			serveraddress: section.serveraddress || '',
+			dhcp_option: type(section.dhcp_option) == 'array' ? join('\n', section.dhcp_option) : (section.dhcp_option || ''),
+			networkid: section.networkid || '',
+			force: section.force || '',
+			instance: section.instance || ''
+		});
+	});
+
+	return boots;
+}
+
+function dhcp_boot6_rows() {
+	let boots = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return boots;
+	}
+
+	uci.foreach('dhcp', 'boot6', function(section) {
+		push(boots, {
+			section: section['.name'] || '',
+			url: section.url || '',
+			arch: section.arch || ''
+		});
+	});
+
+	return boots;
+}
+
 function dhcp_clean_value(value) {
 	value = trim('' + (value || ''));
 	return replace(value, /[\r\n]/g, '');
@@ -835,6 +882,19 @@ function split_dhcp_list(value) {
 	let rows = [];
 
 	for (let piece in split(replace('' + (value || ''), /\n/g, ','), ',')) {
+		piece = dhcp_clean_value(piece);
+
+		if (length(piece))
+			push(rows, piece);
+	}
+
+	return rows;
+}
+
+function split_dhcp_lines(value) {
+	let rows = [];
+
+	for (let piece in split('' + (value || ''), '\n')) {
 		piece = dhcp_clean_value(piece);
 
 		if (length(piece))
@@ -1147,6 +1207,188 @@ function save_dhcp_relays(rows) {
 		changed,
 		relays: dhcp_relay_rows(),
 		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+	};
+}
+
+function valid_dhcp_boot_value(value) {
+	return replace(value, /[^A-Za-z0-9_.:@/+%#,\[\]-]/g, '') == value;
+}
+
+function save_dhcp_boots(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'boot', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'boot';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'boot');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let filename = dhcp_clean_value(row?.filename || '');
+		let servername = dhcp_clean_value(row?.servername || '');
+		let serveraddress = dhcp_clean_value(row?.serveraddress || '');
+		let dhcp_option_list = split_dhcp_lines(row?.dhcp_option || '');
+		let networkid = dhcp_clean_value(row?.networkid || '');
+		let force = dhcp_optional_zero_one(row?.force);
+		let instance = dhcp_clean_value(row?.instance || '');
+
+		if (!length(filename) || !length(servername) || !length(serveraddress))
+			return {
+				saved: false,
+				message: 'PXE/TFTP boot filename, server name, and server address are required.',
+				changed: false,
+				boots: dhcp_boot_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+			};
+
+		for (let value in [filename, servername, serveraddress, networkid, instance, ...dhcp_option_list]) {
+			if (!valid_dhcp_boot_value(value))
+				return {
+					saved: false,
+					message: 'PXE/TFTP boot option contains unsupported characters.',
+					changed: false,
+					boots: dhcp_boot_rows(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+				};
+		}
+
+		let scalar_options = {
+			filename,
+			servername,
+			serveraddress,
+			networkid,
+			force,
+			instance
+		};
+
+		for (let key, value in scalar_options) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				dhcp_set_option(section, key, value);
+			}
+		}
+
+		let current_options = uci.get('dhcp', section, 'dhcp_option') || [];
+
+		if (!same_dhcp_list(current_options, dhcp_option_list)) {
+			changed = true;
+			if (length(dhcp_option_list))
+				uci.set('dhcp', section, 'dhcp_option', length(dhcp_option_list) == 1 ? dhcp_option_list[0] : dhcp_option_list);
+			else
+				uci.delete('dhcp', section, 'dhcp_option');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'PXE/TFTP boot options saved and dnsmasq reloaded.' : 'PXE/TFTP boot options already up to date.',
+		changed,
+		boots: dhcp_boot_rows(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+	};
+}
+
+function save_dhcp_boot6s(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'boot6', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == 'boot6';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'boot6');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let url = dhcp_clean_value(row?.url || '');
+		let arch = dhcp_clean_value(row?.arch || '');
+
+		if (!length(url) || !valid_dhcp_boot_value(url))
+			return {
+				saved: false,
+				message: 'IPv6 PXE boot URL is required and contains unsupported characters.',
+				changed: false,
+				boots: dhcp_boot6_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+			};
+
+		if (arch != '' && (!dhcp_numeric_value(arch) || +arch < 0 || +arch > 65535))
+			return {
+				saved: false,
+				message: 'IPv6 PXE boot architecture must be between 0 and 65535.',
+				changed: false,
+				boots: dhcp_boot6_rows(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+			};
+
+		let next = { url, arch };
+
+		for (let key, value in next) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				dhcp_set_option(section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/odhcpd reload >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'IPv6 PXE boot options saved and odhcpd reloaded.' : 'IPv6 PXE boot options already up to date.',
+		changed,
+		boots: dhcp_boot6_rows(),
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
 	};
 }
 
@@ -7692,6 +7934,8 @@ function build_core_settings(page) {
 		dhcpDomains: [],
 		dhcpPools: [],
 		dhcpRelays: [],
+		dhcpBoots: [],
+		dhcpBoot6s: [],
 		dhcpStatus: {},
 		networkRoutes: [],
 		networkRules: [],
@@ -7702,12 +7946,14 @@ function build_core_settings(page) {
 	};
 
 	if (page == 'dhcp') {
-		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay']);
+		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6']);
 		data.dhcpLeases = dhcp_leases();
 		data.dhcpHosts = dhcp_static_hosts();
 		data.dhcpDomains = dhcp_domain_records();
 		data.dhcpPools = dhcp_pool_rows();
 		data.dhcpRelays = dhcp_relay_rows();
+		data.dhcpBoots = dhcp_boot_rows();
+		data.dhcpBoot6s = dhcp_boot6_rows();
 		data.dhcpStatus = dhcp_status();
 	}
 	else if (page == 'firewall') {
@@ -7969,6 +8215,46 @@ const methods = {
 					changed: false,
 					relays: dhcp_relay_rows(),
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay'])
+				});
+			}
+		}
+	},
+
+	dhcp_boots_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_boots(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'PXE/TFTP boot options save failed: ' + e,
+					changed: false,
+					boots: dhcp_boot_rows(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+				});
+			}
+		}
+	},
+
+	dhcp_boot6s_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_boot6s(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'IPv6 PXE boot options save failed: ' + e,
+					changed: false,
+					boots: dhcp_boot6_rows(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
 				});
 			}
 		}

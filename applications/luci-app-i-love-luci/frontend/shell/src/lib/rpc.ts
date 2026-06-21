@@ -224,6 +224,23 @@ export type DhcpRelay = {
 	interface: string;
 };
 
+export type DhcpBoot = {
+	section: string;
+	filename: string;
+	servername: string;
+	serveraddress: string;
+	dhcp_option: string;
+	networkid: string;
+	force: string;
+	instance: string;
+};
+
+export type DhcpBoot6 = {
+	section: string;
+	url: string;
+	arch: string;
+};
+
 export type DhcpStatus = {
 	dnsmasq?: ServiceState | null;
 	odhcpd?: ServiceState | null;
@@ -280,6 +297,8 @@ export type CoreSettings = {
 	dhcpDomains?: DhcpDomain[];
 	dhcpPools?: DhcpPool[];
 	dhcpRelays?: DhcpRelay[];
+	dhcpBoots?: DhcpBoot[];
+	dhcpBoot6s?: DhcpBoot6[];
 	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
 	firewallFiles?: ServiceFile[];
@@ -792,6 +811,22 @@ export type DhcpRelaysResult = {
 	message: string;
 	changed: boolean;
 	relays: DhcpRelay[];
+	sections: ConfigSection[];
+};
+
+export type DhcpBootsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	boots: DhcpBoot[];
+	sections: ConfigSection[];
+};
+
+export type DhcpBoot6sResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	boots: DhcpBoot6[];
 	sections: ConfigSection[];
 };
 
@@ -1843,6 +1878,36 @@ export async function saveDhcpRelays(rows: DhcpRelay[]): Promise<DhcpRelaysResul
 			message: "DHCP relay save failed.",
 			changed: false,
 			relays: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpBoots(rows: DhcpBoot[]): Promise<DhcpBootsResult> {
+	try {
+		return await callBridge<DhcpBootsResult>("dhcp_boots_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "PXE/TFTP boot options save failed.",
+			changed: false,
+			boots: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpBoot6s(rows: DhcpBoot6[]): Promise<DhcpBoot6sResult> {
+	try {
+		return await callBridge<DhcpBoot6sResult>("dhcp_boot6s_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "IPv6 PXE boot options save failed.",
+			changed: false,
+			boots: [],
 			sections: [],
 		};
 	}

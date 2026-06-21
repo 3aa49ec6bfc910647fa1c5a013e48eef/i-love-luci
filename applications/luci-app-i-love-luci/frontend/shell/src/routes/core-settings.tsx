@@ -18,6 +18,8 @@ import {
 	saveFirewallRedirects,
 	saveFirewallRules,
 	saveFirewallZones,
+	saveDhcpBoot6s,
+	saveDhcpBoots,
 	saveDhcpDomains,
 	saveDhcpHosts,
 	saveDhcpPools,
@@ -35,6 +37,8 @@ import {
 	type ConfigSection,
 	type CoreSettings,
 	type DashboardStatus,
+	type DhcpBoot,
+	type DhcpBoot6,
 	type DhcpDomain,
 	type DhcpHost,
 	type DhcpLease,
@@ -196,6 +200,8 @@ function DhcpSummary({
 	const domainRecords = settings.dhcpDomains ?? [];
 	const pools = settings.dhcpPools ?? [];
 	const relays = settings.dhcpRelays ?? [];
+	const boots = settings.dhcpBoots ?? [];
+	const boot6s = settings.dhcpBoot6s ?? [];
 	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
 	const odhcpd = settings.dhcp.find((section) => section.type === "odhcpd") ?? null;
 	const [pendingStaticHost, setPendingStaticHost] = useState<PendingStaticHost | null>(null);
@@ -276,6 +282,26 @@ function DhcpSummary({
 					})
 				}
 				relays={relays}
+			/>
+			<DhcpBootEditor
+				boots={boots}
+				onSaved={(nextBoots, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpBoots: nextBoots,
+					})
+				}
+			/>
+			<DhcpBoot6Editor
+				boots={boot6s}
+				onSaved={(nextBoots, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpBoot6s: nextBoots,
+					})
+				}
 			/>
 			<LeaseTable leases={leases} onAddStaticHost={addStaticHostFromLease} />
 			<StaticHostEditor
@@ -1288,6 +1314,313 @@ function normalizeDhcpRelay(relay: DhcpRelay): DhcpRelay {
 		local_addr: relay.local_addr ?? "",
 		server_addr: relay.server_addr ?? "",
 		interface: relay.interface ?? "",
+	};
+}
+
+function DhcpBootEditor({
+	boots,
+	onSaved,
+}: {
+	boots: DhcpBoot[];
+	onSaved: (boots: DhcpBoot[], sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => boots.map(normalizeDhcpBoot));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpBoot, value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{ section: "", filename: "", servername: "", serveraddress: "", dhcp_option: "", networkid: "", force: "", instance: "" },
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpBoots(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.boots.map(normalizeDhcpBoot);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">PXE/TFTP boot options</h2>
+					<p className="text-sm text-muted-foreground">Configure dnsmasq boot files, DHCP options, tags, and instance binding.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add boot
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[88rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Filename</th>
+								<th className="px-3 py-2 font-medium">Server name</th>
+								<th className="px-3 py-2 font-medium">Server address</th>
+								<th className="px-3 py-2 font-medium">DHCP options</th>
+								<th className="px-3 py-2 font-medium">Match tag</th>
+								<th className="px-3 py-2 font-medium">Force</th>
+								<th className="px-3 py-2 font-medium">Instance</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((boot, index) => (
+									<tr className="border-b align-top last:border-0" key={`${boot.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Boot filename"
+												onChange={(event) => updateRow(index, "filename", event.target.value)}
+												value={boot.filename}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Boot server name"
+												onChange={(event) => updateRow(index, "servername", event.target.value)}
+												value={boot.servername}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Boot server address"
+												onChange={(event) => updateRow(index, "serveraddress", event.target.value)}
+												value={boot.serveraddress}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="DHCP boot options"
+												className="min-h-20 w-72 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "dhcp_option", event.target.value)}
+												value={boot.dhcp_option}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Boot match tag"
+												onChange={(event) => updateRow(index, "networkid", event.target.value)}
+												value={boot.networkid}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`dhcp-boot-force-${index}`}
+												onChange={(value) => updateRow(index, "force", value)}
+												options={[
+													["", "Default"],
+													["1", "Yes"],
+													["0", "No"],
+												]}
+												value={boot.force}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Boot dnsmasq instance"
+												onChange={(event) => updateRow(index, "instance", event.target.value)}
+												value={boot.instance}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${boot.filename || "boot option"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={8}>
+										No PXE/TFTP boot options configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpBoot(boot: DhcpBoot): DhcpBoot {
+	return {
+		section: boot.section ?? "",
+		filename: boot.filename ?? "",
+		servername: boot.servername ?? "",
+		serveraddress: boot.serveraddress ?? "",
+		dhcp_option: boot.dhcp_option ?? "",
+		networkid: boot.networkid ?? "",
+		force: boot.force === "1" || boot.force === "0" ? boot.force : "",
+		instance: boot.instance ?? "",
+	};
+}
+
+function DhcpBoot6Editor({
+	boots,
+	onSaved,
+}: {
+	boots: DhcpBoot6[];
+	onSaved: (boots: DhcpBoot6[], sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => boots.map(normalizeDhcpBoot6));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpBoot6, value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRow() {
+		setRows((current) => [...current, { section: "", url: "", arch: "" }]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpBoot6s(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.boots.map(normalizeDhcpBoot6);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">PXE over IPv6</h2>
+					<p className="text-sm text-muted-foreground">Configure odhcpd boot URLs and optional client architecture selectors.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add IPv6 boot
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[42rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">URL</th>
+								<th className="px-3 py-2 font-medium">Architecture</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((boot, index) => (
+									<tr className="border-b align-top last:border-0" key={`${boot.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="IPv6 boot URL"
+												onChange={(event) => updateRow(index, "url", event.target.value)}
+												value={boot.url}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Client architecture"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "arch", event.target.value)}
+												value={boot.arch}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${boot.url || "IPv6 boot option"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+										No IPv6 PXE boot options configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpBoot6(boot: DhcpBoot6): DhcpBoot6 {
+	return {
+		section: boot.section ?? "",
+		url: boot.url ?? "",
+		arch: boot.arch ?? "",
 	};
 }
 

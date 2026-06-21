@@ -35,6 +35,8 @@
 					"custom_command_run",
 					"custom_commands_save",
 					"diagnostics_run",
+					"dhcp_boot6s_save",
+					"dhcp_boots_save",
 					"dhcp_domains_save",
 					"dhcp_hosts_save",
 					"dhcp_pools_save",
