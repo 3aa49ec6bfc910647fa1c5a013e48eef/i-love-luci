@@ -242,6 +242,14 @@ compat_exact = {
 	"/admin/system/attendedsysupgrade",
 	"/admin/system/attendedsysupgrade/overview",
 }
+requires_explicit_promotion_routes = {
+	"/admin/network": "live interface workflow can drop the active router path; protocol switch/reconnect/save-apply parity is not proven",
+	"/admin/network/network": "live interface workflow can drop the active router path; protocol switch/reconnect/save-apply parity is not proven",
+	"/admin/system/attendedsysupgrade": "image build/flash/reconnect/rollback parity is not proven",
+	"/admin/system/attendedsysupgrade/overview": "image build/flash/reconnect/rollback parity is not proven",
+	"/admin/system/flash": "destructive flash/recovery/reconnect parity is not proven",
+	"/admin/system/package-manager": "broader package mutation rollback and post-install UX parity is not proven",
+}
 for item in visible:
 	path = item.get("path", "")
 	if path in compat_exact or any(path.startswith(prefix) for prefix in compat_prefixes):
@@ -253,6 +261,15 @@ for item in visible:
 	if path in approved_native_app_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes):
 		if item.get("configuredMode", "auto") == "auto" and item.get("effectiveMode") == "modern" and item.get("nativeStatus") != "supported":
 			failures.append(f"{path}: approved native app route is modern but not fully supported")
+
+	if path in requires_explicit_promotion_routes:
+		reason = requires_explicit_promotion_routes[path]
+		if item.get("effectiveMode") != "legacy":
+			failures.append(f"{path}: must remain LuCI compat until explicit promotion evidence is added ({reason})")
+		if item.get("nativeStatus") != "compat":
+			failures.append(f"{path}: must keep nativeStatus=compat until explicit promotion evidence is added ({reason})")
+		if item.get("nativePath"):
+			failures.append(f"{path}: must not expose nativePath until explicit promotion evidence is added ({reason})")
 
 for item in unapproved_app_routes:
 	path = item.get("path", "")

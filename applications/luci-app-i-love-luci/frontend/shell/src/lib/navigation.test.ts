@@ -110,6 +110,18 @@ describe("itemTarget", () => {
 				legacy: false,
 			}),
 		).toBe("/legacy?path=%2Fadmin%2Fservices%2Fbanip%2Fallowlist");
+
+		expect(
+			itemTarget({
+				title: "Interfaces",
+				path: "/admin/network/network",
+				nativePath: "/core/network",
+				effectiveMode: "modern",
+				configuredMode: "modern",
+				nativeStatus: "compat",
+				legacy: false,
+			}),
+		).toBe("/legacy?path=%2Fadmin%2Fnetwork%2Fnetwork");
 	});
 
 	it("keeps query strings when routing to LuCI compatibility", () => {
