@@ -3197,6 +3197,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			</div>
 			<PackageUpgradeTable actionBusy={actionBusy} entries={upgrades} onRunAction={runAction} />
 			<PackageActionOutput result={actionResult} />
+			<ManualPackagePlanner busy={actionBusy} onRunAction={runAction} />
 			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
 			<Panel
@@ -3308,6 +3309,48 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 			/>
 			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
 		</div>
+	);
+}
+
+function ManualPackagePlanner({
+	busy,
+	onRunAction,
+}: {
+	busy: string | null;
+	onRunAction: (action: "install", name: string, simulate: boolean) => void | Promise<void>;
+}) {
+	const [name, setName] = useState("");
+
+	function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		const value = name.trim();
+
+		if (!value) {
+			toast.error("Package name is required.");
+			return;
+		}
+
+		void onRunAction("install", value, true);
+	}
+
+	return (
+		<Panel
+			title={
+				<div className="flex flex-col gap-1">
+					<div>Manual package install</div>
+					<div className="text-xs font-normal text-muted-foreground">
+						Plan a package-name install without changing the router. URL/package-file installs stay in LuCI compat.
+					</div>
+				</div>
+			}
+		>
+			<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submit}>
+				<Input onChange={(event) => setName(event.target.value)} placeholder="Package name" value={name} />
+				<Button disabled={busy === `install:${name.trim()}:plan`} type="submit" variant="outline">
+					Plan install
+				</Button>
+			</form>
+		</Panel>
 	);
 }
 
