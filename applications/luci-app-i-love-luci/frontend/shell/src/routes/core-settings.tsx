@@ -6082,6 +6082,7 @@ function NetworkSummary({
 	const rules = settings.networkRules ?? [];
 	const configInterfaces = settings.network.filter((section) => section.type === "interface");
 	const configDevices = settings.network.filter((section) => section.type === "device");
+	const firewallZones = settings.firewall.filter((section) => section.type === "zone");
 
 	if (!interfaces.length && !devices.length && !settings.network.length) {
 		return null;
@@ -6091,11 +6092,13 @@ function NetworkSummary({
 		<div className="grid gap-5">
 			{configInterfaces.length ? (
 				<NetworkInterfaceEditor
+					firewallZones={firewallZones}
 					interfaces={configInterfaces}
-					onSaved={(sections) =>
+					onSaved={(sections, nextFirewallZones) =>
 						onSettingsChange({
 							...settings,
 							network: sections,
+							firewall: nextFirewallZones ?? settings.firewall,
 						})
 					}
 				/>
@@ -6138,19 +6141,31 @@ function NetworkSummary({
 }
 
 function NetworkInterfaceEditor({
+	firewallZones,
 	interfaces,
 	onSaved,
 }: {
+	firewallZones: ConfigSection[];
 	interfaces: ConfigSection[];
-	onSaved: (sections: ConfigSection[]) => void;
+	onSaved: (sections: ConfigSection[], firewallSections?: ConfigSection[]) => void;
 }) {
-	const [rows, setRows] = useState(() => interfaces.map(networkInterfaceValues));
+	const [rows, setRows] = useState(() => interfaces.map((section) => networkInterfaceValues(section, firewallZones)));
 	const [savedRows, setSavedRows] = useState(rows);
 	const [saving, setSaving] = useState(false);
 	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
 	const visibleRows = rows
 		.map((row, index) => ({ row, index }))
 		.filter(({ row }) => row.remove !== "1");
+	const firewallZoneOptions = useMemo<[string, string][]>(
+		() => [
+			["", "Unspecified"],
+			...firewallZones.map((zone) => {
+				const name = rawValue(zone.values.name || zone.name);
+				return [name, name] as [string, string];
+			}),
+		],
+		[firewallZones],
+	);
 
 	function updateRow(index: number, field: keyof NetworkInterfaceConfig, value: string) {
 		setRows((current) =>
@@ -6196,7 +6211,7 @@ function NetworkInterfaceEditor({
 		toast.success(result.message);
 		setRows(nextRows);
 		setSavedRows(nextRows);
-		onSaved(result.sections);
+		onSaved(result.sections, result.firewallSections);
 	}
 
 	return (
@@ -6220,6 +6235,7 @@ function NetworkInterfaceEditor({
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Interface</th>
+								<th className="px-3 py-2 font-medium">Firewall zone</th>
 								<th className="px-3 py-2 font-medium">Protocol</th>
 								<th className="px-3 py-2 font-medium">Device</th>
 								<th className="px-3 py-2 font-medium">Disabled</th>
@@ -6256,6 +6272,14 @@ function NetworkInterfaceEditor({
 										) : (
 											row.section
 										)}
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-zone-${index}`}
+											onChange={(value) => updateRow(index, "zone", value)}
+											options={firewallZoneOptions}
+											value={row.zone ?? ""}
+										/>
 									</td>
 									<td className="px-3 py-3">
 										<Input aria-label="Protocol" onChange={(event) => updateRow(index, "proto", event.target.value)} value={row.proto} />
@@ -7372,9 +7396,10 @@ function rawListValue(value: unknown) {
 	return text ? [text] : [];
 }
 
-function networkInterfaceValues(section: ConfigSection): NetworkInterfaceConfig {
+function networkInterfaceValues(section: ConfigSection, firewallZones: ConfigSection[] = []): NetworkInterfaceConfig {
 	return normalizeNetworkInterface({
 		section: section.name,
+		zone: firewallZoneForInterface(section.name, firewallZones),
 		proto: rawValue(section.values.proto),
 		device: rawValue(section.values.device || section.values.ifname),
 		disabled: rawValue(section.values.disabled),
@@ -7407,6 +7432,7 @@ function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfac
 		section: row.section ?? "",
 		remove: row.remove === "1" ? "1" : "",
 		isNew: row.isNew === "1" ? "1" : "",
+		zone: row.zone ?? "",
 		proto: row.proto ?? "",
 		device: row.device ?? "",
 		disabled: row.disabled === "1" || row.disabled === "0" ? row.disabled : "",
@@ -7439,6 +7465,7 @@ function newNetworkInterfaceRow(section: string): NetworkInterfaceConfig {
 		section,
 		remove: "",
 		isNew: "1",
+		zone: "",
 		proto: "none",
 		device: "",
 		disabled: "1",
@@ -7475,6 +7502,18 @@ function uniqueNetworkInterfaceName(rows: NetworkInterfaceConfig[]) {
 	}
 
 	return `new_interface_${index}`;
+}
+
+function firewallZoneForInterface(interfaceName: string, firewallZones: ConfigSection[]) {
+	for (const zone of firewallZones) {
+		const networks = rawListValue(zone.values.network);
+
+		if (networks.includes(interfaceName)) {
+			return rawValue(zone.values.name || zone.name);
+		}
+	}
+
+	return "";
 }
 
 function networkDeviceValues(section: ConfigSection): NetworkDeviceConfig {

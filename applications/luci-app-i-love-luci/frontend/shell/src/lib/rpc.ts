@@ -997,6 +997,7 @@ export type NetworkInterfaceConfig = {
 	section: string;
 	remove?: string;
 	isNew?: string;
+	zone?: string;
 	proto: string;
 	device: string;
 	disabled: string;
@@ -1029,6 +1030,7 @@ export type NetworkInterfacesResult = {
 	changed: boolean;
 	interfaces: NetworkInterfaceConfig[];
 	sections: ConfigSection[];
+	firewallSections?: ConfigSection[];
 };
 
 export type NetworkDeviceConfig = {

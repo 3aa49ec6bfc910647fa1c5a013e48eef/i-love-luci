@@ -2226,17 +2226,28 @@ function valid_network_interface_text(value) {
 
 function network_interface_rows() {
 	let interfaces = [];
+	let interface_zones = {};
 
 	try {
 		uci.load('network');
+		uci.load('firewall');
 	}
 	catch (e) {
 		return interfaces;
 	}
 
+	uci.foreach('firewall', 'zone', function(section) {
+		let name = section.name || section['.name'] || '';
+
+		for (let network in dhcp_normalize_list(section.network))
+			if (length(network) && !interface_zones[network])
+				interface_zones[network] = name;
+	});
+
 	uci.foreach('network', 'interface', function(section) {
 		push(interfaces, {
 			section: section['.name'] || '',
+			zone: interface_zones[section['.name'] || ''] || '',
 			proto: section.proto || '',
 			device: section.device || section.ifname || '',
 			disabled: section.disabled || '',
@@ -2267,18 +2278,68 @@ function network_interface_rows() {
 	return interfaces;
 }
 
+function update_firewall_zone_networks(interface_name, target_zone) {
+	let changed = false;
+
+	uci.foreach('firewall', 'zone', function(section) {
+		let section_name = section['.name'];
+		let zone_name = section.name || section_name || '';
+		let next_networks = [];
+		let found = false;
+
+		for (let network in dhcp_normalize_list(section.network)) {
+			if (network == interface_name) {
+				found = true;
+				if (zone_name != target_zone)
+					changed = true;
+				else
+					push(next_networks, network);
+			}
+			else {
+				push(next_networks, network);
+			}
+		}
+
+		if (zone_name == target_zone && length(target_zone) && !found) {
+			push(next_networks, interface_name);
+			changed = true;
+		}
+
+		if (!same_dhcp_list(section.network || [], next_networks)) {
+			if (length(next_networks))
+				uci.set('firewall', section_name, 'network', length(next_networks) == 1 ? next_networks[0] : next_networks);
+			else
+				uci.delete('firewall', section_name, 'network');
+		}
+	});
+
+	return changed;
+}
+
 function save_network_interfaces(rows) {
 	rows ||= [];
 	uci.load('network');
+	uci.load('firewall');
 
 	let changed = false;
+	let firewall_changed = false;
 	let validated = [];
 	let seen = {};
+	let zone_sections = {};
+
+	uci.foreach('firewall', 'zone', function(section) {
+		let name = section.name || section['.name'] || '';
+
+		if (length(name))
+			zone_sections[name] = section['.name'];
+	});
 
 	for (let row in rows) {
 		let section = dhcp_clean_value(row?.section || '');
 		let exists = length(section) && uci.get('network', section) == 'interface';
 		let remove = dhcp_zero_one(row?.remove) == '1';
+		let zone_provided = row != null && row.zone != null;
+		let zone = zone_provided ? dhcp_clean_value(row?.zone || '') : null;
 
 		if (!length(section) || !valid_network_route_interface(section))
 			return {
@@ -2313,10 +2374,34 @@ function save_network_interfaces(rows) {
 			if (exists)
 				push(validated, {
 					section,
-					remove: true
+					remove: true,
+					zone_provided: true,
+					zone: ''
 				});
 
 			continue;
+		}
+
+		if (zone_provided) {
+			if (zone != '' && !valid_network_route_interface(zone))
+				return {
+					saved: false,
+					message: 'Network interface firewall zone contains unsupported characters.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+					firewallSections: collect_uci_config('firewall', ['zone'])
+				};
+
+			if (zone != '' && !zone_sections[zone])
+				return {
+					saved: false,
+					message: 'Network interface firewall zone was not found.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+					firewallSections: collect_uci_config('firewall', ['zone'])
+				};
 		}
 
 		if (!exists && uci.get('network', section) != null)
@@ -2414,6 +2499,8 @@ function save_network_interfaces(rows) {
 		push(validated, {
 			section,
 			create: !exists,
+			zone_provided,
+			zone,
 			ipaddr,
 			dns,
 			ip6class,
@@ -2428,6 +2515,8 @@ function save_network_interfaces(rows) {
 		if (item.remove) {
 			changed = true;
 			uci.delete('network', section);
+			if (update_firewall_zone_networks(section, ''))
+				firewall_changed = true;
 			continue;
 		}
 
@@ -2484,6 +2573,9 @@ function save_network_interfaces(rows) {
 			else
 				uci.delete('network', section, 'ip6prefix');
 		}
+
+		if (item.zone_provided && update_firewall_zone_networks(section, item.zone || ''))
+			firewall_changed = true;
 	}
 
 	if (changed) {
@@ -2491,12 +2583,18 @@ function save_network_interfaces(rows) {
 		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
 	}
 
+	if (firewall_changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1 || true');
+	}
+
 	return {
 		saved: true,
-		message: changed ? 'Network interfaces saved and network reloaded.' : 'Network interfaces already up to date.',
-		changed,
+		message: changed || firewall_changed ? 'Network interfaces saved and services reloaded.' : 'Network interfaces already up to date.',
+		changed: changed || firewall_changed,
 		interfaces: network_interface_rows(),
-		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+		sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+		firewallSections: collect_uci_config('firewall', ['zone'])
 	};
 }
 
@@ -8402,6 +8500,12 @@ function build_core_settings(page) {
 	else if (page == 'firewall') {
 		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include']);
 		data.firewallFiles = firewall_files();
+	}
+	else if (page == 'network') {
+		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
+		data.networkRoutes = network_route_rows();
+		data.networkRules = network_rule_rows();
+		data.firewall = collect_uci_config('firewall', ['zone']);
 	}
 	else if (page == 'system') {
 		data.system = collect_system_settings_sections();
