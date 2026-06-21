@@ -307,7 +307,7 @@ Current compatibility model:
 
 - User routing has only three outcomes: supported native route, LuCI compat route, or intentionally hidden route.
 - `nativeStatus=partial` is internal migration metadata only. It means adapter evidence exists, but the user-facing route is still LuCI compat.
-- Partial/internal adapter routes must not advertise `nativePath`, must not offer native mode in settings, and must reject native-mode overrides in `rpcd`.
+- Routes with internal adapter evidence must not advertise `nativePath`, must not offer native mode in settings, and must reject native-mode overrides in `rpcd`.
 - The plan should describe these as LuCI compat routes with in-progress adapter evidence, not as partial user routes.
 
 Audit scope:
@@ -624,11 +624,11 @@ Installed LuCI app renderer policy:
 - Strict compat apps on the router: `luci-app-banip`, `luci-app-adblock-fast`, `luci-app-attendedsysupgrade`, and `luci-app-package-manager`.
 - Approved native app exceptions on the router: `luci-app-firewall`, `luci-app-commands`, `luci-app-uhttpd`, and `luci-app-upnp`. These are allowed to default to native because parity evidence and no-op/mutation safety tests are recorded below.
 - Unknown future `luci-app-*` routes must appear through LuCI compat automatically unless a native adapter explicitly supports them.
-- Internal route metadata still uses the value `legacy`, but user-facing UI should describe that path as `LuCI compat`. Partial routes are clean compat routes in normal use: `menu_tree` does not advertise a native path for them, the settings UI does not offer native mode, and the bridge rejects native-mode overrides unless the route is fully supported.
+- Internal route metadata may still mark migration work as in progress, but user-facing UI should describe that path as `LuCI compat`. Routes with incomplete adapter evidence are clean compat routes in normal use: `menu_tree` does not advertise a native path for them, the settings UI does not offer native mode, and the bridge rejects native-mode overrides unless the route is fully supported.
 
 Validation on `172.16.172.1`:
 
-- All visible LuCI menu routes have either a native route or a LuCI compat route. Partial routes and service/package LuCI apps with incomplete native parity default to LuCI compat in `auto`, so full LuCI functionality remains available.
+- All visible LuCI menu routes have either a supported native route or a LuCI compat route. Service/package LuCI apps and other routes with incomplete native parity default to LuCI compat in `auto`, so full LuCI functionality remains available.
 - `native_page` returned successfully for `status-routes`, `firewall-status`, `logs`, `processes`, `connections`, `wireless`, `diagnostics`, `attendedsysupgrade`, `packages`, `startup`, `crontab`, `sshkeys`, `password`, `repokeys`, `leds`, `flash`, `services`, and `reboot`.
 - `crontab_save` saved through the native bridge and reloaded cron on `172.16.172.1`; the test router had no existing root crontab entries.
 - `native_page` returned `sshkeys` successfully. The router currently has no `/etc/dropbear/authorized_keys`, so save was not exercised to avoid creating an empty file during validation.
@@ -639,11 +639,14 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
 - Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
 - Menu policy validation confirms strict compat LuCI app routes such as banIP, AdBlock Fast, attended sysupgrade, and package manager default to LuCI compat in auto mode. It also tracks approved native LuCI app exceptions so routes like firewall, custom commands, uHTTPd, and UPnP cannot default to native unless they are marked supported.
-- Route audit now reports the exact `partial_default_paths` list so partial routes can be verified as LuCI compat defaults rather than silently becoming native routes. The audit also fails if any partial route exposes a `nativePath`, if any non-supported route is configured for native mode, or if the number of exposed native paths differs from the number of supported routes.
-- Clean compat routing was validated on `172.16.172.1`: all 16 partial routes reported as `legacy` effective mode, the settings UI hides native mode for partial routes, and `route_mode_set` rejected `modern` for `/admin/services/banip` with `saved=false` and `uci changes=0`.
-- Clean compat menu metadata was validated on `172.16.172.1`: `menu_tree` now exposes `nativePath` only for the 41 fully supported routes (`native_paths=41`), while all 16 partial routes have no native path and continue to use LuCI compat. Route audit, native page audit, HTTP route smoke, and `uci changes=0` passed after deploy.
-- Frontend navigation now also treats partial/unsupported route metadata as LuCI compat even if stale menu data contains a native path. The static native-path fallback map contains supported routes only.
+- Route audit now reports the exact `compat_internal_paths` list so routes with internal adapter evidence can be verified as LuCI compat routes rather than silently becoming native routes. The audit also fails if any compat route exposes a `nativePath`, if any non-supported route is configured for native mode, or if the number of exposed native paths differs from the number of supported routes.
+- Clean compat routing was validated on `172.16.172.1`: all 16 routes with incomplete adapter evidence reported as `legacy` effective mode, the settings UI hides native mode for those routes, and `route_mode_set` rejected `modern` for `/admin/services/banip` with `saved=false` and `uci changes=0`.
+- Clean compat menu metadata was validated on `172.16.172.1`: `menu_tree` now exposes `nativePath` only for the 41 fully supported routes (`native_paths=41`), while all 16 routes with incomplete adapter evidence have no native path and continue to use LuCI compat. Route audit, native page audit, HTTP route smoke, and `uci changes=0` passed after deploy.
+- Frontend navigation now also treats unsupported or incomplete route metadata as LuCI compat even if stale menu data contains a native path. The static native-path fallback map contains supported routes only.
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
+
+Historical validation notes below may contain older audit labels such as `native_preview_routes`. The current release gate is the clean compat model above: supported routes expose `nativePath`; all routes with incomplete/native-in-progress adapter evidence open LuCI compat and expose no native path.
+
 - `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.
 - Browser smoke test loaded `#/core/firewall` on `172.16.172.1` with the `1.0.0-r4-native13` bundle and rendered firewall defaults, 3 zones, 3 zone forwardings, and 9 traffic rules.
@@ -673,7 +676,7 @@ Validation on `172.16.172.1`:
 - The route compatibility table now labels route support as `Coverage` and no longer displays effective `modern`/`legacy` status text beside each route. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native35` bundle confirmed the settings table renders `Route`, `Coverage`, and `Mode` columns; mode labels remain only inside the explicit route override selector. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - banIP adapter evidence covers allowlist, blocklist, custom feeds, reporting, firewall log, and processing log data sources. banIP user routes remain clean LuCI compat; the adapter evidence is retained for future migration work, not advertised through `menu_tree`. Browser smoke on `172.16.172.1` with the `1.0.0-r4-native36` bundle confirmed the data-source routes rendered focused structured views without `<pre>` elements. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - Firewall port-forward editing now covers installed LuCI `firewall/forwards.js` fields. Router validation added and removed a disabled DNAT test forward with negated source IP/MAC and mark matches, source port, destination mapping, protocol list, default NAT reflection behavior, reflection zones, limit/burst, logging, and extra-args handling; `/etc/config/firewall` restored to the same SHA-256 hash and `uci changes` was empty afterward. Route audit passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=32`, `partial=28`, `unsupported=0`; native page audit passed with `core_pages=4`, `native_pages=18`, `service_adapters=6`; HTTP smoke passed with `native_shell_checks=47`, `legacy_route_checks=13`.
-- Historical route audit once validated preview paths for every native-capable route. Current policy supersedes this: only supported routes expose `nativePath`; partial routes are clean LuCI compat and expose no native path.
+- Historical route audit once used broader preview-path checks. Current policy supersedes this: only supported routes expose `nativePath`; routes with in-progress adapter evidence are clean LuCI compat and expose no native path.
 - Native page audit asserts focused service-adapter data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so future migration evidence cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
 - Native page audit now fails if the console bridge is enabled but does not expose the ttyd helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
 - Console no-reprompt design is currently implemented with `ttyd` bound to LAN, a generated helper HTTP basic-auth credential stored in UCI, and `/bin/login -f root` as the ttyd command. The React header opens ttyd with the helper credential in the URL so the user does not need to type router credentials again. Security constraints: LAN binding, random helper credential, existing LuCI session required to read the helper credential, and native audit coverage for helper URL fields.
@@ -912,8 +915,8 @@ Audit checks:
   - native route when `effectiveMode=modern`
   - LuCI compat route when `effectiveMode=legacy`
   - hidden only when explicitly configured hidden or hidden by LuCI metadata
-- Every route with `nativeStatus=partial` is treated as clean LuCI compat in user routing: no `nativePath` is advertised, native mode is not selectable, and explicit native mode is rejected by the bridge.
-- Partial route work must be batched one full LuCI page at a time. A route is promoted only after its LuCI source view, fields, actions, ACL/UCI visibility dependencies, save/apply behavior, mobile rendering, and compat fallback are compared and tested together. Do not promote isolated controls from a page when the rest of that page still depends on LuCI.
+- Every route with in-progress adapter evidence is treated as clean LuCI compat in user routing: no `nativePath` is advertised, native mode is not selectable, and explicit native mode is rejected by the bridge.
+- Native migration work must be batched one full LuCI page at a time. A route is promoted only after its LuCI source view, fields, actions, ACL/UCI visibility dependencies, save/apply behavior, mobile rendering, and compat fallback are compared and tested together. Do not promote isolated controls from a page when the rest of that page still depends on LuCI.
 - LuCI menu dependency metadata must be honored before a route is shown. If LuCI would hide a route because a required UCI section, ACL, file, executable, or package capability is absent, I Love LuCI must also hide it instead of routing to a broken native or compat page.
 - Every `luci-app-*` package has all of its menu children represented and defaults to LuCI compat unless a reusable native adapter proves parity.
 - Native route migrations are tested route-by-route, including dashboard/status, network, firewall, system, services, package, console, pending-change, and settings surfaces.
@@ -932,7 +935,7 @@ Native migration checks:
 - For routes with in-progress native adapter evidence, verify user routing still opens LuCI compat until missing edit/save/apply flows are complete.
 - For migrated first-party routes, test sidebar navigation, search navigation, direct hash URL load, refresh, and session-expired login recovery.
 - For write-capable native routes, verify pending changes, save/apply, discard, validation errors, and rollback behavior match LuCI expectations.
-- Do not promote a route from partial to native default until the route-specific parity checklist is documented in this file.
+- Do not promote a route from LuCI compat to native default until the route-specific parity checklist is documented in this file.
 
 LuCI app adapter robustness checks:
 
@@ -961,8 +964,8 @@ Required tooling:
   - missing routes
   - dead legacy targets
   - dead native targets for supported routes
-  - partial routes that expose `nativePath`
-  - partial routes that incorrectly default to native
+  - routes with in-progress adapter evidence that expose `nativePath`
+  - routes with in-progress adapter evidence that incorrectly default to native
   - LuCI app routes without compat fallback
 - `scripts/audit-router-native-pages.sh` calls representative `core_settings`, `native_page`, `service_detail`, `console_status`, and `changes_list` RPCs on the router and reports:
   - core network/DHCP/firewall/system payload regressions
@@ -980,7 +983,7 @@ Required tooling:
   - visible legacy compat routes that return login, 404, dispatch failure, or HTTP errors
 - Add browser smoke coverage for representative route types:
   - supported native core route
-  - partial LuCI compat route rejecting native-mode override
+  - in-progress adapter evidence route rejecting native-mode override and opening LuCI compat
   - third-party LuCI app auto route opening compat
   - search result opening same target as sidebar
   - newly installed test LuCI app appearing after refresh

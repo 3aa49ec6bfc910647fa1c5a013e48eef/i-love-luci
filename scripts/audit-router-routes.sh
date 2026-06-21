@@ -157,7 +157,7 @@ for item in visible:
 			failures.append(f"{path}: nativePath does not match a known shell route pattern: {native_path}")
 
 	if item.get("nativeStatus") == "partial" and native_path:
-		failures.append(f"{path}: partial route should not expose a nativePath; it must remain clean LuCI compat")
+		failures.append(f"{path}: compat route with internal adapter metadata should not expose a nativePath")
 
 	if mode == "legacy" and not resolved:
 		failures.append(f"{path}: legacy route has no resolved legacy path")
@@ -170,7 +170,7 @@ for item in visible:
 		and item.get("nativeStatus") == "partial"
 		and mode != "legacy"
 	):
-		failures.append(f"{path}: partial native route should default to LuCI compat until full-page parity is proven")
+		failures.append(f"{path}: route with internal adapter metadata must remain LuCI compat until full-page parity is proven")
 
 	if item.get("configuredMode") == "modern" and item.get("nativeStatus") != "supported":
 		failures.append(f"{path}: non-supported route must not be configured for native mode")
@@ -209,7 +209,7 @@ for item in visible:
 		if item.get("configuredMode", "auto") == "auto" and item.get("nativeStatus") != "supported" and item.get("effectiveMode") != "legacy":
 			failures.append(f"{path}: incomplete LuCI app route should default to compat in auto mode")
 		if item.get("nativeStatus") == "supported" and not item.get("nativePath"):
-			failures.append(f"{path}: native-capable app route has no native preview path")
+			failures.append(f"{path}: supported app route has no native path")
 
 	if path in strict_compat_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in strict_compat_prefixes):
 		if item.get("configuredMode", "auto") == "auto":
@@ -279,7 +279,7 @@ approved_native_app_routes = [
 	item for item in visible
 	if any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in approved_native_app_prefixes)
 ]
-partial_default_routes = [
+compat_internal_routes = [
 	item for item in visible
 	if item.get("configuredMode", "auto") == "auto"
 	and item.get("nativeStatus") == "partial"
@@ -291,10 +291,10 @@ print(
 	f"strict_compat_app_routes={len(strict_compat_routes)} "
 	f"approved_native_app_routes={len(approved_native_app_routes)}"
 )
-print(f"partial_default_routes={len(partial_default_routes)}")
+print(f"compat_internal_routes={len(compat_internal_routes)}")
 
-if partial_default_routes:
-	print("partial_default_paths=" + ",".join(sorted(item.get("path", "") for item in partial_default_routes)))
+if compat_internal_routes:
+	print("compat_internal_paths=" + ",".join(sorted(item.get("path", "") for item in compat_internal_routes)))
 
 if native_path_count != native_counter.get("supported", 0):
 	failures.append("Only supported routes should expose nativePath in menu_tree")
