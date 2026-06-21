@@ -52,6 +52,8 @@ echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
 echo '---ILOVELUCI-CONSOLE-LAUNCH---'
 ubus call luci.iloveluci console_launch
+echo '---ILOVELUCI-CONSOLE-LAUNCH-ROTATE---'
+ubus call luci.iloveluci console_launch
 echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
 echo '---ILOVELUCI-REBOOT-REJECT---'
@@ -394,6 +396,15 @@ else:
 		failures.append("console_launch enabled but missing helper password")
 	if console_launch_data.get("enabled") and console_launch_data.get("path") != "/":
 		failures.append("console_launch enabled but did not expose the ttyd root path")
+	if console_launch_data.get("enabled") and console_launch_data.get("rotated") is not True:
+		failures.append("console_launch enabled but did not rotate the helper credential")
+
+console_launch_rotate = json_after_marker("---ILOVELUCI-CONSOLE-LAUNCH-ROTATE---")
+if console_launch and console_launch.get("ok") and console_launch_rotate and console_launch_rotate.get("ok"):
+	first = console_launch.get("data") or {}
+	second = console_launch_rotate.get("data") or {}
+	if first.get("enabled") and second.get("enabled") and first.get("password") == second.get("password"):
+		failures.append("console_launch helper credential did not change between launches")
 
 changes = json_after_marker("---ILOVELUCI-CHANGES---")
 if not changes or not changes.get("ok"):

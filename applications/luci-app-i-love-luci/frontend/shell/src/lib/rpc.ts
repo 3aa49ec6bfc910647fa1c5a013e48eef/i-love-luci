@@ -59,6 +59,7 @@ export type ConsoleStatus = {
 export type ConsoleLaunch = ConsoleStatus & {
 	username?: string;
 	password?: string;
+	rotated?: boolean;
 };
 
 export type PendingChange = {

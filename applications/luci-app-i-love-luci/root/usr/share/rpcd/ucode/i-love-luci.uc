@@ -11271,11 +11271,26 @@ const methods = {
 
 			const port = section?.port || '7681';
 			const ssl = section?.ssl == '1';
-			const credential = section?.credential || '';
+			const enabled = section?.enable != '0' && port != '0' && section?.command != null;
+			let credential = section?.credential || '';
+			let rotated = false;
+
+			if (section != null && enabled) {
+				let username = split(credential, ':')?.[0] || 'iloveluci';
+				let password = trim(shell_output(`dd if=/dev/urandom bs=16 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"'`));
+
+				if (length(password) >= 32) {
+					credential = username + ':' + password;
+					uci.set('ttyd', section['.name'], 'credential', credential);
+					uci.commit('ttyd');
+					system('/etc/init.d/ttyd restart >/dev/null 2>&1 || true');
+					rotated = true;
+				}
+			}
+
 			const parts = split(credential, ':');
 			const username = parts?.[0] || '';
 			const password = parts?.[1] || '';
-			const enabled = section?.enable != '0' && port != '0' && section?.command != null;
 
 			return respond({
 				available: section != null,
@@ -11284,6 +11299,7 @@ const methods = {
 				ssl,
 				username,
 				password,
+				rotated,
 				path: '/',
 				url: `${ssl ? 'https' : 'http'}://{{host}}:${port}/`
 			});

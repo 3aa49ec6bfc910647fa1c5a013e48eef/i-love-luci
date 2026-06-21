@@ -102,7 +102,7 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
-- Web console bridge backed by `ttyd`; safe status is loaded on page render and the helper credential is requested only when the user opens the console.
+- Web console bridge backed by `ttyd`; safe status is loaded on page render and the helper credential is rotated/requested only when the user opens the console.
 - Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
 
@@ -330,6 +330,6 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 ## Security Notes
 
 - The React app is never the source of security truth. Privileged work must go through LuCI, `rpcd`, `ubus`, or OpenWrt services.
-- The web console bridge depends on `ttyd`. Treat the generated console credential as sensitive router configuration.
+- The web console bridge depends on `ttyd`. Treat the per-launch console credential as sensitive; it is rotated when opened but still appears in the ttyd launch URL.
 - Passkey and MFA support require server-side challenge and secret handling before they are production-ready.
 - Do not commit router credentials, package signing keys, or screenshots containing real hostnames, MACs, leases, addresses, or secrets.
