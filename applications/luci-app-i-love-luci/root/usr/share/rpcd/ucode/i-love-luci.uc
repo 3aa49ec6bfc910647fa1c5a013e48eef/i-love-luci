@@ -5397,6 +5397,62 @@ function save_system_settings(config) {
 	};
 }
 
+function sync_system_time(action, localtime) {
+	action = clean_uci_value(action || '');
+
+	if (action == 'browser') {
+		let timestamp = int(localtime || 0);
+
+		if (timestamp <= 0)
+			return {
+				ok: false,
+				message: 'Browser time was not provided.',
+				localtime: null
+			};
+
+		let result = null;
+		try {
+			result = ubus.call('luci', 'setLocaltime', { localtime: timestamp });
+		}
+		catch (e) {
+			return {
+				ok: false,
+				message: 'Browser time sync failed.',
+				localtime: null
+			};
+		}
+
+		let ok = result?.result == true || result == true;
+		return {
+			ok,
+			message: ok ? 'System time synced with browser.' : 'Browser time sync failed.',
+			localtime: timestamp
+		};
+	}
+
+	if (action == 'ntp') {
+		if (stat('/etc/init.d/sysntpd')?.type != 'file')
+			return {
+				ok: false,
+				message: 'NTP service is not installed.',
+				localtime: null
+			};
+
+		let ok = system('/etc/init.d/sysntpd restart >/dev/null 2>&1 &') == 0;
+		return {
+			ok,
+			message: ok ? 'NTP service restarted.' : 'NTP sync failed.',
+			localtime: null
+		};
+	}
+
+	return {
+		ok: false,
+		message: 'Unknown time sync action.',
+		localtime: null
+	};
+}
+
 function save_led_config(rows, allow_empty) {
 	rows ||= [];
 	allow_empty = allow_empty == true;
@@ -7167,7 +7223,8 @@ function build_core_settings(page) {
 		networkRules: [],
 		firewall: [],
 		firewallFiles: [],
-		system: []
+		system: [],
+		timezones: {}
 	};
 
 	if (page == 'dhcp') {
@@ -7184,6 +7241,10 @@ function build_core_settings(page) {
 	}
 	else if (page == 'system') {
 		data.system = collect_system_settings_sections();
+		data.timezones = { UTC: { tzstring: 'UTC0' } };
+		for (let section in data.system)
+			if (section.type == 'system' && length(section.values?.zonename || ''))
+				data.timezones[section.values.zonename] = { tzstring: section.values?.timezone || '' };
 	}
 	else {
 		data.network = collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']);
@@ -7657,6 +7718,16 @@ const methods = {
 					sections: collect_system_settings_sections()
 				});
 			}
+		}
+	},
+
+	system_time_sync: {
+		args: {
+			action: '',
+			localtime: 0
+		},
+		call: function(request) {
+			return respond(sync_system_time(request.args.action, request.args.localtime));
 		}
 	},
 

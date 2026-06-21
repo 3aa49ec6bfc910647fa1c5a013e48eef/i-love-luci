@@ -182,6 +182,20 @@ The live router also has installed app menus such as:
 
 These are not default core screens, but the modern shell must enumerate them and default them to legacy. Native replacements should be considered app-by-app after the default core sections are stable.
 
+## Console Gateway
+
+The header console action should not rely on browser-visible ttyd basic-auth URLs for a hardened release. The target design is:
+
+- keep ttyd bound to localhost or a private interface
+- expose an I Love LuCI console gateway that requires the active LuCI session cookie
+- mint short-lived one-time console tokens through `rpcd`
+- store only token hashes under `/tmp`, expire and consume tokens on first use
+- proxy the HTTP/websocket upgrade from the gateway to ttyd
+- keep ttyd running `/bin/login -f root` behind the gateway so users do not re-enter router credentials
+- set `Cache-Control: no-store`, reject cross-origin requests, and log console open/deny events
+
+This preserves the no-second-login UX while avoiding credential leakage through URL history, page JavaScript, proxy logs, or screenshots.
+
 ## Menu Enumeration Design
 
 Add a backend method:

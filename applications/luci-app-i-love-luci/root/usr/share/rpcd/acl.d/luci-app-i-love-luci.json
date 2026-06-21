@@ -62,6 +62,7 @@
 					"ssh_keys_save",
 					"startup_action",
 					"system_settings_save",
+					"system_time_sync",
 					"uhttpd_cert_defaults_save",
 					"uhttpd_config_save",
 					"upnpd_active_rule_delete",

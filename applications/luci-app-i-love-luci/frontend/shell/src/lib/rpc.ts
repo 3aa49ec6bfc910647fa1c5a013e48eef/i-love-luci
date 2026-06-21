@@ -261,6 +261,13 @@ export type CoreSettings = {
 	firewall: ConfigSection[];
 	firewallFiles?: ServiceFile[];
 	system: ConfigSection[];
+	timezones?: Record<string, { tzstring?: string }>;
+};
+
+export type SystemTimeSyncResult = {
+	ok: boolean;
+	message: string;
+	localtime?: number;
 };
 
 export type CommandBlock = {
@@ -1589,6 +1596,18 @@ export async function saveSystemSettings(config: SystemSettingsInput): Promise<S
 			message: "System settings save failed.",
 			changed: false,
 			sections: [],
+		};
+	}
+}
+
+export async function syncSystemTime(action: "browser" | "ntp", localtime?: number): Promise<SystemTimeSyncResult> {
+	try {
+		return await callBridge<SystemTimeSyncResult>("system_time_sync", { action, localtime });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "System time sync failed.",
 		};
 	}
 }

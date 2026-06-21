@@ -29,6 +29,7 @@ import {
 	saveNetworkRoutes,
 	saveSystemSettings,
 	saveUhttpdCertDefaults,
+	syncSystemTime,
 	type ConfigSection,
 	type CoreSettings,
 	type DashboardStatus,
@@ -3817,7 +3818,12 @@ function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashbo
 
 	return (
 		<div className="grid gap-5">
-			<SystemSettingsEditor dashboard={dashboard} onSaved={setSystemSections} sections={systemSections} />
+			<SystemSettingsEditor
+				dashboard={dashboard}
+				onSaved={setSystemSections}
+				sections={systemSections}
+				timezones={settings.timezones ?? {}}
+			/>
 
 			{luciMain && luciApply && luciThemes ? (
 				<LuciUiSettingsEditor
@@ -4117,14 +4123,18 @@ function SystemSettingsEditor({
 	dashboard,
 	onSaved,
 	sections,
+	timezones,
 }: {
 	dashboard: DashboardStatus | null;
 	onSaved: (sections: ConfigSection[]) => void;
 	sections: ConfigSection[];
+	timezones: Record<string, { tzstring?: string }>;
 }) {
 	const [values, setValues] = useState(() => systemSettingsValues(sections, dashboard));
 	const [savedValues, setSavedValues] = useState(values);
 	const [saving, setSaving] = useState(false);
+	const [syncing, setSyncing] = useState<"browser" | "ntp" | null>(null);
+	const timezoneNames = useMemo(() => ["UTC", ...Object.keys(timezones).filter((name) => name !== "UTC").sort()], [timezones]);
 	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
 
 	function updateField(field: keyof SystemSettingsInput, value: string) {
@@ -4132,6 +4142,27 @@ function SystemSettingsEditor({
 			...current,
 			[field]: value,
 		}));
+	}
+
+	function updateTimezone(zonename: string) {
+		setValues((current) => ({
+			...current,
+			zonename,
+			timezone: timezones[zonename]?.tzstring ?? (zonename === "UTC" ? "UTC0" : current.timezone),
+		}));
+	}
+
+	async function syncTime(action: "browser" | "ntp") {
+		setSyncing(action);
+		const result = await syncSystemTime(action, Math.floor(Date.now() / 1000));
+		setSyncing(null);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
 	}
 
 	async function submit(event: FormEvent<HTMLFormElement>) {
@@ -4157,6 +4188,20 @@ function SystemSettingsEditor({
 				<p className="text-sm text-muted-foreground">Edit identity, logging, and basic NTP configuration.</p>
 			</div>
 			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-secondary/40 px-3 py-2 text-sm">
+					<div>
+						<p className="font-medium">Local time</p>
+						<p className="text-muted-foreground">{formatLocalTime(dashboard?.system.localtime)}</p>
+					</div>
+					<div className="flex flex-wrap gap-2">
+						<Button disabled={syncing != null} onClick={() => void syncTime("browser")} size="sm" type="button" variant="outline">
+							{syncing === "browser" ? "Syncing" : "Sync with browser"}
+						</Button>
+						<Button disabled={syncing != null} onClick={() => void syncTime("ntp")} size="sm" type="button" variant="outline">
+							{syncing === "ntp" ? "Restarting" : "Sync with NTP"}
+						</Button>
+					</div>
+				</div>
 				<div className="grid gap-4 md:grid-cols-2">
 					<Field label="Hostname" target="system-hostname">
 						<Input
@@ -4196,11 +4241,19 @@ function SystemSettingsEditor({
 						/>
 					</Field>
 					<Field label="Timezone name" target="system-zonename">
-						<Input
+						<select
+							className="h-10 rounded-md border bg-card px-3 text-sm outline-none focus-visible:border-ring"
 							id="system-zonename"
-							onChange={(event) => updateField("zonename", event.target.value)}
+							onChange={(event) => updateTimezone(event.target.value)}
 							value={values.zonename}
-						/>
+						>
+							{values.zonename && !timezoneNames.includes(values.zonename) ? <option value={values.zonename}>{values.zonename}</option> : null}
+							{timezoneNames.map((name) => (
+								<option key={name} value={name}>
+									{name}
+								</option>
+							))}
+						</select>
 					</Field>
 					<Field label="POSIX timezone" target="system-timezone">
 						<Input
