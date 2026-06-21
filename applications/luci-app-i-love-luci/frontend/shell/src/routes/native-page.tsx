@@ -17,6 +17,7 @@ import {
 	flashFirmware,
 	getNativePage,
 	getServiceDetail,
+	runAttendedSysupgradePlan,
 	runCustomCommand,
 	runPackageAction,
 	saveAttendedSysupgradeConfig,
@@ -45,6 +46,8 @@ import {
 	type AdblockFastConfigInput,
 	type AdblockFastFeed,
 	type AttendedSysupgradeConfigInput,
+	type AttendedSysupgradePlanAction,
+	type AttendedSysupgradePlanResult,
 	type BanipConfigInput,
 	type CommandBlock,
 	type ConfigSection,
@@ -4909,6 +4912,7 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 				<MetricBlock label="Target" value={firmware.DISTRIB_TARGET ?? data.board.release?.target ?? "unknown"} />
 				<MetricBlock label="Upgrade helper" value={helper || "unknown"} />
 			</div>
+			<AttendedSysupgradePlanPanel />
 			<AttendedSysupgradeConfigPanel client={client} helper={helper} server={server} />
 			<Panel title="Guardrails">
 				<p className="text-sm text-muted-foreground">
@@ -4916,6 +4920,85 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 					has rollback-safe confirmation and progress RPCs.
 				</p>
 			</Panel>
+		</div>
+	);
+}
+
+const attendedPlanActions: Array<{ action: AttendedSysupgradePlanAction; label: string; description: string }> = [
+	{ action: "check", label: "Check", description: "Compare current firmware against the ASU server." },
+	{ action: "list", label: "Package list", description: "Show packages that would be retained in a build request." },
+	{ action: "blob", label: "Build request", description: "Render the capped ASU build request payload." },
+];
+
+function AttendedSysupgradePlanPanel() {
+	const [result, setResult] = useState<AttendedSysupgradePlanResult | null>(null);
+	const [running, setRunning] = useState<AttendedSysupgradePlanAction | null>(null);
+
+	async function run(action: AttendedSysupgradePlanAction) {
+		setRunning(action);
+		const next = await runAttendedSysupgradePlan(action);
+		setRunning(null);
+		setResult(next);
+
+		if (next.ok) {
+			toast.success(next.message);
+		}
+		else {
+			toast.warning(next.message);
+		}
+	}
+
+	return (
+		<Panel title="Upgrade planning">
+			<div className="grid gap-4">
+				<div className="grid gap-3 md:grid-cols-3">
+					{attendedPlanActions.map((item) => (
+						<div className="grid gap-2 rounded-md border bg-card p-3" key={item.action}>
+							<div>
+								<div className="text-sm font-medium">{item.label}</div>
+								<div className="text-xs text-muted-foreground">{item.description}</div>
+							</div>
+							<Button disabled={running != null} onClick={() => void run(item.action)} type="button" variant="outline">
+								{running === item.action ? "Running" : item.label}
+							</Button>
+						</div>
+					))}
+				</div>
+				{result ? <AttendedSysupgradePlanOutput result={result} /> : null}
+			</div>
+		</Panel>
+	);
+}
+
+function AttendedSysupgradePlanOutput({ result }: { result: AttendedSysupgradePlanResult }) {
+	const lines = parseOutputLines([
+		{
+			stream: result.ok ? "stdout" : "stderr",
+			text: result.output || result.message,
+		},
+	]);
+
+	return (
+		<div className="grid gap-3">
+			<SimpleValueTable
+				empty="No attended sysupgrade planning context."
+				columns={["Field", "Value"]}
+				rows={[
+					["Helper", result.helper || "unknown"],
+					["Action", result.action || "unknown"],
+					["Command", result.command || "not run"],
+					["Result", result.message || (result.ok ? "ok" : "blocked")],
+				]}
+				title="Planning result"
+			/>
+			{result.warnings.length ? (
+				<OutputLinesTable
+					empty="No warnings."
+					lines={parseOutputLines([{ stream: "warning", text: result.warnings.join("\n") }])}
+					title="Planning warnings"
+				/>
+			) : null}
+			<OutputLinesTable empty="No planning output." lines={lines} title="Planning output" />
 		</div>
 	);
 }

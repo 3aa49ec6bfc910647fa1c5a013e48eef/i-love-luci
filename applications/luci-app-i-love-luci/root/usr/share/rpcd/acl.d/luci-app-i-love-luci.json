@@ -26,6 +26,7 @@
 				"luci.iloveluci": [
 					"adblock_fast_config_save",
 					"attendedsysupgrade_config_save",
+					"attendedsysupgrade_plan",
 					"banip_config_save",
 					"banip_file_save",
 					"config_backup_create",

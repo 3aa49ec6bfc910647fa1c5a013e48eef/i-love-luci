@@ -409,6 +409,19 @@ export type AttendedSysupgradeConfigResult = {
 	sections: ConfigSection[];
 };
 
+export type AttendedSysupgradePlanAction = "check" | "list" | "blob";
+
+export type AttendedSysupgradePlanResult = {
+	ok: boolean;
+	helper: string;
+	action: AttendedSysupgradePlanAction | string;
+	command: string;
+	output: string;
+	lines: string[];
+	warnings: string[];
+	message: string;
+};
+
 export type ServiceState = {
 	name: string;
 	enabled: boolean;
@@ -1705,6 +1718,24 @@ export async function saveAttendedSysupgradeConfig(config: AttendedSysupgradeCon
 			message: "Attended sysupgrade settings save failed.",
 			changed: false,
 			sections: [],
+		};
+	}
+}
+
+export async function runAttendedSysupgradePlan(action: AttendedSysupgradePlanAction): Promise<AttendedSysupgradePlanResult> {
+	try {
+		return await callBridge<AttendedSysupgradePlanResult>("attendedsysupgrade_plan", { action });
+	}
+	catch {
+		return {
+			ok: false,
+			helper: "unknown",
+			action,
+			command: "",
+			output: "",
+			lines: [],
+			warnings: [],
+			message: "Attended sysupgrade planning failed.",
 		};
 	}
 }

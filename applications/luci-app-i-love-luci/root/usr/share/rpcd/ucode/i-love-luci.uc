@@ -5683,6 +5683,103 @@ function save_attendedsysupgrade_config(config) {
 	};
 }
 
+function attendedsysupgrade_helper_status() {
+	if (command_exists('owut'))
+		return trim(shell_output('owut --version 2>&1 || owut --help 2>&1 | sed -n "1,80p"'));
+
+	if (command_exists('auc'))
+		return trim(shell_output('auc --help 2>&1 | sed -n "1,80p"'));
+
+	return 'owut and auc are not installed.';
+}
+
+function attendedsysupgrade_plan(action) {
+	action = trim('' + (action || 'check'));
+
+	let allowed = {
+		check: 'Check for upgrade',
+		list: 'List build packages',
+		blob: 'Build request payload'
+	};
+
+	if (!allowed[action])
+		return {
+			ok: false,
+			helper: command_exists('owut') ? 'owut' : (command_exists('auc') ? 'auc' : 'none'),
+			action,
+			command: '',
+			output: '',
+			lines: [],
+			warnings: [],
+			message: 'Unsupported attended sysupgrade planning action.'
+		};
+
+	if (!command_exists('owut'))
+		return {
+			ok: false,
+			helper: command_exists('auc') ? 'auc' : 'none',
+			action,
+			command: '',
+			output: '',
+			lines: [],
+			warnings: [],
+			message: 'owut is not installed. Use LuCI compat for attended sysupgrade actions on this router.'
+		};
+
+	let command = 'owut ' + action;
+	let board = ubus.call('system', 'board') || {};
+	let release = board.release || {};
+	let sections = attendedsysupgrade_sections();
+	let server_url = '';
+	let package_source = command_exists('apk') ? '/etc/apk/world' : 'opkg user package state';
+	let package_lines = command_exists('apk')
+		? split_lines(shell_output('sed -n "1,120p" /etc/apk/world 2>/dev/null'))
+		: split_lines(shell_output("opkg list-installed 2>/dev/null | sed -n '1,120p'"));
+
+	for (let section in sections)
+		if (section.type == 'server' && !length(server_url))
+			server_url = section.values?.url || '';
+
+	let lines = [
+		`Prepared command: ${command}`,
+		`ASU server: ${server_url || 'default owut server'}`,
+		`Current firmware: ${release.description || 'unknown'}`,
+		`Target: ${release.target || 'unknown'}`,
+		`Profile: ${board.board_name || board.model || 'unknown'}`
+	];
+	let warnings = [
+		'Live owut check/list/blob execution is intentionally left to LuCI compat because it can exceed ubus/rpcd request timeouts.'
+	];
+
+	if (action == 'list') {
+		push(lines, `Package source: ${package_source}`);
+		for (let line in package_lines)
+			push(lines, `Package: ${line}`);
+	}
+	else if (action == 'blob') {
+		push(lines, `Package source: ${package_source}`);
+		push(lines, 'Build request generation remains delegated to owut/LuCI compat until long-running ASU jobs have a background job/progress RPC.');
+		for (let line in package_lines)
+			push(lines, `Package candidate: ${line}`);
+	}
+	else {
+		push(lines, 'Live compatibility check remains delegated to owut/LuCI compat until background job/progress handling exists.');
+	}
+
+	let output = join('\n', lines);
+
+	return {
+		ok: true,
+		helper: 'owut',
+		action,
+		command,
+		output,
+		lines,
+		warnings,
+		message: `${allowed[action]} prepared without router changes.`
+	};
+}
+
 function package_search(query) {
 	query = trim('' + (query || ''));
 
@@ -8932,7 +9029,7 @@ function native_page(page) {
 		data.sections = attendedsysupgrade_sections();
 		data.commands = [
 			{ title: 'Current firmware', output: shell_output('cat /etc/openwrt_release') },
-			{ title: 'Upgrade helper', output: command_exists('auc') ? shell_output('auc --help 2>&1 | head -n 80') : 'auc is not installed.' }
+			{ title: 'Upgrade helper', output: attendedsysupgrade_helper_status() }
 		];
 	}
 	else if (page == 'packages') {
@@ -9809,6 +9906,29 @@ const methods = {
 					message: 'Attended sysupgrade settings save failed: ' + e,
 					changed: false,
 					sections: attendedsysupgrade_sections()
+				});
+			}
+		}
+	},
+
+	attendedsysupgrade_plan: {
+		args: {
+			action: ''
+		},
+		call: function(request) {
+			try {
+				return respond(attendedsysupgrade_plan(request.args.action || 'check'));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					helper: command_exists('owut') ? 'owut' : (command_exists('auc') ? 'auc' : 'none'),
+					action: request.args.action || 'check',
+					command: '',
+					output: '',
+					lines: [],
+					warnings: [],
+					message: 'Attended sysupgrade planning failed: ' + e
 				});
 			}
 		}

@@ -60,6 +60,10 @@ echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
 ubus call luci.iloveluci firewall_includes_save
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
+for action in check list blob; do
+	printf '%s\n' \"---ILOVELUCI-ASU-PLAN:\$action---\"
+	ubus call luci.iloveluci attendedsysupgrade_plan \"{\\\"action\\\":\\\"\$action\\\"}\"
+done
 echo '---ILOVELUCI-PACKAGE-FEEDS-NOOP---'
 ubus call luci.iloveluci native_page '{\"page\":\"packages\"}' >/tmp/i-love-luci-package-feeds.json
 feeds_payload=\$(jsonfilter -i /tmp/i-love-luci-package-feeds.json -e '@.data.packageFeeds' | sed 's/^/{\"rows\":/; s/\$/}/')
@@ -374,6 +378,22 @@ else:
 		failures.append("package_search did not return package lines")
 	elif not package_data.get("lines"):
 		warnings.append("package_search returned no luci-app results")
+
+for action in ("check", "list", "blob"):
+	asu_plan = json_after_marker(f"---ILOVELUCI-ASU-PLAN:{action}---")
+	if not asu_plan or not asu_plan.get("ok"):
+		failures.append(f"attendedsysupgrade_plan {action} did not return ok")
+		continue
+
+	asu_data = asu_plan.get("data") or {}
+	if asu_data.get("action") != action:
+		failures.append(f"attendedsysupgrade_plan {action} returned wrong action")
+	if asu_data.get("helper") == "owut" and not str(asu_data.get("command", "")).startswith(f"owut {action}"):
+		failures.append(f"attendedsysupgrade_plan {action} did not expose owut command")
+	if not isinstance(asu_data.get("lines"), list):
+		failures.append(f"attendedsysupgrade_plan {action} did not return lines")
+	if not asu_data.get("message"):
+		failures.append(f"attendedsysupgrade_plan {action} did not return message")
 
 package_feed_save = json_after_marker("---ILOVELUCI-PACKAGE-FEEDS-NOOP---")
 if not package_feed_save or not package_feed_save.get("ok"):
