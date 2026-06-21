@@ -321,6 +321,14 @@ for base in scan_roots:
 			):
 				if required_console_doc_term not in text:
 					failures.append(f"{relative_path}: missing console tunnel constraint {required_console_doc_term}")
+		if relative_path == Path("docs/LEGACY_UPLIFT.md"):
+			for required_legacy_console_term in (
+				"i-love-luci-console",
+				"/var/run/i-love-luci-console/control.sock",
+				"direct `ttyd` is not installed or configured by default",
+			):
+				if required_legacy_console_term not in text:
+					failures.append(f"{relative_path}: console gateway plan must describe shipped helper tunnel ({required_legacy_console_term})")
 		archived_history = False
 		for line_no, line in enumerate(text.splitlines(), 1):
 			if path.name == "UI_REFACTOR.md" and line.startswith("Historical validation notes below"):

@@ -184,17 +184,16 @@ These are not default core screens, but the modern shell must enumerate them and
 
 ## Console Gateway
 
-The header console action should not rely on browser-visible ttyd basic-auth URLs for a hardened release. The target design is:
+The header console action must not rely on browser-visible ttyd basic-auth URLs for a hardened release. The shipped production path is now the `i-love-luci-console` helper tunnel:
 
-- keep ttyd bound to localhost or a private interface
-- expose an I Love LuCI console gateway that requires the active LuCI session cookie
-- mint short-lived one-time console tokens through `rpcd`
-- store only token hashes under `/tmp`, expire and consume tokens on first use
-- proxy the HTTP/websocket upgrade from the gateway to ttyd
-- keep ttyd running `/bin/login -f root` behind the gateway so users do not re-enter router credentials
-- set `Cache-Control: no-store`, reject cross-origin requests, and log console open/deny events
+- `luci-app-i-love-luci` depends on `i-love-luci-console`
+- the helper owns root-only PTY sessions behind `/var/run/i-love-luci-console/control.sock`
+- the React console page sends launch, poll, write, resize, and close requests through authenticated same-origin LuCI RPC
+- the browser never receives terminal credentials and does not connect to a second router port
+- helper sessions are short-lived, bounded by idle timeout and max-session limits, and closed on route unmount/logout/timeout
+- direct `ttyd` is not installed or configured by default; it is only an operator-installed trusted-LAN development fallback
 
-This preserves the no-second-login UX while avoiding credential leakage through URL history, page JavaScript, proxy logs, or screenshots.
+This preserves the no-second-login UX while avoiding credential leakage through URL history, page JavaScript, proxy logs, screenshots, or embedded-credential browser restrictions.
 
 ## Menu Enumeration Design
 
