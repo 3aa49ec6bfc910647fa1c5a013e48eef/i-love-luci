@@ -309,6 +309,7 @@ Current compatibility model:
 - In-progress adapter evidence is internal migration metadata only. It means data-source or form coverage evidence exists, but the user-facing route is still LuCI compat.
 - Routes with internal adapter evidence must not advertise `nativePath`, must not offer native mode in settings, and must reject native-mode overrides in `rpcd`.
 - The plan should describe these as LuCI compat routes with in-progress adapter evidence, not as a separate user-facing route class.
+- Do not use "partial" as a product or routing state. If old code or audit output still exposes a `nativeStatus` value for migration evidence, translate it in docs, UI, and release decisions to "LuCI compat with adapter evidence".
 
 Audit scope:
 
@@ -347,7 +348,7 @@ Future app install behavior is part of the adapter contract. Installing a LuCI a
 Route audit must be treated as a release gate, not an optional validation step. Each release candidate should prove that:
 
 - all installed LuCI routes are discovered from live router metadata
-- every route has an explicit compat/native decision recorded in the route inventory
+- every route has an explicit renderer decision recorded in the route inventory: supported native, LuCI compat, or hidden
 - compat is configured and tested for every installed LuCI app, including all child routes exposed by each app
 - native I Love LuCI routes cover the workflows already migrated from LuCI
 - every migrated native route has an explicit LuCI source route, parity status, test evidence, and fallback decision
@@ -625,6 +626,7 @@ Installed LuCI app renderer policy:
 - Approved native app exceptions on the router: `luci-app-firewall`, `luci-app-commands`, `luci-app-uhttpd`, and `luci-app-upnp`. These are allowed to default to native because parity evidence and no-op/mutation safety tests are recorded below.
 - Unknown future `luci-app-*` routes must appear through LuCI compat automatically unless a native adapter explicitly supports them.
 - Internal route metadata may still mark migration work as in progress, but user-facing UI should describe that path as `LuCI compat`. Routes with incomplete adapter evidence are clean compat routes in normal use: `menu_tree` does not advertise a native path for them, the settings UI does not offer native mode, and the bridge rejects native-mode overrides unless the route is fully supported.
+- Compatibility route promotion is binary: a route stays LuCI compat until it has documented native parity and successful route/browser/save tests. There is no user-facing "partial native" mode.
 
 Validation on `172.16.172.1`:
 
@@ -645,7 +647,7 @@ Validation on `172.16.172.1`:
 - Frontend navigation now also treats unsupported or incomplete route metadata as LuCI compat even if stale menu data contains a native path. The static native-path fallback map contains supported routes only.
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
 
-Historical validation notes below may contain older audit labels such as `partial` or `native_preview_routes`. These are archived command-output labels, not the current routing model. The current release gate is the clean compat model above: supported routes expose `nativePath`; all routes with in-progress adapter evidence open LuCI compat and expose no native path.
+Historical validation notes below may contain older raw audit labels that predate clean compat routing. Treat those labels as archived command output only. The current release gate is the clean compat model above: supported routes expose `nativePath`; all routes with in-progress adapter evidence open LuCI compat and expose no native path.
 
 - `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.
@@ -894,7 +896,8 @@ Route inventory minimum fields:
 
 - LuCI route path, display title, parent path, source menu file, source package, and ACL scope.
 - I Love LuCI route path, renderer type, adapter id, adapter evidence state, configured mode, effective mode, and LuCI compat target.
-- Native migration status: not migrated, in-progress adapter evidence, supported, or intentionally hidden.
+- Renderer decision: LuCI compat, supported native, or intentionally hidden.
+- Native migration evidence: none, in-progress adapter evidence, or parity accepted.
 - Parity evidence: read/render coverage, write/save/apply coverage, mobile coverage, direct-route load coverage, search/sidebar coverage, session recovery coverage, and fallback coverage.
 - App lifecycle evidence: install, upgrade, remove, reinstall, menu/cache refresh, route disappearance cleanup, and stale route detection.
 - Last router audit result, last HTTP smoke result, test date, router/OpenWrt version, and package version.
@@ -929,7 +932,7 @@ Audit checks:
 
 Native migration checks:
 
-- Maintain a route inventory that marks each LuCI route as `native`, `compat`, `in-progress adapter evidence`, or `hidden`.
+- Maintain a route inventory that marks each LuCI route renderer as `native`, `compat`, or `hidden`, with adapter evidence tracked separately from the renderer decision.
 - Require every native route migrated into I Love LuCI to have an owner entry in the inventory with source LuCI route, native React route, data source, write/apply behavior, mobile test status, and fallback route.
 - For native routes, verify the React route renders, uses the intended `rpcd`/UCI data source, and has mobile-safe layout.
 - For routes with in-progress native adapter evidence, verify user routing still opens LuCI compat until missing edit/save/apply flows are complete.
@@ -995,8 +998,8 @@ Acceptance gate:
 - Future app handling must be proven with an install/remove/reinstall smoke test for a LuCI app that was not hard-coded into I Love LuCI.
 - Native migration is not complete until every migrated route has parity evidence and every non-migrated or in-progress route has a working LuCI compat target.
 - Future installed apps are considered supported only when navigation, search, ACL visibility, direct route load, session recovery, and compat rendering all work without an I Love LuCI code change.
-- Latest router audit on `172.16.172.1` passed after UCI dependency filtering and System parent promotion with `visible_routes=57`, `modern=39`, `legacy=18`, `native_status supported=39`, `partial=18`, `menu_files=15`, `luci_apps=9`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`. Current gate treats the 18 non-supported entries as LuCI compat routes and verifies them through `compat_internal_paths`; native page audit passed with `core_pages=4`, `native_pages=18`, and `service_adapters=6`; HTTP route smoke passed with `native_shell_checks=39` and `legacy_route_checks=18`.
-- Network interface DHCP sub-section parity was expanded on `172.16.172.1`: `core_settings(page=network)` now returns the same DHCP pool rows used by the DHCP/DNS page, and `/admin/network/network` renders the structured DHCP pool editor alongside interface configuration. A no-op `dhcp_pools_save` for the router's `lan` and `wan` pools returned `changed=false`, preserved `/etc/config/dhcp` SHA-256 `d15e4bc2723b2bd844ee87e8d843c1c2f874b26728d21f2b5ab79264f59d4fa8`, and left `uci changes=0`. Route audit still passes with `visible_routes=57`, `modern=41`, `legacy=16`, `native_status supported=41`, `partial=16`, `unsupported=0`, `native_preview_routes=57`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`; current gate treats the 16 non-supported entries as LuCI compat routes until parity is proven. Native page audit passes with `core_pages=4`, `native_pages=18`, and `service_adapters=6`.
+- Latest router audit on `172.16.172.1` passed after UCI dependency filtering and System parent promotion with `visible_routes=57`, `modern=39`, `legacy=18`, `supported_native_routes=39`, `compat_routes_with_adapter_evidence=18`, `menu_files=15`, `luci_apps=9`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`. Current gate treats the 18 non-supported entries as LuCI compat routes and verifies them through `compat_internal_paths`; native page audit passed with `core_pages=4`, `native_pages=18`, and `service_adapters=6`; HTTP route smoke passed with `native_shell_checks=39` and `legacy_route_checks=18`.
+- Network interface DHCP sub-section parity was expanded on `172.16.172.1`: `core_settings(page=network)` now returns the same DHCP pool rows used by the DHCP/DNS page, and `/admin/network/network` renders the structured DHCP pool editor alongside interface configuration. A no-op `dhcp_pools_save` for the router's `lan` and `wan` pools returned `changed=false`, preserved `/etc/config/dhcp` SHA-256 `d15e4bc2723b2bd844ee87e8d843c1c2f874b26728d21f2b5ab79264f59d4fa8`, and left `uci changes=0`. Route audit still passes with `visible_routes=57`, `modern=41`, `legacy=16`, `supported_native_routes=41`, `compat_routes_with_adapter_evidence=16`, `unsupported=0`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`; current gate treats the 16 non-supported entries as LuCI compat routes until parity is proven. Native page audit passes with `core_pages=4`, `native_pages=18`, and `service_adapters=6`.
 - Attended sysupgrade configuration parity was expanded on `172.16.172.1`: the native settings editor now includes the LuCI `server.rebuilder` dynamic list while still avoiding image build or flash actions. A no-op `attendedsysupgrade_config_save` with the router's current server/client values returned `changed=false`, preserved `/etc/config/attendedsysupgrade` SHA-256 `340f483818163ece0b03c90737149e77626366856dda8fb57f28b175ddbe964f`, and left `uci changes attendedsysupgrade=0`. Route audit, native page audit, and HTTP route smoke all passed after deploy.
 - Attended sysupgrade planning evidence was expanded on `172.16.172.1`: `attendedsysupgrade_plan` now exposes local `owut check`, `owut list`, and `owut blob` planning context, ASU server URL, current firmware target/profile, and `/etc/apk/world` package-retention candidates without executing long-running ASU server operations through `rpcd`. Earlier live `owut check/list/blob` calls exceeded the default ubus/rpcd request timeout, so image/server checks remain LuCI compat until a background job/progress RPC exists. Route audit, native page audit, HTTP route smoke, direct plan RPC checks, and `uci changes=0` passed after deploy.
 - Native flash backup coverage was expanded on `172.16.172.1`: `/admin/system/flash` now exposes the existing authenticated backup dry-run helper as a Check action before download. `config_backup_create` with `dry_run=true` returned `Configuration backup helper is available.`, produced no archive payload, and left `uci changes=0`. Route audit, native page audit, and HTTP route smoke all passed after deploy.
