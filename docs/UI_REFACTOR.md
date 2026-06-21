@@ -314,7 +314,7 @@ Current compatibility model:
 Audit scope:
 
 - every visible LuCI menu route must resolve to one of: supported native route, LuCI compat route, or intentionally hidden route
-- every route discovered from LuCI menu metadata must be recorded in the route inventory with renderer, parity, fallback, and test status
+- every route discovered from LuCI menu metadata must be recorded in [the route inventory](ROUTE_INVENTORY.md) with renderer, parity, fallback, and test status
 - every installed LuCI app must retain a functional compat path until its native route reaches parity
 - every installed LuCI app must have compat explicitly configured and exercised before release, including child routes and deep links
 - service apps such as banIP, AdBlock Fast, UPnP, uHTTPd, and future installed apps must be treated consistently through the generic adapter
@@ -348,7 +348,7 @@ Future app install behavior is part of the adapter contract. Installing a LuCI a
 Route audit must be treated as a release gate, not an optional validation step. Each release candidate should prove that:
 
 - all installed LuCI routes are discovered from live router metadata
-- every route has an explicit renderer decision recorded in the route inventory: supported native, LuCI compat, or hidden
+- every route has an explicit renderer decision recorded in [the route inventory](ROUTE_INVENTORY.md): supported native, LuCI compat, or hidden
 - compat is configured and tested for every installed LuCI app, including all child routes exposed by each app
 - native I Love LuCI routes cover the workflows already migrated from LuCI
 - every migrated native route has an explicit LuCI source route, parity status, test evidence, and fallback decision
@@ -970,6 +970,7 @@ Required tooling:
   - routes with in-progress adapter evidence that expose `nativePath`
   - routes with in-progress adapter evidence that incorrectly default to native
   - LuCI app routes without compat fallback
+- `scripts/audit-router-route-inventory-doc.sh` compares live `menu_tree` output with [docs/ROUTE_INVENTORY.md](ROUTE_INVENTORY.md) and fails if any visible route is missing, has the wrong renderer, has the wrong target, or describes a compat route as anything other than LuCI compat with internal adapter evidence.
 - `scripts/audit-router-route-mode-guards.sh` calls `route_mode_set(mode=modern)` for every visible `nativeStatus=compat` route and fails if any compat route accepts native mode or leaves pending UCI changes.
 - `scripts/audit-router-future-luci-app.sh` temporarily installs `luci-app-example`, verifies newly discovered routes appear as LuCI compat routes with no native path, removes the package, and fails if routes or package-world changes remain.
 - `scripts/audit-router-native-pages.sh` calls representative `core_settings`, `native_page`, `service_detail`, `console_status`, and `changes_list` RPCs on the router and reports:
