@@ -559,11 +559,146 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 						onChange={(value) => updateField("enable_tftp", value)}
 						value={values.enable_tftp}
 					/>
+					<OptionalBooleanField
+						id="dns-allservers"
+						label="Query all servers"
+						onChange={(value) => updateField("allservers", value)}
+						value={values.allservers}
+					/>
+					<OptionalBooleanField
+						id="dns-boguspriv"
+						label="Filter private reverse lookups"
+						onChange={(value) => updateField("boguspriv", value)}
+						value={values.boguspriv}
+					/>
+					<OptionalBooleanField
+						id="dns-filterwin2k"
+						label="Filter useless Windows queries"
+						onChange={(value) => updateField("filterwin2k", value)}
+						value={values.filterwin2k}
+					/>
+					<OptionalBooleanField
+						id="dns-filter-aaaa"
+						label="Filter AAAA"
+						onChange={(value) => updateField("filter_aaaa", value)}
+						value={values.filter_aaaa}
+					/>
+					<OptionalBooleanField
+						id="dns-filter-a"
+						label="Filter A"
+						onChange={(value) => updateField("filter_a", value)}
+						value={values.filter_a}
+					/>
+					<OptionalBooleanField
+						id="dns-nonegcache"
+						label="Disable negative cache"
+						onChange={(value) => updateField("nonegcache", value)}
+						value={values.nonegcache}
+					/>
+					<OptionalBooleanField
+						id="dns-noresolv"
+						label="Ignore resolver file"
+						onChange={(value) => updateField("noresolv", value)}
+						value={values.noresolv}
+					/>
+					<OptionalBooleanField
+						id="dns-strictorder"
+						label="Strict resolver order"
+						onChange={(value) => updateField("strictorder", value)}
+						value={values.strictorder}
+					/>
+					<OptionalBooleanField
+						id="dns-ignore-hosts-dir"
+						label="Ignore hosts directory"
+						onChange={(value) => updateField("ignore_hosts_dir", value)}
+						value={values.ignore_hosts_dir}
+					/>
+					<OptionalBooleanField
+						id="dns-nohosts"
+						label="Ignore hosts files"
+						onChange={(value) => updateField("nohosts", value)}
+						value={values.nohosts}
+					/>
+					<OptionalBooleanField
+						id="dns-logqueries"
+						label="Log DNS queries"
+						onChange={(value) => updateField("logqueries", value)}
+						value={values.logqueries}
+					/>
+					<OptionalBooleanField
+						id="dns-stripmac"
+						label="Strip MAC upstream"
+						onChange={(value) => updateField("stripmac", value)}
+						value={values.stripmac}
+					/>
+					<OptionalBooleanField
+						id="dns-stripsubnet"
+						label="Strip subnet upstream"
+						onChange={(value) => updateField("stripsubnet", value)}
+						value={values.stripsubnet}
+					/>
 					<Field label="TFTP root" target="dns-tftp-root">
 						<Input id="dns-tftp-root" onChange={(event) => updateField("tftp_root", event.target.value)} value={values.tftp_root} />
 					</Field>
 					<Field label="Network boot image" target="dns-dhcp-boot">
 						<Input id="dns-dhcp-boot" onChange={(event) => updateField("dhcp_boot", event.target.value)} value={values.dhcp_boot} />
+					</Field>
+					<Field label="DNS server port" target="dns-port">
+						<Input id="dns-port" inputMode="numeric" onChange={(event) => updateField("port", event.target.value)} value={values.port} />
+					</Field>
+					<Field label="DNS query port" target="dns-queryport">
+						<Input
+							id="dns-queryport"
+							inputMode="numeric"
+							onChange={(event) => updateField("queryport", event.target.value)}
+							value={values.queryport}
+						/>
+					</Field>
+					<Field label="Min source port" target="dns-minport">
+						<Input
+							id="dns-minport"
+							inputMode="numeric"
+							onChange={(event) => updateField("minport", event.target.value)}
+							value={values.minport}
+						/>
+					</Field>
+					<Field label="Max source port" target="dns-maxport">
+						<Input
+							id="dns-maxport"
+							inputMode="numeric"
+							onChange={(event) => updateField("maxport", event.target.value)}
+							value={values.maxport}
+						/>
+					</Field>
+					<Field label="Max concurrent queries" target="dns-forwardmax">
+						<Input
+							id="dns-forwardmax"
+							inputMode="numeric"
+							onChange={(event) => updateField("dnsforwardmax", event.target.value)}
+							value={values.dnsforwardmax}
+						/>
+					</Field>
+					<Field label="Min cache TTL" target="dns-min-cache-ttl">
+						<Input
+							id="dns-min-cache-ttl"
+							inputMode="numeric"
+							onChange={(event) => updateField("min_cache_ttl", event.target.value)}
+							value={values.min_cache_ttl}
+						/>
+					</Field>
+					<Field label="Max cache TTL" target="dns-max-cache-ttl">
+						<Input
+							id="dns-max-cache-ttl"
+							inputMode="numeric"
+							onChange={(event) => updateField("max_cache_ttl", event.target.value)}
+							value={values.max_cache_ttl}
+						/>
+					</Field>
+					<Field label="MAC forwarding" target="dns-addmac">
+						<Input id="dns-addmac" onChange={(event) => updateField("addmac", event.target.value)} value={values.addmac} />
+					</Field>
+					<Field label="Subnet forwarding" target="dns-addsubnet">
+						<Input id="dns-addsubnet" onChange={(event) => updateField("addsubnet", event.target.value)} value={values.addsubnet} />
 					</Field>
 				</div>
 				<Field label="Upstream servers" target="dns-servers">
@@ -585,6 +720,35 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 						value={values.address}
 					/>
 				</Field>
+				<div className="grid gap-4 md:grid-cols-3">
+					<Field label="Rebind whitelist" target="dns-rebind-domain">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-rebind-domain"
+							onChange={(event) => updateField("rebind_domain", event.target.value)}
+							spellCheck={false}
+							value={values.rebind_domain}
+						/>
+					</Field>
+					<Field label="Bogus NXDOMAIN" target="dns-bogusnxdomain">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-bogusnxdomain"
+							onChange={(event) => updateField("bogusnxdomain", event.target.value)}
+							spellCheck={false}
+							value={values.bogusnxdomain}
+						/>
+					</Field>
+					<Field label="Additional hosts files" target="dns-addnhosts">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-addnhosts"
+							onChange={(event) => updateField("addnhosts", event.target.value)}
+							spellCheck={false}
+							value={values.addnhosts}
+						/>
+					</Field>
+				</div>
 				<div className="grid gap-4 md:grid-cols-3">
 					<Field label="Listen interfaces" target="dns-interface">
 						<textarea
@@ -696,19 +860,44 @@ function dnsmasqSettingsValues(section: ConfigSection): DnsmasqConfigInput {
 		logdhcp: optionalBooleanValue(section.values.logdhcp),
 		quietdhcp: optionalBooleanValue(section.values.quietdhcp),
 		enable_tftp: optionalBooleanValue(section.values.enable_tftp),
+		allservers: optionalBooleanValue(section.values.allservers),
+		boguspriv: optionalBooleanValue(section.values.boguspriv),
+		filterwin2k: optionalBooleanValue(section.values.filterwin2k),
+		filter_aaaa: optionalBooleanValue(section.values.filter_aaaa),
+		filter_a: optionalBooleanValue(section.values.filter_a),
+		nonegcache: optionalBooleanValue(section.values.nonegcache),
+		noresolv: optionalBooleanValue(section.values.noresolv),
+		strictorder: optionalBooleanValue(section.values.strictorder),
+		ignore_hosts_dir: optionalBooleanValue(section.values.ignore_hosts_dir),
+		nohosts: optionalBooleanValue(section.values.nohosts),
+		logqueries: optionalBooleanValue(section.values.logqueries),
+		stripmac: optionalBooleanValue(section.values.stripmac),
+		stripsubnet: optionalBooleanValue(section.values.stripsubnet),
 		local: rawValue(section.values.local),
 		domain: rawValue(section.values.domain),
 		cachesize: rawValue(section.values.cachesize),
 		dhcpleasemax: rawValue(section.values.dhcpleasemax),
+		dnsforwardmax: rawValue(section.values.dnsforwardmax),
+		min_cache_ttl: rawValue(section.values.min_cache_ttl),
+		max_cache_ttl: rawValue(section.values.max_cache_ttl),
 		ednspacket_max: rawValue(section.values.ednspacket_max),
+		port: rawValue(section.values.port),
+		queryport: rawValue(section.values.queryport),
+		minport: rawValue(section.values.minport),
+		maxport: rawValue(section.values.maxport),
 		leasefile: rawValue(section.values.leasefile),
 		resolvfile: rawValue(section.values.resolvfile),
 		serversfile: rawValue(section.values.serversfile),
 		logfacility: rawValue(section.values.logfacility),
+		addmac: rawValue(section.values.addmac),
+		addsubnet: rawValue(section.values.addsubnet),
 		tftp_root: rawValue(section.values.tftp_root),
 		dhcp_boot: rawValue(section.values.dhcp_boot),
 		server: rawListValue(section.values.server).join("\n"),
 		address: rawListValue(section.values.address).join("\n"),
+		rebind_domain: rawListValue(section.values.rebind_domain).join("\n"),
+		bogusnxdomain: rawListValue(section.values.bogusnxdomain).join("\n"),
+		addnhosts: rawListValue(section.values.addnhosts).join("\n"),
 		interface: rawListValue(section.values.interface).join("\n"),
 		listen_address: rawListValue(section.values.listen_address).join("\n"),
 		notinterface: rawListValue(section.values.notinterface).join("\n"),

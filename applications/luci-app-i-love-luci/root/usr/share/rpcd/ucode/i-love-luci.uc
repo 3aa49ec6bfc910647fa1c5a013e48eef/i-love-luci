@@ -1343,6 +1343,9 @@ function save_dnsmasq_config(config) {
 	let section = dnsmasq_section();
 	let server_list = split_dhcp_list(config.server || '');
 	let address_list = split_dhcp_list(config.address || '');
+	let rebind_domain_list = split_dhcp_list(config.rebind_domain || '');
+	let bogusnxdomain_list = split_dhcp_list(config.bogusnxdomain || '');
+	let addnhosts_list = split_dhcp_list(config.addnhosts || '');
 	let interface_list = split_dhcp_list(config.interface || '');
 	let listen_address_list = split_dhcp_list(config.listen_address || '');
 	let notinterface_list = split_dhcp_list(config.notinterface || '');
@@ -1361,33 +1364,66 @@ function save_dnsmasq_config(config) {
 		logdhcp: dhcp_optional_zero_one(config.logdhcp),
 		quietdhcp: dhcp_optional_zero_one(config.quietdhcp),
 		enable_tftp: dhcp_optional_zero_one(config.enable_tftp),
+		allservers: dhcp_optional_zero_one(config.allservers),
+		boguspriv: dhcp_optional_zero_one(config.boguspriv),
+		filterwin2k: dhcp_optional_zero_one(config.filterwin2k),
+		filter_aaaa: dhcp_optional_zero_one(config.filter_aaaa),
+		filter_a: dhcp_optional_zero_one(config.filter_a),
+		nonegcache: dhcp_optional_zero_one(config.nonegcache),
+		noresolv: dhcp_optional_zero_one(config.noresolv),
+		strictorder: dhcp_optional_zero_one(config.strictorder),
+		ignore_hosts_dir: dhcp_optional_zero_one(config.ignore_hosts_dir),
+		nohosts: dhcp_optional_zero_one(config.nohosts),
+		logqueries: dhcp_optional_zero_one(config.logqueries),
+		stripmac: dhcp_optional_zero_one(config.stripmac),
+		stripsubnet: dhcp_optional_zero_one(config.stripsubnet),
 		local: dhcp_clean_value(config.local || ''),
 		domain: dhcp_clean_value(config.domain || ''),
 		cachesize: dhcp_clean_value(config.cachesize || ''),
 		dhcpleasemax: dhcp_clean_value(config.dhcpleasemax || ''),
+		dnsforwardmax: dhcp_clean_value(config.dnsforwardmax || ''),
+		min_cache_ttl: dhcp_clean_value(config.min_cache_ttl || ''),
+		max_cache_ttl: dhcp_clean_value(config.max_cache_ttl || ''),
 		ednspacket_max: dhcp_clean_value(config.ednspacket_max || ''),
+		port: dhcp_clean_value(config.port || ''),
+		queryport: dhcp_clean_value(config.queryport || ''),
+		minport: dhcp_clean_value(config.minport || ''),
+		maxport: dhcp_clean_value(config.maxport || ''),
 		leasefile: dhcp_clean_value(config.leasefile || ''),
 		resolvfile: dhcp_clean_value(config.resolvfile || ''),
 		serversfile: dhcp_clean_value(config.serversfile || ''),
 		logfacility: dhcp_clean_value(config.logfacility || ''),
+		addmac: dhcp_clean_value(config.addmac || ''),
+		addsubnet: dhcp_clean_value(config.addsubnet || ''),
 		tftp_root: dhcp_clean_value(config.tftp_root || ''),
 		dhcp_boot: dhcp_clean_value(config.dhcp_boot || '')
 	};
 
-	if (!dhcp_numeric_value(next.cachesize) || !dhcp_numeric_value(next.dhcpleasemax) || !dhcp_numeric_value(next.ednspacket_max))
+	for (let value in [next.cachesize, next.dhcpleasemax, next.dnsforwardmax, next.min_cache_ttl, next.max_cache_ttl, next.ednspacket_max, next.port, next.queryport, next.minport, next.maxport]) {
+		if (!dhcp_numeric_value(value))
+			return {
+				saved: false,
+				message: 'DNS cache, TTL, query, lease, and port limits must be numeric.',
+				changed: false,
+				section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+	}
+
+	if (next.port != '' && (+next.port < 0 || +next.port > 65535))
 		return {
 			saved: false,
-			message: 'DNS cache size, max DHCP leases, and EDNS packet size must be numeric.',
+			message: 'DNS server port must be between 0 and 65535.',
 			changed: false,
 			section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 			sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 		};
 
-	for (let value in [next.logfacility, next.tftp_root, next.dhcp_boot, ...address_list, ...interface_list, ...listen_address_list, ...notinterface_list]) {
+	for (let value in [next.logfacility, next.tftp_root, next.dhcp_boot, next.addmac, next.addsubnet, ...address_list, ...rebind_domain_list, ...bogusnxdomain_list, ...addnhosts_list, ...interface_list, ...listen_address_list, ...notinterface_list]) {
 		if (replace(value, /[^A-Za-z0-9_.:@/+%#-]/g, '') != value)
 			return {
 				saved: false,
-				message: 'DNS address, listen, logging, or PXE/TFTP settings contain unsupported characters.',
+				message: 'DNS filter, forward, address, listen, logging, hosts, or PXE/TFTP settings contain unsupported characters.',
 				changed: false,
 				section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
@@ -1417,6 +1453,9 @@ function save_dnsmasq_config(config) {
 
 	let list_options = {
 		address: address_list,
+		rebind_domain: rebind_domain_list,
+		bogusnxdomain: bogusnxdomain_list,
+		addnhosts: addnhosts_list,
 		interface: interface_list,
 		listen_address: listen_address_list,
 		notinterface: notinterface_list
