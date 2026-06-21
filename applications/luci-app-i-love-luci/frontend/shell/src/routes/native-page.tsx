@@ -302,7 +302,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	packages: {
 		title: "Software",
-		description: "Installed package inventory. Package install and removal remain in legacy LuCI for now.",
+		description: "Installed package inventory with guarded plan/apply actions. Full package-manager workflow remains LuCI compat until rollback parity is proven.",
 	},
 	startup: {
 		title: "Startup",
@@ -330,7 +330,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	flash: {
 		title: "Backup / flash firmware",
-		description: "Storage and flash partition overview. Firmware write actions remain in legacy LuCI.",
+		description: "Storage and flash partition overview. Firmware write actions remain LuCI compat until destructive recovery parity is proven.",
 	},
 	reboot: {
 		title: "Reboot",
@@ -445,7 +445,7 @@ export function NativeServicePage() {
 			<PageHeader
 				meta={{
 					title: focusMeta ? `${detail?.title ?? pageTitle(service)} ${focusMeta.title}` : (detail?.title ?? pageTitle(service)),
-					description: focusMeta?.description ?? "Modern service status and configuration summary. Advanced editing remains in legacy LuCI.",
+					description: focusMeta?.description ?? "Modern service status and configuration summary. Advanced editing remains LuCI compat until parity is proven.",
 				}}
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
