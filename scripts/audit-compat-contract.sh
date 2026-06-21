@@ -44,6 +44,7 @@ legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/l
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 navigation_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/navigation.ts")
+service_compat_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/service-compat.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
 console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
 sysauth_template_files = {
@@ -129,6 +130,8 @@ for base in scan_roots:
 			if "`${pathname}${search}${hash}`" not in text:
 				failures.append(f"{relative_path}: direct LuCI fallback must preserve path, query string, and hash")
 		if relative_path == native_page_file:
+			if "nativePageCompatPath(page)" not in text or "return <Navigate replace to={legacyTarget(compatPath)} />" not in text:
+				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
 			for function_name in ("RoutingSummary", "NftablesSummary"):
 				match = re.search(rf"function {function_name}\([^)]*\) \{{(?P<body>.*?)\nfunction ", text, re.S)
 				if not match:
@@ -165,6 +168,16 @@ for base in scan_roots:
 			):
 				if compat_route in text:
 					failures.append(f"{relative_path}: native fallback map must not include third-party LuCI app route {compat_route}")
+		if relative_path == service_compat_file:
+			for required_alias in (
+				'attendedsysupgrade: "/admin/system/attendedsysupgrade/overview"',
+				'flash: "/admin/system/flash"',
+				'packages: "/admin/system/package-manager"',
+				'"/admin/services/adblock-fast"',
+				'"/admin/services/banip"',
+			):
+				if required_alias not in text:
+					failures.append(f"{relative_path}: compat redirect map missing {required_alias}")
 		if relative_path == header_file:
 			if "getConsoleLaunch" in text:
 				failures.append(f"{relative_path}: header must not request or handle helper console credentials")

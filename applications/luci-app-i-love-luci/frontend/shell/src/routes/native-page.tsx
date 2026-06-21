@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { legacyTarget, serviceCompatPath } from "@/lib/service-compat";
+import { legacyTarget, nativePageCompatPath, serviceCompatPath } from "@/lib/service-compat";
 import {
 	applyFactoryReset,
 	applyRestoreBackup,
@@ -346,6 +346,16 @@ const pageMeta: Record<string, PageMeta> = {
 export function NativePage() {
 	const params = useParams();
 	const page = params.page ?? "status-routes";
+	const compatPath = nativePageCompatPath(page);
+
+	if (compatPath) {
+		return <Navigate replace to={legacyTarget(compatPath)} />;
+	}
+
+	return <NativePageContent page={page} />;
+}
+
+function NativePageContent({ page }: { page: string }) {
 	const dataPage = page === "attendedsysupgrade-config" ? "attendedsysupgrade" : page;
 	const meta = pageMeta[page] ?? { title: pageTitle(page), description: "Modern route surface." };
 	const [data, setData] = useState<NativePageData | null>(null);
