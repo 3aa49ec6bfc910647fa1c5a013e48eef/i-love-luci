@@ -5258,10 +5258,16 @@ function save_system_settings(config) {
 	let next_system = {
 		hostname,
 		description: clean_uci_value(config.description || ''),
+		notes: clean_uci_value(config.notes || ''),
 		zonename: clean_uci_value(config.zonename || ''),
 		timezone: clean_uci_value(config.timezone || ''),
+		clock_timestyle: zero_one(config.clock_timestyle),
+		clock_hourcycle: clean_uci_value(config.clock_hourcycle || ''),
 		log_size: clean_uci_value(config.log_size || ''),
+		log_ip: clean_uci_value(config.log_ip || ''),
+		log_port: clean_uci_value(config.log_port || ''),
 		log_proto: config.log_proto == 'tcp' ? 'tcp' : 'udp',
+		log_file: clean_uci_value(config.log_file || ''),
 		conloglevel: clean_uci_value(config.conloglevel || ''),
 		cronloglevel: clean_uci_value(config.cronloglevel || '')
 	};
@@ -5274,7 +5280,23 @@ function save_system_settings(config) {
 			sections: collect_system_settings_sections()
 		};
 
-	if (!valid_numeric_value(next_system.log_size) || !valid_numeric_value(next_system.conloglevel) || !valid_numeric_value(next_system.cronloglevel))
+	if (next_system.clock_hourcycle != '' && next_system.clock_hourcycle != 'h12' && next_system.clock_hourcycle != 'h23')
+		return {
+			saved: false,
+			message: 'Time format contains unsupported characters.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	if (replace(next_system.log_ip, /[^A-Za-z0-9_.:-]/g, '') != next_system.log_ip || replace(next_system.log_file, /[^A-Za-z0-9_./:-]/g, '') != next_system.log_file)
+		return {
+			saved: false,
+			message: 'Log server and file fields contain unsupported characters.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
+
+	if (!valid_numeric_value(next_system.log_size) || !valid_numeric_value(next_system.log_port) || !valid_numeric_value(next_system.conloglevel) || !valid_numeric_value(next_system.cronloglevel))
 		return {
 			saved: false,
 			message: 'Log size and log levels must be numeric.',
@@ -5285,14 +5307,27 @@ function save_system_settings(config) {
 	let ntp_section = first_uci_section('system', 'timeserver');
 	let next_ntp = {
 		enabled: zero_one(config.ntp_enabled),
+		enable_server: zero_one(config.ntp_enable_server),
+		interface: clean_uci_value(config.ntp_interface || ''),
 		use_dhcp: zero_one(config.ntp_use_dhcp),
 		server: split_uci_lines(config.ntp_servers || '')
 	};
+
+	if (replace(next_ntp.interface, /[^A-Za-z0-9_.:-]/g, '') != next_ntp.interface)
+		return {
+			saved: false,
+			message: 'NTP interface contains unsupported characters.',
+			changed: false,
+			sections: collect_system_settings_sections()
+		};
 
 	let changed = false;
 
 	for (let key, value in next_system) {
 		let current = uci.get('system', system_section, key) || '';
+
+		if (key == 'clock_timestyle' && !length(current) && value == '0')
+			continue;
 
 		if (current != value) {
 			changed = true;
@@ -5306,6 +5341,8 @@ function save_system_settings(config) {
 	}
 
 	let current_ntp_enabled = uci.get('system', ntp_section, 'enabled') || '1';
+	let current_ntp_enable_server = uci.get('system', ntp_section, 'enable_server') || '0';
+	let current_ntp_interface = uci.get('system', ntp_section, 'interface') || '';
 	let current_ntp_use_dhcp = uci.get('system', ntp_section, 'use_dhcp') || '1';
 	let current_ntp_servers = uci.get('system', ntp_section, 'server') || [];
 
@@ -5315,6 +5352,19 @@ function save_system_settings(config) {
 			uci.delete('system', ntp_section, 'enabled');
 		else
 			uci.set('system', ntp_section, 'enabled', '0');
+	}
+
+	if (current_ntp_enable_server != next_ntp.enable_server) {
+		changed = true;
+		if (next_ntp.enable_server == '1')
+			uci.set('system', ntp_section, 'enable_server', '1');
+		else
+			uci.delete('system', ntp_section, 'enable_server');
+	}
+
+	if (current_ntp_interface != next_ntp.interface) {
+		changed = true;
+		set_uci_option('system', ntp_section, 'interface', next_ntp.interface);
 	}
 
 	if (current_ntp_use_dhcp != next_ntp.use_dhcp) {

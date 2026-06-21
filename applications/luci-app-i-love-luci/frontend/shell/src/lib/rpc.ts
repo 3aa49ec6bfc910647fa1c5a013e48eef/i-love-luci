@@ -676,13 +676,21 @@ export type UhttpdCertDefaultsResult = {
 export type SystemSettingsInput = {
 	hostname: string;
 	description: string;
+	notes: string;
 	zonename: string;
 	timezone: string;
+	clock_timestyle: string;
+	clock_hourcycle: string;
 	log_size: string;
+	log_ip: string;
+	log_port: string;
 	log_proto: string;
+	log_file: string;
 	conloglevel: string;
 	cronloglevel: string;
 	ntp_enabled: string;
+	ntp_enable_server: string;
+	ntp_interface: string;
 	ntp_use_dhcp: string;
 	ntp_servers: string;
 };

@@ -4172,6 +4172,29 @@ function SystemSettingsEditor({
 							value={values.description}
 						/>
 					</Field>
+					<Field label="Full timezone name" target="system-clock-style">
+						<SelectField
+							id="system-clock-style"
+							onChange={(value) => updateField("clock_timestyle", value)}
+							options={[
+								["0", "Offset"],
+								["1", "Full name"],
+							]}
+							value={values.clock_timestyle}
+						/>
+					</Field>
+					<Field label="Time format" target="system-clock-hourcycle">
+						<SelectField
+							id="system-clock-hourcycle"
+							onChange={(value) => updateField("clock_hourcycle", value)}
+							options={[
+								["", "Default"],
+								["h12", "12-hour"],
+								["h23", "24-hour"],
+							]}
+							value={values.clock_hourcycle}
+						/>
+					</Field>
 					<Field label="Timezone name" target="system-zonename">
 						<Input
 							id="system-zonename"
@@ -4194,6 +4217,17 @@ function SystemSettingsEditor({
 							value={values.log_size}
 						/>
 					</Field>
+					<Field label="External log server" target="system-log-ip">
+						<Input id="system-log-ip" onChange={(event) => updateField("log_ip", event.target.value)} value={values.log_ip} />
+					</Field>
+					<Field label="External log port" target="system-log-port">
+						<Input
+							id="system-log-port"
+							inputMode="numeric"
+							onChange={(event) => updateField("log_port", event.target.value)}
+							value={values.log_port}
+						/>
+					</Field>
 					<Field label="Log protocol" target="system-log-proto">
 						<SelectField
 							id="system-log-proto"
@@ -4204,6 +4238,9 @@ function SystemSettingsEditor({
 							]}
 							value={values.log_proto}
 						/>
+					</Field>
+					<Field label="Log file" target="system-log-file">
+						<Input id="system-log-file" onChange={(event) => updateField("log_file", event.target.value)} value={values.log_file} />
 					</Field>
 					<Field label="Console log level" target="system-console-log">
 						<LogLevelSelect
@@ -4230,6 +4267,25 @@ function SystemSettingsEditor({
 							value={values.ntp_enabled}
 						/>
 					</Field>
+					<Field label="Provide NTP server" target="system-ntp-server">
+						<SelectField
+							id="system-ntp-server"
+							onChange={(value) => updateField("ntp_enable_server", value)}
+							options={[
+								["0", "Disabled"],
+								["1", "Enabled"],
+							]}
+							value={values.ntp_enable_server}
+						/>
+					</Field>
+					<Field label="Bind NTP server" target="system-ntp-interface">
+						<Input
+							id="system-ntp-interface"
+							onChange={(event) => updateField("ntp_interface", event.target.value)}
+							placeholder="All interfaces"
+							value={values.ntp_interface}
+						/>
+					</Field>
 					<Field label="Use DHCP advertised servers" target="system-ntp-dhcp">
 						<SelectField
 							id="system-ntp-dhcp"
@@ -4249,6 +4305,15 @@ function SystemSettingsEditor({
 						onChange={(event) => updateField("ntp_servers", event.target.value)}
 						spellCheck={false}
 						value={values.ntp_servers}
+					/>
+				</Field>
+				<Field label="Notes" target="system-notes">
+					<textarea
+						className="min-h-28 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						id="system-notes"
+						onChange={(event) => updateField("notes", event.target.value)}
+						spellCheck={false}
+						value={values.notes}
 					/>
 				</Field>
 				<div className="flex justify-end gap-2">
@@ -4332,13 +4397,21 @@ function systemSettingsValues(sections: ConfigSection[], dashboard: DashboardSta
 	return {
 		hostname: rawValue(system?.values.hostname || dashboard?.board.hostname || "OpenWrt"),
 		description: rawValue(system?.values.description),
+		notes: rawValue(system?.values.notes),
 		zonename: rawValue(system?.values.zonename),
 		timezone: rawValue(system?.values.timezone),
+		clock_timestyle: rawValue(system?.values.clock_timestyle) === "1" ? "1" : "0",
+		clock_hourcycle: rawValue(system?.values.clock_hourcycle),
 		log_size: rawValue(system?.values.log_size),
+		log_ip: rawValue(system?.values.log_ip),
+		log_port: rawValue(system?.values.log_port),
 		log_proto: rawValue(system?.values.log_proto || "udp"),
+		log_file: rawValue(system?.values.log_file),
 		conloglevel: rawValue(system?.values.conloglevel),
 		cronloglevel: rawValue(system?.values.cronloglevel),
 		ntp_enabled: rawValue(ntp?.values.enabled || "1") === "0" ? "0" : "1",
+		ntp_enable_server: rawValue(ntp?.values.enable_server) === "1" ? "1" : "0",
+		ntp_interface: rawValue(ntp?.values.interface),
 		ntp_use_dhcp: rawValue(ntp?.values.use_dhcp || "1") === "0" ? "0" : "1",
 		ntp_servers: rawListValue(ntp?.values.server).join("\n"),
 	};
