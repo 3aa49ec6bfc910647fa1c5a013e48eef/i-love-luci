@@ -237,7 +237,7 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 export function Sidebar({ open, onClose }: SidebarProps) {
 	return (
 		<>
-			<aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-hidden border-r bg-card p-3 lg:block">
+			<aside className="hidden h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r bg-card p-3 lg:flex">
 				<NavItems />
 			</aside>
 			{open ? (
@@ -255,7 +255,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 								<X className="size-5" />
 							</Button>
 						</div>
-						<div className="min-h-0 flex-1 overflow-y-auto">
+						<div className="min-h-0 flex-1">
 							<NavItems onClose={onClose} />
 						</div>
 					</aside>

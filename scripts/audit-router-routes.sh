@@ -127,7 +127,7 @@ known_native_pages = {
 	"status-routes",
 	"wireless",
 }
-known_core_pages = {"dhcp", "firewall", "network", "system"}
+known_core_pages = {"dhcp", "firewall", "network-routes", "network", "system"}
 
 def known_native_path(path):
 	if path in {"/", "/realtime", "/settings"}:

@@ -1050,6 +1050,7 @@ Acceptance gate:
 - Services overview now tags installed third-party LuCI apps with their original LuCI path. The React cards for banIP and AdBlock Fast open the full LuCI compat route, and stale direct hashes such as `#/native/service/banip` redirect back to compat so partial native service pages are not user-facing.
 - Static frontend fallback routing must stay aligned with the live compat policy. `nativePathFor()` must not contain third-party LuCI app aliases such as banIP or AdBlock Fast; if menu metadata is stale or incomplete, these routes must still fall back to LuCI compat.
 - Stale direct native hashes for compat-only core workflows are also redirected back to full LuCI routes. `#/native/packages`, `#/native/flash`, and `#/native/attendedsysupgrade` are migration evidence aliases only and must not expose partial native screens to users.
+- Network routing is separated from network interface adapter evidence. `/admin/network/routes` targets the route-only native page at `#/core/network-routes`, while stale direct `#/core/network` redirects to `/admin/network/network` through LuCI compat so interface protocol/reconnect workflows are not exposed as a partial native page.
 - Current conversion pass reviewed those remaining routes and intentionally did not promote read-only banIP log/report subviews, AdBlock Fast summaries, Package Manager previews, Flash helpers, ASU planning, or Network Interfaces. Those native adapters provide migration evidence, but exposing them as default user routes would create partial native replacements for routes where LuCI still owns the full workflow.
 - Compat gap documentation is now part of the release gate. `scripts/audit-router-compat-gap-doc.sh` reads the live route inventory from `172.16.172.1` and fails if any current LuCI compat route is missing from the gap register below, or if the register contains stale compat routes that are no longer live.
 
@@ -1124,13 +1125,13 @@ Current implementation:
 - The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
 - `console_status` returns safe ttyd availability metadata without the helper credential.
 - The header opens the internal `#/console?launch=1` route after explicit user action. The header does not request, hold, or build URLs with helper credentials.
-- `console_launch` reads and rotates the generated ttyd credential from UCI only inside the console route, then the route embeds ttyd in an iframe.
-- The console route keeps the helper credential out of the browser address bar and browser history. The fallback button still opens a direct ttyd tab for manual troubleshooting.
-- This means the user does not need to manually provide credentials again.
+- `console_launch` reads and rotates the generated ttyd credential from UCI only inside the console route.
+- The console route must not embed ttyd with a `https://user:pass@host/` URL. Chromium blocks embedded-credential subresource requests, and the credential would still be visible in DOM/network state.
+- Until the proxy gateway below exists, the route only offers a direct top-level ttyd open path after explicit user action. This preserves current router access for trusted LAN testing but does not meet the no-browser-visible-credential target.
 
 Security gap:
 
-- The ttyd helper credential is rotated on every launch and no longer appears in the browser address bar for the primary path, but it is still present in the iframe URL inside the DOM/network request and in the fallback direct-open URL. This reduces user-visible leakage but does not remove credential exposure.
+- The ttyd helper credential is rotated on every launch but is still present in the direct-open URL. This reduces exposure duration but does not remove browser-visible credential exposure.
 
 Preferred future helper:
 
@@ -1142,7 +1143,7 @@ Preferred future helper:
 - Keep ttyd running `/bin/login -f root` behind the gateway so the terminal still does not prompt for router credentials, but never expose the helper ttyd credential to browser history, logs, or page JavaScript.
 - Reject cross-origin requests and set `Cache-Control: no-store` on every console-token response.
 
-Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be treated as a convenience bridge, not a hardened remote console. Public release hardening should replace embedded basic-auth iframe URLs with the session-bound proxy/token gateway above; per-launch ttyd credential rotation only reduces exposure duration, it does not remove credential exposure.
+Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be treated as a convenience bridge, not a hardened remote console. Public release hardening should use the session-bound proxy/token gateway above; per-launch ttyd credential rotation only reduces exposure duration, it does not remove credential exposure.
 
 Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
 

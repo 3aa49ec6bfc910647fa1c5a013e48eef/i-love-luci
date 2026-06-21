@@ -19,7 +19,7 @@ This inventory records the current user-facing renderer decision for every visib
 | `/admin/status/processes` | Processes | Native | `/native/processes` | supported native | LuCI compat selectable | live menu audit | route |
 | `/admin/status/realtime` | Realtime Graphs | Native | `/realtime` | supported native | LuCI compat selectable | live menu audit | route; first child `/admin/status/realtime/load` |
 | `/admin/network/network` | Interfaces | LuCI compat | `/admin/network/network` | native parity not proven | LuCI compat primary | live menu audit | route; native adapter evidence retained; user route stays compat |
-| `/admin/network/routes` | Routing | Native | `/core/network` | supported native | LuCI compat selectable | live menu audit | route |
+| `/admin/network/routes` | Routing | Native | `/core/network-routes` | supported native | LuCI compat selectable | live menu audit | route |
 | `/admin/system/package-manager` | Software | LuCI compat | `/admin/system/package-manager` | native parity not proven | LuCI compat primary | live menu audit | route; native adapter evidence retained; user route stays compat |
 | `/admin/network/dhcp` | DHCP | Native | `/core/dhcp` | supported native | LuCI compat selectable | live menu audit | route |
 | `/admin/network/dns` | DNS | Native | `/core/dhcp` | supported native | LuCI compat selectable | live menu audit | route |

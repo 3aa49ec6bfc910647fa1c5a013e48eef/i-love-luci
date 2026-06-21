@@ -59,6 +59,19 @@ describe("itemTarget", () => {
 		).toBe("/native/crontab");
 	});
 
+	it("routes network routing to the route-only native surface", () => {
+		expect(
+			itemTarget({
+				title: "Routing",
+				path: "/admin/network/routes",
+				effectiveMode: "modern",
+				configuredMode: "auto",
+				nativeStatus: "supported",
+				legacy: false,
+			}),
+		).toBe("/core/network-routes");
+	});
+
 	it("routes LuCI realtime graphs to the dedicated realtime surface", () => {
 		expect(
 			itemTarget({

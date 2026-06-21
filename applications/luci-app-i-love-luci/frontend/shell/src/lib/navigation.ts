@@ -35,7 +35,7 @@ export function nativePathFor(path: string) {
 		"/admin/status/realtime/load": "/realtime",
 		"/admin/status/realtime/bandwidth": "/realtime",
 		"/admin/status/realtime/connections": "/native/connections",
-		"/admin/network/routes": "/core/network",
+		"/admin/network/routes": "/core/network-routes",
 		"/admin/network/diagnostics": "/native/diagnostics",
 		"/admin/network/dhcp": "/core/dhcp",
 		"/admin/network/dns": "/core/dhcp",

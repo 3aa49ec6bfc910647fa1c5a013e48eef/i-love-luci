@@ -37,6 +37,7 @@ route_ui_files = {
 	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx"),
 }
 native_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/native-page.tsx")
+core_settings_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/core-settings.tsx")
 frontend_src_root = Path("applications/luci-app-i-love-luci/frontend/shell/src")
 app_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/app/app.tsx")
 legacy_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/legacy.tsx")
@@ -47,6 +48,8 @@ navigation_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib
 service_compat_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/service-compat.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
 console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
+modern_shell_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/modern-shell.tsx")
+sidebar_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx")
 sysauth_template_files = {
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/sysauth.ut"),
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
@@ -139,6 +142,13 @@ for base in scan_roots:
 					continue
 				if "OutputLinesTable" in match.group("body"):
 					failures.append(f"{relative_path}: {function_name} must render structured tables, not generic command output")
+		if relative_path == core_settings_file:
+			if 'page === "network"' not in text or 'legacyTarget("/admin/network/network")' not in text:
+				failures.append(f"{relative_path}: stale /core/network must redirect to LuCI interface compat")
+			if 'page === "network-routes"' not in text or "NetworkRoutesSummary" not in text:
+				failures.append(f"{relative_path}: network routing must use route-only native page, not shared interface adapter")
+			if "const exposeNetworkAdapterEvidence = false;" not in text:
+				failures.append(f"{relative_path}: network interface adapter evidence must stay disabled in user routing")
 		if relative_path == rpc_bridge_file:
 			status_match = re.search(r"console_status:\s*\{\s*call:\s*function\(\)\s*\{(?P<body>.*?)\n\t\},\n\n\tconsole_launch:", text, re.S)
 			if not status_match:
@@ -189,8 +199,25 @@ for base in scan_roots:
 		if relative_path == console_page_file:
 			if "getConsoleLaunch" not in text:
 				failures.append(f"{relative_path}: console route must use explicit console_launch RPC")
-			if "url.username" not in text or "url.password" not in text:
-				failures.append(f"{relative_path}: console route must isolate helper credential URL construction away from the header")
+			if "buildConsoleFallbackUrl" not in text or "buildConsoleEmbeddedUrl" not in text:
+				failures.append(f"{relative_path}: console route must separate fallback URL and embedded URL construction")
+			if "src={fallbackUrl}" in text or "src={consoleUrl}" in text:
+				failures.append(f"{relative_path}: console iframe must not use a credential-capable URL")
+		if relative_path == Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/console-url.ts"):
+			if "buildConsoleEmbeddedUrl" not in text or "return null;" not in text:
+				failures.append(f"{relative_path}: embedded console URL must reject helper credentials")
+			if "buildConsoleFallbackUrl" not in text or "url.username" not in text or "url.password" not in text:
+				failures.append(f"{relative_path}: direct console fallback must isolate helper credential URL construction")
+		if relative_path == modern_shell_file:
+			if "flex min-h-0 flex-1 overflow-hidden" not in text:
+				failures.append(f"{relative_path}: shell body must constrain overflow for independent sidebar/main scrolling")
+			if "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto" not in text:
+				failures.append(f"{relative_path}: main content must own its vertical scroll container")
+		if relative_path == sidebar_file:
+			if "lg:flex" not in text or "h-full min-h-0" not in text:
+				failures.append(f"{relative_path}: desktop sidebar must be a constrained flex column")
+			if "min-h-0 flex-1 overflow-y-auto" not in text:
+				failures.append(f"{relative_path}: nav list must own sidebar vertical overflow")
 		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
 			if "| LuCI compat |" not in text:
 				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")

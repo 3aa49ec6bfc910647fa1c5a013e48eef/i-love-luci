@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { legacyTarget } from "@/lib/service-compat";
 import {
 	getCoreSettings,
 	getDashboardStatus,
@@ -76,7 +77,8 @@ import {
 	type UhttpdCertDefaultsInput,
 } from "@/lib/rpc";
 
-type CorePage = "network" | "dhcp" | "firewall" | "system";
+type CorePage = "network" | "network-routes" | "dhcp" | "firewall" | "system";
+const exposeNetworkAdapterEvidence = false;
 
 type PendingStaticHost = {
 	host: DhcpHost;
@@ -87,6 +89,11 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 	network: {
 		title: "Network interfaces",
 		description: "Modern network view with interface, device, static route, policy rule, and live link state.",
+		configKey: "network",
+	},
+	"network-routes": {
+		title: "Network routing",
+		description: "Modern route and policy rule editor for UCI-managed network routing.",
 		configKey: "network",
 	},
 	dhcp: {
@@ -109,6 +116,15 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 export function CoreSettingsPage() {
 	const params = useParams();
 	const page = normalizePage(params.page);
+
+	if (page === "network") {
+		return <Navigate replace to={legacyTarget("/admin/network/network")} />;
+	}
+
+	return <CoreSettingsContent page={page} />;
+}
+
+function CoreSettingsContent({ page }: { page: Exclude<CorePage, "network"> }) {
 	const meta = pageMeta[page];
 	const [settings, setSettings] = useState<CoreSettings | null>(null);
 	const [dashboard, setDashboard] = useState<DashboardStatus | null>(null);
@@ -147,12 +163,9 @@ export function CoreSettingsPage() {
 				</div>
 			</header>
 
-			{page === "network" && settings ? (
-				<NetworkSummary
-					dashboard={dashboard}
-					onSettingsChange={(nextSettings) => setSettings(nextSettings)}
-					settings={settings}
-				/>
+			{page === "network-routes" && settings ? <NetworkRoutesSummary onSettingsChange={setSettings} settings={settings} /> : null}
+			{page === "network-routes" && exposeNetworkAdapterEvidence && settings ? (
+				<NetworkSummary dashboard={dashboard} onSettingsChange={setSettings} settings={settings} />
 			) : null}
 			{page === "dhcp" && settings ? <DhcpSummary onSettingsChange={setSettings} settings={settings} /> : null}
 			{page === "firewall" && settings ? <FirewallSummary onSettingsChange={setSettings} settings={settings} /> : null}
@@ -6204,6 +6217,42 @@ function NetworkSummary({
 	);
 }
 
+function NetworkRoutesSummary({
+	onSettingsChange,
+	settings,
+}: {
+	onSettingsChange: (settings: CoreSettings) => void;
+	settings: CoreSettings;
+}) {
+	const routes = settings.networkRoutes ?? [];
+	const rules = settings.networkRules ?? [];
+
+	return (
+		<div className="grid gap-5">
+			<StaticRouteEditor
+				onSaved={(nextRoutes, sections) =>
+					onSettingsChange({
+						...settings,
+						network: sections,
+						networkRoutes: nextRoutes,
+					})
+				}
+				routes={routes}
+			/>
+			<PolicyRuleEditor
+				onSaved={(nextRules, sections) =>
+					onSettingsChange({
+						...settings,
+						network: sections,
+						networkRules: nextRules,
+					})
+				}
+				rules={rules}
+			/>
+		</div>
+	);
+}
+
 function NetworkInterfaceEditor({
 	firewallZones,
 	interfaces,
@@ -7492,6 +7541,10 @@ function KeyValueList({ section }: { section: ConfigSection }) {
 }
 
 function normalizePage(page?: string): CorePage {
+	if (page === "network-routes") {
+		return page;
+	}
+
 	if (page === "dhcp" || page === "firewall" || page === "system") {
 		return page;
 	}

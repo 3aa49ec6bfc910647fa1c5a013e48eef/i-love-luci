@@ -20,9 +20,9 @@ export function ModernShell() {
 	return (
 		<div className="iloveluci-shell">
 			<Header onMenuClick={() => setSidebarOpen(true)} />
-			<div className="flex min-h-[calc(100vh-4rem)]">
+			<div className="flex min-h-0 flex-1 overflow-hidden">
 				<Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-				<main className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-6 lg:px-8">
+				<main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
 					<div className="min-w-0 flex-1">
 						<Outlet />
 					</div>

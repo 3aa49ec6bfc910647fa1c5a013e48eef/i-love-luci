@@ -35,7 +35,7 @@ const nativeRoutes = {
 	'/admin/status/channel_analysis': { status: 'compat', nativePath: '/native/wireless' },
 	'/admin/network': { status: 'compat', nativePath: '/core/network' },
 	'/admin/network/network': { status: 'compat', nativePath: '/core/network' },
-	'/admin/network/routes': { status: 'supported', nativePath: '/core/network' },
+	'/admin/network/routes': { status: 'supported', nativePath: '/core/network-routes' },
 	'/admin/network/wireless': { status: 'compat', nativePath: '/native/wireless' },
 	'/admin/network/diagnostics': { status: 'supported', nativePath: '/native/diagnostics' },
 	'/admin/network/dhcp': { status: 'supported', nativePath: '/core/dhcp' },
