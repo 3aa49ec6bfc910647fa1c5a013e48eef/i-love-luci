@@ -4039,7 +4039,7 @@ function AvailablePackageSearch({
 					<div>
 						<div>Available package search</div>
 						<div className="mt-1 text-xs font-normal text-muted-foreground">
-							Read-only package index search. Install and remove actions stay in LuCI compat until rollback parity is complete.
+							Package index search with guarded plan/apply actions. URL apply and broader rollback workflows remain LuCI compat.
 						</div>
 					</div>
 					<form className="flex w-full gap-2 sm:w-[26rem]" onSubmit={(event) => void submit(event)}>
