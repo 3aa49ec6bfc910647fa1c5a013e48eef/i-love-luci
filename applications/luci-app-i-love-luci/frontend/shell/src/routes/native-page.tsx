@@ -58,6 +58,7 @@ import {
 	type NativePageData,
 	type NativeService,
 	type PackageActionResult,
+	type PackageActionOptions,
 	type PackageFeedRow,
 	type PackageSearchResult,
 	type RestoreBackupValidationResult,
@@ -3165,6 +3166,7 @@ function ConfigTable({ sections }: { sections: ConfigSection[] }) {
 function PackageInventory({ data }: { data: NativePageData }) {
 	const [query, setQuery] = useState("");
 	const [installedTranslationMode, setInstalledTranslationMode] = useState<"all" | "hide" | "only">("all");
+	const [removeAutoremove, setRemoveAutoremove] = useState(false);
 	const [actionResult, setActionResult] = useState<PackageActionResult | null>(null);
 	const [actionBusy, setActionBusy] = useState<string | null>(null);
 	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
@@ -3194,14 +3196,14 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
 	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
-	async function runAction(action: "install" | "remove" | "update" | "upgrade", name = "", simulate = true) {
+	async function runAction(action: "install" | "remove" | "update" | "upgrade", name = "", simulate = true, options: PackageActionOptions = {}) {
 		if (!simulate && action !== "update" && !window.confirm(`${action === "install" ? "Install" : action === "remove" ? "Remove" : "Upgrade"} ${name}?`)) {
 			return;
 		}
 
 		const key = `${action}:${name}:${simulate ? "plan" : "apply"}`;
 		setActionBusy(key);
-		const result = await runPackageAction(action, name, simulate);
+		const result = await runPackageAction(action, name, simulate, options);
 		setActionResult(result);
 		setActionBusy(null);
 
@@ -3223,6 +3225,12 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			<PackageUpgradeTable actionBusy={actionBusy} entries={upgrades} onRunAction={runAction} />
 			<PackageActionOutput result={actionResult} />
 			<ManualPackagePlanner busy={actionBusy} onRunAction={runAction} />
+			<Panel title="Package action options">
+				<label className="inline-flex items-center gap-2 text-sm">
+					<input checked={removeAutoremove} onChange={(event) => setRemoveAutoremove(event.target.checked)} type="checkbox" />
+					Automatically remove unused dependencies when removing packages
+				</label>
+			</Panel>
 			<AvailablePackageTable busy={actionBusy} lines={data.packageAvailable ?? []} onRunAction={runAction} />
 			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
@@ -3280,7 +3288,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 											<div className="flex flex-wrap gap-1.5">
 												<Button
 													disabled={actionBusy === `remove:${pkg.name}:plan`}
-													onClick={() => void runAction("remove", pkg.name, true)}
+													onClick={() => void runAction("remove", pkg.name, true, { autoremove: removeAutoremove })}
 													size="sm"
 													type="button"
 													variant="outline"
@@ -3289,7 +3297,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 												</Button>
 												<Button
 													disabled={actionBusy === `remove:${pkg.name}:apply`}
-													onClick={() => void runAction("remove", pkg.name, false)}
+													onClick={() => void runAction("remove", pkg.name, false, { autoremove: removeAutoremove })}
 													size="sm"
 													type="button"
 													variant="outline"
@@ -3354,9 +3362,10 @@ function ManualPackagePlanner({
 	onRunAction,
 }: {
 	busy: string | null;
-	onRunAction: (action: "install", name: string, simulate: boolean) => void | Promise<void>;
+	onRunAction: (action: "install", name: string, simulate: boolean, options?: PackageActionOptions) => void | Promise<void>;
 }) {
 	const [name, setName] = useState("");
+	const [overwrite, setOverwrite] = useState(false);
 
 	function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -3367,7 +3376,7 @@ function ManualPackagePlanner({
 			return;
 		}
 
-		void onRunAction("install", value, true);
+		void onRunAction("install", value, true, { overwrite });
 	}
 
 	return (
@@ -3376,16 +3385,22 @@ function ManualPackagePlanner({
 				<div className="flex flex-col gap-1">
 					<div>Manual package install</div>
 					<div className="text-xs font-normal text-muted-foreground">
-						Plan a package-name install without changing the router. URL/package-file installs stay in LuCI compat.
+						Plan package-name, URL, or staged `/tmp/*.apk` and `/tmp/*.ipk` installs without changing the router. Browser package-file upload stays in LuCI compat.
 					</div>
 				</div>
 			}
 		>
-			<form className="flex flex-col gap-2 sm:flex-row" onSubmit={submit}>
-				<Input onChange={(event) => setName(event.target.value)} placeholder="Package name" value={name} />
-				<Button disabled={busy === `install:${name.trim()}:plan`} type="submit" variant="outline">
-					Plan install
-				</Button>
+			<form className="grid gap-3" onSubmit={submit}>
+				<div className="flex flex-col gap-2 sm:flex-row">
+					<Input onChange={(event) => setName(event.target.value)} placeholder="Package name, URL, or /tmp/package.apk" value={name} />
+					<Button disabled={busy === `install:${name.trim()}:plan`} type="submit" variant="outline">
+						Plan install
+					</Button>
+				</div>
+				<label className="inline-flex items-center gap-2 text-sm">
+					<input checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} type="checkbox" />
+					Allow overwriting conflicting package files
+				</label>
 			</form>
 		</Panel>
 	);
@@ -3398,7 +3413,7 @@ function AvailablePackageTable({
 }: {
 	busy: string | null;
 	lines: string[];
-	onRunAction: (action: "install", name: string, simulate: boolean) => void | Promise<void>;
+	onRunAction: (action: "install", name: string, simulate: boolean, options?: PackageActionOptions) => void | Promise<void>;
 }) {
 	const [query, setQuery] = useState("");
 	const [translationMode, setTranslationMode] = useState<"all" | "hide" | "only">("all");
@@ -3663,7 +3678,7 @@ function AvailablePackageSearch({
 	onRunAction,
 }: {
 	busy: string | null;
-	onRunAction: (action: "install" | "remove" | "update", name?: string, simulate?: boolean) => void | Promise<void>;
+	onRunAction: (action: "install" | "remove" | "update", name?: string, simulate?: boolean, options?: PackageActionOptions) => void | Promise<void>;
 }) {
 	const [query, setQuery] = useState("");
 	const [result, setResult] = useState<PackageSearchResult | null>(null);

@@ -5731,13 +5731,39 @@ function valid_package_name(name) {
 	return length(name) > 0 && length(name) <= 120 && replace(name, /[^A-Za-z0-9_.+:-]/g, '') == name;
 }
 
-function package_action(action, name, simulate) {
+function valid_package_reference(name, simulate) {
+	if (valid_package_name(name))
+		return true;
+
+	if (!simulate || length(name) <= 0 || length(name) > 2048)
+		return false;
+
+	if ((substr(name, 0, 7) == 'http://' || substr(name, 0, 8) == 'https://') && replace(name, /[^A-Za-z0-9._~:\/?#=@&%+;,!$()*-]/g, '') == name)
+		return true;
+
+	if (match(name, /^\/tmp\/[A-Za-z0-9._+-]+\.(apk|ipk)$/))
+		return true;
+
+	return false;
+}
+
+function package_action(action, name, simulate, options) {
 	action = trim('' + (action || ''));
 	name = trim('' + (name || ''));
 	simulate = !!simulate;
+	options ||= {};
 
 	let manager = command_exists('apk') ? 'apk' : 'opkg';
 	let argv = [];
+	let overwrite = !!options.overwrite;
+	let autoremove = !!options.autoremove;
+	let i18n = [];
+
+	for (let pkg in (options.i18nPackages || [])) {
+		pkg = trim('' + pkg);
+		if (valid_package_name(pkg))
+			push(i18n, pkg);
+	}
 
 	if (action == 'update') {
 		argv = manager == 'apk' ? ['apk', 'update'] : ['opkg', 'update'];
@@ -5748,7 +5774,7 @@ function package_action(action, name, simulate) {
 		if (action == 'upgrade' && simulate && !length(name)) {
 			argv = manager == 'apk' ? ['apk', 'upgrade', '--simulate'] : ['opkg', '--noaction', 'upgrade'];
 		}
-		else if (!valid_package_name(name))
+		else if (!valid_package_reference(name, simulate))
 			return {
 				ok: false,
 				manager,
@@ -5758,6 +5784,17 @@ function package_action(action, name, simulate) {
 				command: '',
 				output: '',
 				message: 'Package name contains unsupported characters.'
+			};
+		else if (!simulate && !valid_package_name(name))
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'URL and uploaded package installs stay in LuCI compat until upload and rollback parity is complete.'
 			};
 		else if (action == 'upgrade' && !simulate)
 			return {
@@ -5771,18 +5808,45 @@ function package_action(action, name, simulate) {
 				message: 'Package upgrade apply stays in LuCI compat until rollback parity is complete.'
 			};
 		else if (manager == 'apk') {
-			if (action == 'install')
-				argv = simulate ? ['apk', 'add', '--simulate', name] : ['apk', 'add', name];
-			else if (action == 'remove')
-				argv = simulate ? ['apk', 'del', '--simulate', name] : ['apk', 'del', name];
+			if (action == 'install') {
+				argv = ['apk', 'add'];
+				if (simulate)
+					push(argv, '--simulate');
+				if (overwrite)
+					push(argv, '--force-overwrite');
+				for (let pkg in i18n)
+					push(argv, pkg);
+				push(argv, name);
+			}
+			else if (action == 'remove') {
+				argv = ['apk', 'del'];
+				if (simulate)
+					push(argv, '--simulate');
+				push(argv, name);
+			}
 			else
 				argv = ['apk', 'add', '--simulate', '--upgrade', name];
 		}
 		else {
-			if (action == 'install')
-				argv = simulate ? ['opkg', '--noaction', 'install', name] : ['opkg', 'install', name];
-			else if (action == 'remove')
-				argv = simulate ? ['opkg', '--noaction', 'remove', name] : ['opkg', 'remove', name];
+			if (action == 'install') {
+				argv = ['opkg'];
+				if (simulate)
+					push(argv, '--noaction');
+				if (overwrite)
+					push(argv, '--force-overwrite');
+				push(argv, 'install');
+				for (let pkg in i18n)
+					push(argv, pkg);
+				push(argv, name);
+			}
+			else if (action == 'remove') {
+				argv = ['opkg'];
+				if (simulate)
+					push(argv, '--noaction');
+				if (autoremove)
+					push(argv, '--autoremove');
+				push(argv, 'remove', name);
+			}
 			else
 				argv = ['opkg', '--noaction', 'upgrade', name];
 		}
@@ -9690,11 +9754,12 @@ const methods = {
 		args: {
 			action: '',
 			name: '',
-			simulate: true
+			simulate: true,
+			options: {}
 		},
 		call: function(request) {
 			try {
-				return respond(package_action(request.args.action || '', request.args.name || '', request.args.simulate));
+				return respond(package_action(request.args.action || '', request.args.name || '', request.args.simulate, request.args.options || {}));
 			}
 			catch (e) {
 				return respond({

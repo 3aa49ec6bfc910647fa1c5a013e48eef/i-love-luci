@@ -370,6 +370,12 @@ export type PackageActionResult = {
 	message: string;
 };
 
+export type PackageActionOptions = {
+	overwrite?: boolean;
+	autoremove?: boolean;
+	i18nPackages?: string[];
+};
+
 export type PackageFeedRow = {
 	id: string;
 	file: string;
@@ -1657,9 +1663,9 @@ export async function searchPackages(query: string): Promise<PackageSearchResult
 	}
 }
 
-export async function runPackageAction(action: PackageAction, name = "", simulate = true): Promise<PackageActionResult> {
+export async function runPackageAction(action: PackageAction, name = "", simulate = true, options: PackageActionOptions = {}): Promise<PackageActionResult> {
 	try {
-		return await callBridge<PackageActionResult>("package_action", { action, name, simulate });
+		return await callBridge<PackageActionResult>("package_action", { action, name, simulate, options });
 	}
 	catch {
 		return {
