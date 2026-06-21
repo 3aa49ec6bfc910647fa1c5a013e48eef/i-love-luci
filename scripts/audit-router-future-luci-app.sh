@@ -130,6 +130,37 @@ def visible_paths(menu):
 		and item.get("effectiveMode") != "hidden"
 	}
 
+def route_index_paths(menu):
+	return {
+		item.get("path"): item
+		for item in ((menu or {}).get("routes") or [])
+		if item.get("eligible")
+		and not item.get("hidden")
+		and item.get("effectiveMode") != "hidden"
+	}
+
+def tree_paths(menu):
+	paths = {}
+
+	def visit(items):
+		for item in items or []:
+			path = item.get("path")
+			if path:
+				paths[path] = item
+			visit(item.get("children") or [])
+
+	visit((menu or {}).get("tree") or [])
+	return paths
+
+def search_matches(items, query):
+	needle = query.strip().lower()
+	return {
+		item.get("path")
+		for item in items.values()
+		if needle in (item.get("title") or "").lower()
+		or needle in (item.get("path") or "").lower()
+	}
+
 def first_line_after(marker):
 	if marker not in raw:
 		return ""
@@ -161,6 +192,9 @@ if not before or not installed or not removed:
 before_paths = visible_paths(before)
 installed_paths = visible_paths(installed)
 removed_paths = visible_paths(removed)
+installed_route_paths = route_index_paths(installed)
+installed_tree_paths = tree_paths(installed)
+installed_search_matches = search_matches(installed_paths, "example")
 new_paths = sorted(set(installed_paths) - set(before_paths))
 
 if not new_paths:
@@ -168,6 +202,14 @@ if not new_paths:
 
 for path in new_paths:
 	item = installed_paths[path]
+	if path not in installed_route_paths:
+		failures.append(f"{path}: future app route missing from flat route index")
+	if path not in installed_tree_paths:
+		failures.append(f"{path}: future app route missing from sidebar tree")
+	if path not in installed_search_matches:
+		failures.append(f"{path}: future app route is not searchable by title or path")
+	if not item.get("title"):
+		failures.append(f"{path}: future app route has no title")
 	if item.get("nativeStatus") != "compat":
 		failures.append(f"{path}: future app route nativeStatus={item.get('nativeStatus')!r}, expected compat")
 	if item.get("effectiveMode") != "legacy":
