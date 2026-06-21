@@ -5920,6 +5920,27 @@ const DEFAULT_FLAG_OPTIONS: [string, string][] = [
 	["0", "No"],
 ];
 
+const NETWORK_PROTOCOL_OPTIONS: [string, string][] = [
+	["none", "Unmanaged"],
+	["static", "Static address"],
+	["dhcp", "DHCP client"],
+	["dhcpv6", "DHCPv6 client"],
+	["pppoe", "PPPoE"],
+	["ppp", "PPP"],
+	["pptp", "PPTP"],
+	["l2tp", "L2TP"],
+	["6in4", "IPv6-in-IPv4"],
+	["6rd", "IPv6 rapid deployment"],
+	["6to4", "IPv6-to-IPv4"],
+	["dslite", "DS-Lite"],
+	["map", "MAP"],
+	["464xlat", "464XLAT"],
+	["qmi", "QMI cellular"],
+	["ncm", "NCM cellular"],
+	["mbim", "MBIM cellular"],
+	["wwan", "WWAN"],
+];
+
 function SelectField({
 	id,
 	onChange,
@@ -5945,6 +5966,36 @@ function SelectField({
 			))}
 		</select>
 	);
+}
+
+function NetworkProtocolField({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	const selectedValue = isKnownNetworkProtocol(value) ? value : "__custom";
+	const customValue = isKnownNetworkProtocol(value) ? "" : value;
+
+	return (
+		<div className="grid min-w-48 gap-2">
+			<SelectField
+				id={id}
+				onChange={(nextValue) => {
+					if (nextValue === "__custom") {
+						onChange(isKnownNetworkProtocol(value) ? "" : value);
+						return;
+					}
+
+					onChange(nextValue);
+				}}
+				options={[...NETWORK_PROTOCOL_OPTIONS, ["__custom", "Custom"]]}
+				value={selectedValue}
+			/>
+			{selectedValue === "__custom" ? (
+				<Input aria-label="Custom protocol" onChange={(event) => onChange(event.target.value)} placeholder="custom protocol" value={customValue} />
+			) : null}
+		</div>
+	);
+}
+
+function isKnownNetworkProtocol(value: string) {
+	return NETWORK_PROTOCOL_OPTIONS.some(([optionValue]) => optionValue === value);
 }
 
 function LogLevelSelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
@@ -6304,7 +6355,11 @@ function NetworkInterfaceEditor({
 										</div>
 									</td>
 									<td className="px-3 py-3">
-										<Input aria-label="Protocol" onChange={(event) => updateRow(index, "proto", event.target.value)} value={row.proto} />
+										<NetworkProtocolField
+											id={`network-interface-proto-${index}`}
+											onChange={(value) => updateRow(index, "proto", value)}
+											value={row.proto}
+										/>
 									</td>
 									<td className="px-3 py-3">
 										<Input aria-label="Device" onChange={(event) => updateRow(index, "device", event.target.value)} value={row.device} />
