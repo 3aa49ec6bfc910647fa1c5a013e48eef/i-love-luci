@@ -53,6 +53,7 @@
 					"network_interfaces_save",
 					"network_rules_save",
 					"network_routes_save",
+					"odhcpd_config_save",
 					"password_set",
 					"package_action",
 					"package_feeds_save",

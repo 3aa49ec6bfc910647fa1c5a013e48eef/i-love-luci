@@ -1207,6 +1207,12 @@ function dnsmasq_section() {
 	return section || uci.add('dhcp', 'dnsmasq');
 }
 
+function odhcpd_section() {
+	let section = first_dhcp_section('odhcpd');
+
+	return section || uci.add('dhcp', 'odhcpd');
+}
+
 function save_dnsmasq_config(config) {
 	config ||= {};
 	uci.load('dhcp');
@@ -1313,6 +1319,65 @@ function save_dnsmasq_config(config) {
 		message: changed ? 'DNS settings saved and dnsmasq reloaded.' : 'DNS settings already up to date.',
 		changed,
 		section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
+		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+	};
+}
+
+function save_odhcpd_config(config) {
+	config ||= {};
+	uci.load('dhcp');
+
+	let section = odhcpd_section();
+	let next = {
+		maindhcp: dhcp_zero_one(config.maindhcp),
+		leasefile: dhcp_clean_value(config.leasefile || ''),
+		leasetrigger: dhcp_clean_value(config.leasetrigger || ''),
+		hostsdir: dhcp_clean_value(config.hostsdir || ''),
+		piodir: dhcp_clean_value(config.piodir || ''),
+		loglevel: dhcp_clean_value(config.loglevel || '')
+	};
+
+	if (!dhcp_numeric_value(next.loglevel) || (next.loglevel != '' && (+next.loglevel < 0 || +next.loglevel > 7)))
+		return {
+			saved: false,
+			message: 'odhcpd log level must be between 0 and 7.',
+			changed: false,
+			section: (collect_uci_config('dhcp', ['odhcpd']) || [])[0] || null,
+			sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+		};
+
+	for (let value in [next.leasefile, next.leasetrigger, next.hostsdir, next.piodir]) {
+		if (replace(value, /[^A-Za-z0-9_.:@/+%-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'odhcpd path settings contain unsupported characters.',
+				changed: false,
+				section: (collect_uci_config('dhcp', ['odhcpd']) || [])[0] || null,
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+	}
+
+	let changed = false;
+
+	for (let key, value in next) {
+		let current = uci.get('dhcp', section, key) || '';
+
+		if (current != value) {
+			changed = true;
+			dhcp_set_option(section, key, value);
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/odhcpd reload >/dev/null 2>&1 || /etc/init.d/odhcpd restart >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'odhcpd settings saved and service reloaded.' : 'odhcpd settings already up to date.',
+		changed,
+		section: (collect_uci_config('dhcp', ['odhcpd']) || [])[0] || null,
 		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 	};
 }
@@ -7714,6 +7779,26 @@ const methods = {
 					changed: false,
 					devices: network_device_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				});
+			}
+		}
+	},
+
+	odhcpd_config_save: {
+		args: {
+			config: {}
+		},
+		call: function(request) {
+			try {
+				return respond(save_odhcpd_config(request.args.config || {}));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'odhcpd settings save failed: ' + e,
+					changed: false,
+					section: (collect_uci_config('dhcp', ['odhcpd']) || [])[0] || null,
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 				});
 			}
 		}

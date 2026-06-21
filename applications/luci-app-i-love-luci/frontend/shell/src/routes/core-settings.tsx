@@ -22,6 +22,7 @@ import {
 	saveDhcpHosts,
 	saveDhcpPools,
 	saveDnsmasqConfig,
+	saveOdhcpdConfig,
 	saveLuciUiSettings,
 	saveNetworkDevices,
 	saveNetworkInterfaces,
@@ -50,6 +51,7 @@ import {
 	type NetworkDeviceConfig,
 	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
+	type OdhcpdConfigInput,
 	type PolicyRule,
 	type ServiceFile,
 	type ServiceState,
@@ -192,6 +194,7 @@ function DhcpSummary({
 	const domainRecords = settings.dhcpDomains ?? [];
 	const pools = settings.dhcpPools ?? [];
 	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
+	const odhcpd = settings.dhcp.find((section) => section.type === "odhcpd") ?? null;
 	const [pendingStaticHost, setPendingStaticHost] = useState<PendingStaticHost | null>(null);
 
 	function addStaticHostFromLease(lease: DhcpLease) {
@@ -232,6 +235,17 @@ function DhcpSummary({
 					section={dnsmasq}
 				/>
 			) : null}
+			{odhcpd ? (
+				<OdhcpdSettingsEditor
+					onSaved={(sections) =>
+						onSettingsChange({
+							...settings,
+							dhcp: sections,
+						})
+					}
+					section={odhcpd}
+				/>
+			) : null}
 			<DhcpPoolEditor
 				onSaved={(nextPools, sections) =>
 					onSettingsChange({
@@ -265,6 +279,99 @@ function DhcpSummary({
 				records={domainRecords}
 			/>
 		</div>
+	);
+}
+
+function OdhcpdSettingsEditor({ onSaved, section }: { onSaved: (sections: ConfigSection[]) => void; section: ConfigSection }) {
+	const [values, setValues] = useState(() => odhcpdSettingsValues(section));
+	const [savedValues, setSavedValues] = useState(values);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(values) !== JSON.stringify(savedValues);
+
+	function updateField(field: keyof OdhcpdConfigInput, value: string) {
+		setValues((current) => ({
+			...current,
+			[field]: value,
+		}));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveOdhcpdConfig(values);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextValues = result.section ? odhcpdSettingsValues(result.section) : values;
+		toast.success(result.message);
+		setValues(nextValues);
+		setSavedValues(nextValues);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div>
+				<h2 className="text-base font-semibold">odhcpd settings</h2>
+				<p className="text-sm text-muted-foreground">Configure global DHCPv4 handoff, lease storage, and daemon logging.</p>
+			</div>
+			<form className="grid gap-4 rounded-md border bg-card p-4" onSubmit={(event) => void submit(event)}>
+				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+					<BooleanField
+						id="odhcpd-maindhcp"
+						label="Use odhcpd for DHCPv4"
+						onChange={(value) => updateField("maindhcp", value)}
+						value={values.maindhcp}
+					/>
+					<Field label="Lease file" target="odhcpd-leasefile">
+						<Input id="odhcpd-leasefile" onChange={(event) => updateField("leasefile", event.target.value)} value={values.leasefile} />
+					</Field>
+					<Field label="Lease trigger" target="odhcpd-leasetrigger">
+						<Input
+							id="odhcpd-leasetrigger"
+							onChange={(event) => updateField("leasetrigger", event.target.value)}
+							value={values.leasetrigger}
+						/>
+					</Field>
+					<Field label="Hosts directory" target="odhcpd-hostsdir">
+						<Input id="odhcpd-hostsdir" onChange={(event) => updateField("hostsdir", event.target.value)} value={values.hostsdir} />
+					</Field>
+					<Field label="PIO directory" target="odhcpd-piodir">
+						<Input id="odhcpd-piodir" onChange={(event) => updateField("piodir", event.target.value)} value={values.piodir} />
+					</Field>
+					<Field label="Log level" target="odhcpd-loglevel">
+						<SelectField
+							id="odhcpd-loglevel"
+							onChange={(value) => updateField("loglevel", value)}
+							options={[
+								["", "Default"],
+								["0", "Emergency"],
+								["1", "Alert"],
+								["2", "Critical"],
+								["3", "Error"],
+								["4", "Warning"],
+								["5", "Notice"],
+								["6", "Info"],
+								["7", "Debug"],
+							]}
+							value={values.loglevel}
+						/>
+					</Field>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
 	);
 }
 
@@ -591,6 +698,17 @@ function booleanValue(value: unknown) {
 function optionalBooleanValue(value: unknown) {
 	const raw = rawValue(value);
 	return raw === "1" || raw === "0" ? raw : "";
+}
+
+function odhcpdSettingsValues(section: ConfigSection): OdhcpdConfigInput {
+	return {
+		maindhcp: booleanValue(section.values.maindhcp),
+		leasefile: rawValue(section.values.leasefile),
+		leasetrigger: rawValue(section.values.leasetrigger),
+		hostsdir: rawValue(section.values.hostsdir),
+		piodir: rawValue(section.values.piodir),
+		loglevel: rawValue(section.values.loglevel),
+	};
 }
 
 function DhcpPoolEditor({

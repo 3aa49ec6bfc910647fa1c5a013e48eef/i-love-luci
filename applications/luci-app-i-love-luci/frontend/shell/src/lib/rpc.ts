@@ -811,6 +811,23 @@ export type DnsmasqConfigResult = {
 	sections: ConfigSection[];
 };
 
+export type OdhcpdConfigInput = {
+	maindhcp: string;
+	leasefile: string;
+	leasetrigger: string;
+	hostsdir: string;
+	piodir: string;
+	loglevel: string;
+};
+
+export type OdhcpdConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	section: ConfigSection | null;
+	sections: ConfigSection[];
+};
+
 export type StaticRoutesResult = {
 	saved: boolean;
 	message: string;
@@ -1774,6 +1791,21 @@ export async function saveDnsmasqConfig(config: DnsmasqConfigInput): Promise<Dns
 		return {
 			saved: false,
 			message: "DNS settings save failed.",
+			changed: false,
+			section: null,
+			sections: [],
+		};
+	}
+}
+
+export async function saveOdhcpdConfig(config: OdhcpdConfigInput): Promise<OdhcpdConfigResult> {
+	try {
+		return await callBridge<OdhcpdConfigResult>("odhcpd_config_save", { config });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "odhcpd settings save failed.",
 			changed: false,
 			section: null,
 			sections: [],
