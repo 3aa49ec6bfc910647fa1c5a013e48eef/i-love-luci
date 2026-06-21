@@ -123,6 +123,15 @@ applications/luci-app-i-love-luci/
 
 ## Build Frontend
 
+Check the local development toolchain before building or deploying:
+
+```sh
+scripts/check-dev-tools.sh
+```
+
+Required local tools are Node.js, npm, `python3`, `expect`, `jq`, `make`, `curl`, and `gh`.
+Optional tools improve the loop: `ucode` for local bridge syntax checks, `usign` for local feed signing checks, `shellcheck` for script linting, and `jsonfilter` for matching OpenWrt JSON command behavior. The OpenWrt SDKs are Linux x86_64, so full package builds should run in GitHub Actions or an amd64 Linux/Docker environment when working from macOS.
+
 ```sh
 cd applications/luci-app-i-love-luci/frontend/shell
 npm ci
