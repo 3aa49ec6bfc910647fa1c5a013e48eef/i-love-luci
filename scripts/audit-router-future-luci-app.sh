@@ -6,12 +6,24 @@ REMOTE_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-future-app.XXXXXX")"
 OUTPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-future-app-output.XXXXXX")"
 trap 'rm -f "${REMOTE_SCRIPT}" "${OUTPUT_FILE}"' EXIT
 
+if [ -f "${ROOT_DIR}/.env" ]; then
+	set -a
+	# shellcheck disable=SC1091
+	. "${ROOT_DIR}/.env"
+	set +a
+fi
+
+: "${OPENWRT_USER:=root}"
+: "${OPENWRT_PASSWORD:?OPENWRT_PASSWORD is required}"
+
 cat > "${REMOTE_SCRIPT}" <<'SH'
 #!/bin/sh
 set -eu
 
 pkg="luci-app-example"
 installed=0
+http_user=__ILOVELUCI_HTTP_USER__
+http_password=__ILOVELUCI_HTTP_PASSWORD__
 
 cleanup() {
 	if [ "${installed}" = "1" ]; then
@@ -35,6 +47,53 @@ menu_tree_retry() {
 	return 1
 }
 
+http_smoke_installed_routes() {
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "SMOKE_FAIL curl missing"
+		return
+	fi
+
+	cookie="/tmp/i-love-luci-future-app-cookie.txt"
+	body="/tmp/i-love-luci-future-app-body.txt"
+	base="http://127.0.0.1/cgi-bin/luci"
+
+	rm -f "${cookie}" "${body}" 2>/dev/null || true
+
+	curl -fsS -c "${cookie}" -b "${cookie}" \
+		--data-urlencode "luci_username=${http_user}" \
+		--data-urlencode "luci_password=${http_password}" \
+		"${base}/" >/dev/null 2>&1 || {
+			echo "SMOKE_FAIL login failed"
+			return
+		}
+
+	paths="$(jsonfilter -i /tmp/i-love-luci-future-app-menu-installed.json -e '@.data.items[*].path' 2>/dev/null | grep '^/admin/example' | sort -u || true)"
+	if [ -z "${paths}" ]; then
+		echo "SMOKE_FAIL no example paths"
+		return
+	fi
+
+	for path in ${paths}; do
+		suffix="${path#/admin}"
+		url="${base}/admin${suffix}"
+		frame_url="${url}?iloveluci_frame=1"
+
+		status="$(curl -sS -L -c "${cookie}" -b "${cookie}" -o "${body}" -w '%{http_code}' "${url}" 2>/dev/null || printf '000')"
+		if [ "${status}" -ge 400 ] 2>/dev/null || grep -Eq 'data-iloveluci-login="true"|Log in |404 Not Found|Unable to dispatch' "${body}" 2>/dev/null; then
+			echo "SMOKE_FAIL ${path} route ${status}"
+			continue
+		fi
+
+		frame_status="$(curl -sS -L -c "${cookie}" -b "${cookie}" -o "${body}" -w '%{http_code}' "${frame_url}" 2>/dev/null || printf '000')"
+		if [ "${frame_status}" -ge 400 ] 2>/dev/null || grep -Eq 'data-iloveluci-login="true"|Log in |404 Not Found|Unable to dispatch' "${body}" 2>/dev/null; then
+			echo "SMOKE_FAIL ${path} frame ${frame_status}"
+			continue
+		fi
+
+		echo "SMOKE_OK ${path} route=${status} frame=${frame_status}"
+	done
+}
+
 echo "---ILOVELUCI-WORLD-BEFORE---"
 sha256sum /etc/apk/world 2>/dev/null || true
 
@@ -52,7 +111,10 @@ apk add --allow-untrusted "${pkg}"
 installed=1
 
 echo "---ILOVELUCI-MENU-INSTALLED---"
-menu_tree_retry
+menu_tree_retry | tee /tmp/i-love-luci-future-app-menu-installed.json
+
+echo "---ILOVELUCI-INSTALLED-HTTP-SMOKE---"
+http_smoke_installed_routes
 
 echo "---ILOVELUCI-REMOVE---"
 apk del "${pkg}"
@@ -67,6 +129,17 @@ sha256sum /etc/apk/world 2>/dev/null || true
 echo "---ILOVELUCI-UCI-CHANGES---"
 uci changes | wc -l
 SH
+
+python3 - "${REMOTE_SCRIPT}" "${OPENWRT_USER}" "${OPENWRT_PASSWORD}" <<'PY'
+import shlex
+import sys
+
+path, user, password = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+text = text.replace("__ILOVELUCI_HTTP_USER__", shlex.quote(user))
+text = text.replace("__ILOVELUCI_HTTP_PASSWORD__", shlex.quote(password))
+open(path, "w", encoding="utf-8").write(text)
+PY
 
 router_status=0
 "${ROOT_DIR}/scripts/router-run.sh" "${REMOTE_SCRIPT}" > "${OUTPUT_FILE}" || router_status=$?
@@ -200,6 +273,14 @@ new_paths = sorted(set(installed_paths) - set(before_paths))
 if not new_paths:
 	failures.append("installing test LuCI app did not add visible routes")
 
+smoke_section = raw.split("---ILOVELUCI-INSTALLED-HTTP-SMOKE---", 1)[1].split("---ILOVELUCI-REMOVE---", 1)[0] if "---ILOVELUCI-INSTALLED-HTTP-SMOKE---" in raw else ""
+smoke_ok_paths = {
+	line.split()[1]
+	for line in smoke_section.splitlines()
+	if line.startswith("SMOKE_OK ") and len(line.split()) >= 2
+}
+smoke_failures = [line for line in smoke_section.splitlines() if line.startswith("SMOKE_FAIL ")]
+
 for path in new_paths:
 	item = installed_paths[path]
 	if path not in installed_route_paths:
@@ -216,6 +297,11 @@ for path in new_paths:
 		failures.append(f"{path}: future app route effectiveMode={item.get('effectiveMode')!r}, expected legacy")
 	if item.get("nativePath"):
 		failures.append(f"{path}: future app compat route exposed nativePath={item.get('nativePath')!r}")
+	if path not in smoke_ok_paths:
+		failures.append(f"{path}: future app route was not HTTP-smoked through direct LuCI route and compat frame")
+
+for failure in smoke_failures:
+	failures.append(f"future app HTTP smoke failed: {failure}")
 
 leftover = sorted(set(new_paths) & set(removed_paths))
 if leftover:
@@ -243,6 +329,7 @@ print("I Love LuCI future LuCI app audit")
 print(f"new_routes={len(new_paths)}")
 if new_paths:
 	print("new_paths=" + ",".join(new_paths))
+print(f"http_smoke_checks={len(smoke_ok_paths)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
 print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
 
