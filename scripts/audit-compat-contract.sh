@@ -13,6 +13,7 @@ root = Path(sys.argv[1])
 scan_roots = [
 	root / "README.md",
 	root / "docs" / "LEGACY_UPLIFT.md",
+	root / "docs" / "ROUTE_INVENTORY.md",
 	root / "docs" / "UI_REFACTOR.md",
 	root / "applications" / "luci-app-i-love-luci" / "frontend" / "shell" / "src",
 	root / "applications" / "luci-app-i-love-luci" / "root" / "usr" / "share" / "rpcd" / "ucode" / "i-love-luci.uc",
@@ -23,6 +24,9 @@ forbidden = [
 	(re.compile(r"nativeStatus\s*[:=]\s*['\"]partial['\"]"), "nativeStatus must use compat, not partial"),
 	(re.compile(r"native_status\s+supported=.*partial=", re.IGNORECASE), "route audit output must report compat, not partial"),
 	(re.compile(r"\bpartial\s+native\b", re.IGNORECASE), "user-facing model must not describe partial native routes"),
+	(re.compile(r"\bnative\s+preview\b", re.IGNORECASE), "user-facing model must not describe native preview routes"),
+	(re.compile(r"\bpreview\s+route\b", re.IGNORECASE), "user-facing model must not describe preview routes"),
+	(re.compile(r"\bnative_preview_routes\b", re.IGNORECASE), "route audit output must not report native preview routes"),
 	(re.compile(r"Modern,\s*Partial,\s*Legacy", re.IGNORECASE), "settings status labels must use supported/compat/unsupported"),
 	(re.compile(r"nativeStatus:\s*['\"]supported['\"]\s*\|\s*['\"]partial['\"]"), "types must use supported | compat | unsupported"),
 ]
@@ -79,6 +83,16 @@ for base in scan_roots:
 					continue
 				if "OutputLinesTable" in match.group("body"):
 					failures.append(f"{relative_path}: {function_name} must render structured tables, not generic command output")
+		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
+			if "| LuCI compat |" not in text:
+				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")
+			for line_no, line in enumerate(text.splitlines(), 1):
+				if "| LuCI compat |" in line and "user route stays compat" not in line:
+					failures.append(f"{relative_path}:{line_no}: compat route must be documented as user route stays compat")
+		if relative_path == Path("docs/UI_REFACTOR.md"):
+			required_model = "User routing has only three outcomes: supported native route, LuCI compat route, or intentionally hidden route."
+			if required_model not in text:
+				failures.append(f"{relative_path}: current compatibility model must keep the three-outcome route contract")
 		archived_history = False
 		for line_no, line in enumerate(text.splitlines(), 1):
 			if path.name == "UI_REFACTOR.md" and line.startswith("Historical validation notes below"):
