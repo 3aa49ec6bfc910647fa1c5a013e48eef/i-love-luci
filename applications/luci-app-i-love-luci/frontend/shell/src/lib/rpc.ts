@@ -357,7 +357,7 @@ export type PackageSearchResult = {
 	message: string;
 };
 
-export type PackageAction = "install" | "remove" | "update";
+export type PackageAction = "install" | "remove" | "update" | "upgrade";
 
 export type PackageActionResult = {
 	ok: boolean;

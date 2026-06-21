@@ -3169,8 +3169,8 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
 	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
-	async function runAction(action: "install" | "remove" | "update", name = "", simulate = true) {
-		if (!simulate && action !== "update" && !window.confirm(`${action === "install" ? "Install" : "Remove"} ${name}?`)) {
+	async function runAction(action: "install" | "remove" | "update" | "upgrade", name = "", simulate = true) {
+		if (!simulate && action !== "update" && !window.confirm(`${action === "install" ? "Install" : action === "remove" ? "Remove" : "Upgrade"} ${name}?`)) {
 			return;
 		}
 
@@ -3195,7 +3195,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 				<MetricBlock label="LuCI packages" value={luciCount} />
 				<MetricBlock label="Kernel modules" value={kernelCount} />
 			</div>
-			<PackageUpgradeTable entries={upgrades} />
+			<PackageUpgradeTable actionBusy={actionBusy} entries={upgrades} onRunAction={runAction} />
 			<PackageActionOutput result={actionResult} />
 			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
@@ -3600,7 +3600,15 @@ function AvailablePackageSearch({
 	);
 }
 
-function PackageUpgradeTable({ entries }: { entries: PackageUpgradeEntry[] }) {
+function PackageUpgradeTable({
+	actionBusy,
+	entries,
+	onRunAction,
+}: {
+	actionBusy: string | null;
+	entries: PackageUpgradeEntry[];
+	onRunAction: (action: "upgrade", name: string, simulate: boolean) => void | Promise<void>;
+}) {
 	return (
 		<Panel title="Available upgrades" flush>
 			<div className="overflow-x-auto">
@@ -3610,6 +3618,7 @@ function PackageUpgradeTable({ entries }: { entries: PackageUpgradeEntry[] }) {
 							<th className="px-3 py-2 font-medium">Package</th>
 							<th className="px-3 py-2 font-medium">Installed</th>
 							<th className="px-3 py-2 font-medium">Available</th>
+							<th className="px-3 py-2 font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -3619,11 +3628,22 @@ function PackageUpgradeTable({ entries }: { entries: PackageUpgradeEntry[] }) {
 									<td className="px-3 py-3 font-medium">{entry.name}</td>
 									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{entry.installed}</td>
 									<td className="px-3 py-3 font-mono text-xs">{entry.available}</td>
+									<td className="px-3 py-3">
+										<Button
+											disabled={actionBusy === `upgrade:${entry.name}:plan`}
+											onClick={() => void onRunAction("upgrade", entry.name, true)}
+											size="sm"
+											type="button"
+											variant="outline"
+										>
+											Plan upgrade
+										</Button>
+									</td>
 								</tr>
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
 									No package upgrades reported by the package manager.
 								</td>
 							</tr>
