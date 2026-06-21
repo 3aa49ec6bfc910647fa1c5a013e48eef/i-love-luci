@@ -67,7 +67,7 @@ const nativeRoutes = {
 	'/admin/system/commands/config': { status: 'supported', nativePath: '/native/service/commands' },
 	'/admin/system/i-love-luci-theme': { status: 'supported', nativePath: '/settings' },
 	'/admin/system/reboot': { status: 'supported', nativePath: '/native/reboot' },
-	'/admin/system/leds': { status: 'partial', nativePath: '/native/leds' },
+	'/admin/system/leds': { status: 'supported', nativePath: '/native/leds' },
 	'/admin/services': { status: 'supported', nativePath: '/native/services' },
 	'/admin/services/banip': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
 	'/admin/services/banip/overview': { status: 'partial', nativePath: '/native/service/banip', autoMode: 'legacy' },
@@ -5385,16 +5385,18 @@ function save_led_config(rows, allow_empty) {
 		keep[section] = true;
 		push(next_order, section);
 
+		let trigger = clean_uci_value(row?.trigger || 'none');
 		let next = {
 			name: clean_uci_value(row?.name || section),
 			sysfs: clean_uci_value(row?.sysfs || ''),
-			trigger: clean_uci_value(row?.trigger || 'none'),
-			default: zero_one(row?.default),
-			dev: clean_uci_value(row?.dev || ''),
-			mode: clean_uci_value(row?.mode || ''),
+			trigger,
+			default: trigger == 'none' ? zero_one(row?.default) : '',
+			dev: trigger == 'netdev' ? clean_uci_value(row?.dev || '') : '',
+			mode: trigger == 'netdev' ? clean_uci_value(row?.mode || '') : '',
 			interval: clean_uci_value(row?.interval || ''),
-			delayon: clean_uci_value(row?.delayon || ''),
-			delayoff: clean_uci_value(row?.delayoff || '')
+			delayon: trigger == 'timer' ? clean_uci_value(row?.delayon || '') : '',
+			delayoff: trigger == 'timer' ? clean_uci_value(row?.delayoff || '') : '',
+			inverted: trigger == 'heartbeat' ? zero_one(row?.inverted) : ''
 		};
 
 		if (!length(next.name) || !length(next.sysfs))
@@ -5409,6 +5411,8 @@ function save_led_config(rows, allow_empty) {
 			let current = uci.get('system', section, key) || '';
 
 			if (key == 'default' && !length(current) && value == '0')
+				continue;
+			if (key == 'inverted' && !length(current) && value == '0')
 				continue;
 
 			if (current != value) {
@@ -7074,6 +7078,10 @@ function native_page(page) {
 			{
 				title: 'LED sysfs state',
 				output: shell_output('for f in /sys/class/leds/*; do [ -d "$f" ] || continue; echo "=== ${f##*/} ==="; cat "$f/trigger" 2>/dev/null; printf "brightness: "; cat "$f/brightness" 2>/dev/null; echo; done')
+			},
+			{
+				title: 'Network devices',
+				output: shell_output('ls -1 /sys/class/net 2>/dev/null | sort')
 			}
 		];
 	}

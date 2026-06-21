@@ -435,6 +435,7 @@ export type LedConfigRow = {
 	interval: string;
 	delayon: string;
 	delayoff: string;
+	inverted: string;
 };
 
 export type LedConfigResult = {

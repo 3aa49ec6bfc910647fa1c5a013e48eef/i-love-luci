@@ -177,6 +177,28 @@ type LedSysfsEntry = {
 	brightness: string;
 };
 
+const LED_TRIGGERS = [
+	{ value: "none", label: "Always off" },
+	{ value: "default-on", label: "Always on" },
+	{ value: "timer", label: "Custom flash interval" },
+	{ value: "heartbeat", label: "Heartbeat interval" },
+	{ value: "netdev", label: "Network device activity" },
+];
+
+const LED_NETDEV_MODES = [
+	{ value: "link", label: "Link" },
+	{ value: "link_10", label: "10M" },
+	{ value: "link_100", label: "100M" },
+	{ value: "link_1000", label: "1G" },
+	{ value: "link_2500", label: "2.5G" },
+	{ value: "link_5000", label: "5G" },
+	{ value: "link_10000", label: "10G" },
+	{ value: "half_duplex", label: "Half duplex" },
+	{ value: "full_duplex", label: "Full duplex" },
+	{ value: "tx", label: "Transmit" },
+	{ value: "rx", label: "Receive" },
+];
+
 type DiagnosticTool = "ping" | "traceroute" | "nslookup";
 
 type DiagnosticRunResult = {
@@ -3741,6 +3763,7 @@ function RepoKeySummary({ data }: { data: NativePageData }) {
 
 function LedSummary({ data }: { data: NativePageData }) {
 	const leds = parseLeds(commandOutput(data.commands, "LED sysfs state"));
+	const networkDevices = parseSimpleLines(commandOutput(data.commands, "Network devices"));
 	const triggers = countBy(leds.map((led) => led.trigger || "none"));
 
 	return (
@@ -3750,13 +3773,13 @@ function LedSummary({ data }: { data: NativePageData }) {
 				<MetricBlock label="Netdev triggers" value={triggers.netdev ?? 0} />
 				<MetricBlock label="On" value={leds.filter((led) => Number(led.brightness) > 0).length} />
 			</div>
-			<LedConfigEditor ledNames={leds.map((led) => led.name)} sections={data.sections ?? []} />
+			<LedConfigEditor ledNames={leds.map((led) => led.name)} networkDevices={networkDevices} sections={data.sections ?? []} />
 			<LedSysfsTable entries={leds} />
 		</div>
 	);
 }
 
-function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections: ConfigSection[] }) {
+function LedConfigEditor({ ledNames, networkDevices, sections }: { ledNames: string[]; networkDevices: string[]; sections: ConfigSection[] }) {
 	const initial = useMemo(() => ledRowsFromSections(sections), [sections]);
 	const [rows, setRows] = useState(initial);
 	const [savedRows, setSavedRows] = useState(initial);
@@ -3782,6 +3805,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 				interval: "",
 				delayon: "",
 				delayoff: "",
+				inverted: "0",
 			},
 		]);
 	}
@@ -3804,6 +3828,25 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 			next.splice(nextIndex, 0, row);
 			return next;
 		});
+	}
+
+	function updateMode(section: string, mode: string, enabled: boolean) {
+		setRows((current) =>
+			current.map((row) => {
+				if (row.section !== section) {
+					return row;
+				}
+
+				const modes = new Set(row.mode.split(/\s+/).filter(Boolean));
+				if (enabled) {
+					modes.add(mode);
+				} else {
+					modes.delete(mode);
+				}
+
+				return { ...row, mode: LED_NETDEV_MODES.map((entry) => entry.value).filter((value) => modes.has(value)).join(" ") };
+			}),
+		);
 	}
 
 	async function save() {
@@ -3835,14 +3878,15 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 				</div>
 			}
 		>
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[78rem] text-left text-sm">
+				<div className="overflow-x-auto">
+				<table className="w-full min-w-[84rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Name</th>
 							<th className="px-3 py-2 font-medium">LED</th>
 							<th className="px-3 py-2 font-medium">Trigger</th>
 							<th className="px-3 py-2 font-medium">Default</th>
+							<th className="px-3 py-2 font-medium">Invert</th>
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Mode</th>
 							<th className="px-3 py-2 font-medium">Interval</th>
@@ -3874,7 +3918,20 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 										</select>
 									</td>
 									<td className="px-3 py-2">
-										<Input onChange={(event) => update(row.section, "trigger", event.target.value)} value={row.trigger} />
+										<select
+											className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+											onChange={(event) => update(row.section, "trigger", event.target.value)}
+											value={row.trigger}
+										>
+											{row.trigger && !LED_TRIGGERS.some((trigger) => trigger.value === row.trigger) ? (
+												<option value={row.trigger}>{row.trigger}</option>
+											) : null}
+											{LED_TRIGGERS.map((trigger) => (
+												<option key={trigger.value} value={trigger.value}>
+													{trigger.label}
+												</option>
+											))}
+										</select>
 									</td>
 									<td className="px-3 py-2">
 										<select
@@ -3887,10 +3944,51 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 										</select>
 									</td>
 									<td className="px-3 py-2">
-										<Input onChange={(event) => update(row.section, "dev", event.target.value)} value={row.dev} />
+										<input
+											checked={row.inverted === "1"}
+											className="mt-2 size-4 accent-primary"
+											disabled={row.trigger !== "heartbeat"}
+											onChange={(event) => update(row.section, "inverted", event.target.checked ? "1" : "0")}
+											type="checkbox"
+										/>
 									</td>
 									<td className="px-3 py-2">
-										<Input onChange={(event) => update(row.section, "mode", event.target.value)} value={row.mode} />
+										{row.trigger === "netdev" ? (
+											<select
+												className="h-9 w-full rounded-md border bg-card px-2 text-sm"
+												onChange={(event) => update(row.section, "dev", event.target.value)}
+												value={row.dev}
+											>
+												<option value="">Select device</option>
+												{row.dev && !networkDevices.includes(row.dev) ? <option value={row.dev}>{row.dev}</option> : null}
+												{networkDevices.map((device) => (
+													<option key={device} value={device}>
+														{device}
+													</option>
+												))}
+											</select>
+										) : (
+											<Input disabled onChange={(event) => update(row.section, "dev", event.target.value)} value={row.dev} />
+										)}
+									</td>
+									<td className="px-3 py-2">
+										{row.trigger === "netdev" ? (
+											<div className="grid min-w-56 grid-cols-2 gap-2">
+												{LED_NETDEV_MODES.map((mode) => (
+													<label className="flex items-center gap-2 text-xs text-foreground" key={mode.value}>
+														<input
+															checked={row.mode.split(/\s+/).includes(mode.value)}
+															className="size-3.5 accent-primary"
+															onChange={(event) => updateMode(row.section, mode.value, event.target.checked)}
+															type="checkbox"
+														/>
+														{mode.label}
+													</label>
+												))}
+											</div>
+										) : (
+											<Input disabled onChange={(event) => update(row.section, "mode", event.target.value)} value={row.mode} />
+										)}
 									</td>
 									<td className="px-3 py-2">
 										<Input inputMode="numeric" onChange={(event) => update(row.section, "interval", event.target.value)} value={row.interval} />
@@ -3934,7 +4032,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={12}>
 									No LED actions configured.
 								</td>
 							</tr>
@@ -3968,6 +4066,7 @@ function ledRowsFromSections(sections: ConfigSection[]): LedConfigRow[] {
 			interval: configValue(section, "interval"),
 			delayon: configValue(section, "delayon"),
 			delayoff: configValue(section, "delayoff"),
+			inverted: configValue(section, "inverted") === "1" ? "1" : "0",
 		}));
 }
 
@@ -4895,6 +4994,13 @@ function parsePackageUpgrades(output: string): PackageUpgradeEntry[] {
 
 function commandOutput(commands: CommandBlock[], title: string) {
 	return commands.find((command) => command.title === title)?.output ?? "";
+}
+
+function parseSimpleLines(output: string) {
+	return output
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
 }
 
 function parseRoutes(output: string): RouteEntry[] {
