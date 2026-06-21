@@ -196,6 +196,16 @@ Cons:
 
 Compat is not an incomplete route replacement. It does not parse one section of a LuCI app and leave the rest unsupported. If a route is not fully native, the route opens the original LuCI app through compat.
 
+### Compat Contract
+
+I Love LuCI uses compat as a full-route adapter, not as partial page rendering:
+
+- The compat target is the original LuCI route, loaded intact through the framed/proxied LuCI compatibility layer.
+- LuCI owns the compat route's JavaScript view, form lifecycle, RPC calls, save/apply behavior, child navigation, query-string behavior, and package-specific side effects.
+- I Love LuCI owns the surrounding shell only: header, sidebar, search, profile menu, session recovery, responsive frame wrapper, and route discovery.
+- Adapter evidence can be collected in parallel, but it is not a user-facing renderer. It cannot replace a LuCI route until the whole page/workflow reaches native parity.
+- There is no supported product state where part of a LuCI page is native and the rest of that page is missing, read-only, or approximated. The route is either supported native, LuCI compat, or hidden by LuCI/ACL metadata.
+
 ### Phase 2: Native LuCI View Adapter Research
 
 For `action.type = "view"` pages only, test mounting LuCI views into a React-managed container by calling LuCI's `ui.instantiateView(path)`.
@@ -1117,7 +1127,7 @@ Router smoke tests should be manual at first. Add scheduled or self-hosted CI on
 2. Vite React TypeScript shell with Tailwind v4.
 3. shadcn component setup with local `components/ui`.
 4. App shell with sidebar/header/search/profile/toasts.
-5. Legacy iframe route working against existing LuCI.
+5. LuCI compat iframe route working against existing LuCI.
 6. Stub native dashboard route.
 7. Stub login/MFA flow with server API contract documented.
 8. `rpcd` bridge stub returning menu/session metadata.
@@ -1129,7 +1139,7 @@ Router smoke tests should be manual at first. Add scheduled or self-hosted CI on
 ## Open Questions
 
 1. Should `I Love LuCI` replace `/cgi-bin/luci/admin` as default after login, or live under `/cgi-bin/luci/admin/i-love-luci` until stable?
-2. Should legacy routes open in iframe by default, or should users have a setting to open them in classic LuCI?
+2. Should LuCI compat routes open in iframe by default, or should users have a setting to open them in classic LuCI?
 3. Should MFA be mandatory for `root`, optional per user, or disabled by default?
 4. Should secrets live in UCI, a root-only JSON file, or a small dedicated auth store?
 5. Should WebAuthn/passkey support be a separate optional package to avoid increasing base dependency size?
@@ -1150,7 +1160,7 @@ Proceed with a hybrid replacement:
 
 - Keep LuCI backend and package ecosystem.
 - Build modern React shell as `luci-app-i-love-luci`.
-- Use iframe bridge for universal legacy compatibility.
+- Use iframe bridge for universal LuCI compat coverage.
 - Rebuild important routes natively over time.
 - Plan a standalone `i-love-luci` package and make LuCI compatibility optional once enough native screens exist.
 
