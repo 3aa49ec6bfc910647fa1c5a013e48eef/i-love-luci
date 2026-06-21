@@ -4790,7 +4790,21 @@ function FlashSummary({ data }: { data: NativePageData }) {
 	const filesystems = parseFilesystems(commandOutput(data.commands, "Mounted filesystems"));
 	const partitions = parseFlashPartitions(commandOutput(data.commands, "Flash partitions"));
 	const backup = data.flashBackup;
+	const [checkingBackup, setCheckingBackup] = useState(false);
 	const [creatingBackup, setCreatingBackup] = useState(false);
+
+	async function checkBackup() {
+		setCheckingBackup(true);
+		const result = await createConfigBackup(true);
+		setCheckingBackup(false);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		toast.success(result.message);
+	}
 
 	async function createBackup() {
 		setCreatingBackup(true);
@@ -4816,10 +4830,15 @@ function FlashSummary({ data }: { data: NativePageData }) {
 			<Panel
 				title="Configuration backup"
 				actions={
-					<Button disabled={creatingBackup} onClick={() => void createBackup()} size="sm" type="button" variant="outline">
-						<Download className="size-4" />
-						Download
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button disabled={checkingBackup || creatingBackup} onClick={() => void checkBackup()} size="sm" type="button" variant="outline">
+							Check
+						</Button>
+						<Button disabled={creatingBackup} onClick={() => void createBackup()} size="sm" type="button" variant="outline">
+							<Download className="size-4" />
+							Download
+						</Button>
+					</div>
 				}
 			>
 				<p className="text-sm text-muted-foreground">
