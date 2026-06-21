@@ -98,7 +98,7 @@ expected_pages = {
 	"password": {},
 	"repokeys": {"commands": ["Repository public keys"]},
 	"leds": {"commands": ["LED sysfs state"], "sections": True, "required_options": ["name", "sysfs", "trigger"]},
-	"flash": {"commands": ["Mounted filesystems", "Flash partitions"]},
+	"flash": {"commands": ["Mounted filesystems", "Flash partitions"], "objects": ["flashBackup"]},
 	"services": {"services": True},
 	"reboot": {"commands": ["System uptime"]},
 }
@@ -258,6 +258,10 @@ for page, rules in expected_pages.items():
 
 	if rules.get("text") and "text" not in data:
 		failures.append(f"{page}: expected text field")
+
+	for key in rules.get("objects", []):
+		if not isinstance(data.get(key), dict):
+			failures.append(f"{page}: expected {key} object")
 
 for service, rules in expected_services.items():
 	payload = json_after_marker(f"---ILOVELUCI-SERVICE:{service}---")

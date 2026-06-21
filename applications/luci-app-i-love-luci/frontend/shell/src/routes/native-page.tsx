@@ -22,6 +22,7 @@ import {
 	saveDropbearConfigs,
 	saveLedConfig,
 	savePackageFeeds,
+	saveSysupgradeConfig,
 	saveUpnpdConfig,
 	removeUhttpdCertificate,
 	saveUhttpdCertificateFile,
@@ -4777,6 +4778,7 @@ function AttendedSelect({ label, onChange, value }: { label: string; onChange: (
 function FlashSummary({ data }: { data: NativePageData }) {
 	const filesystems = parseFilesystems(commandOutput(data.commands, "Mounted filesystems"));
 	const partitions = parseFlashPartitions(commandOutput(data.commands, "Flash partitions"));
+	const backup = data.flashBackup;
 	const [creatingBackup, setCreatingBackup] = useState(false);
 
 	async function createBackup() {
@@ -4813,9 +4815,51 @@ function FlashSummary({ data }: { data: NativePageData }) {
 					Create an authenticated sysupgrade configuration archive for this router. Firmware image upload and flashing remain guarded.
 				</p>
 			</Panel>
+			{backup ? (
+				<BackupFileListTable available={backup.available} entries={backup.list} />
+			) : null}
+			{backup ? (
+				<TextFileEditor
+					helperText="Edit shell glob patterns included in sysupgrade configuration backups. Modified files in /etc/config and essential base files are still detected by sysupgrade."
+					initialText={backup.config}
+					onSave={saveSysupgradeConfig}
+					title="Backup configuration list"
+				/>
+			) : null}
 			<FilesystemTable entries={filesystems} />
 			<FlashPartitionTable entries={partitions} />
 		</div>
+	);
+}
+
+function BackupFileListTable({ available, entries }: { available: boolean; entries: string[] }) {
+	return (
+		<Panel title="Current backup file list" flush>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[34rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Path</th>
+						</tr>
+					</thead>
+					<tbody>
+						{available && entries.length ? (
+							entries.map((entry) => (
+								<tr className="border-b last:border-0" key={entry}>
+									<td className="px-3 py-2 font-mono text-xs">{entry}</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground">
+									{available ? "No backup file entries reported by sysupgrade." : "sysupgrade helper is not installed."}
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</Panel>
 	);
 }
 

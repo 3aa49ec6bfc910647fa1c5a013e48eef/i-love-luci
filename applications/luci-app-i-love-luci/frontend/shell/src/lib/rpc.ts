@@ -39,6 +39,13 @@ export type SessionInfo = {
 	};
 };
 
+export type AuthSessionStatus = "valid" | "expired" | "unknown";
+
+export type AuthSessionProbe = {
+	status: AuthSessionStatus;
+	message?: string;
+};
+
 export type ConsoleStatus = {
 	available: boolean;
 	enabled: boolean;
@@ -408,6 +415,19 @@ export type ConfigBackupResult = {
 	size: number;
 	mime: string;
 	data: string;
+};
+
+export type FlashBackupContext = {
+	available: boolean;
+	list: string[];
+	config: string;
+};
+
+export type SysupgradeConfigResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	config: string;
 };
 
 export type DropbearConfigInput = {
@@ -1081,6 +1101,7 @@ export type NativePageData = {
 	lines: string[];
 	text: string;
 	packageFeeds?: PackageFeedRow[];
+	flashBackup?: FlashBackupContext;
 };
 
 type BridgeResponse<T> = {
@@ -1160,6 +1181,53 @@ export async function getSessionInfo(): Promise<SessionInfo> {
 	}
 	catch {
 		return fallbackSession;
+	}
+}
+
+export async function probeAuthSession(): Promise<AuthSessionProbe> {
+	const config = getShellConfig();
+
+	if (!config.sessionId) {
+		return { status: "expired", message: "Missing LuCI session id" };
+	}
+
+	try {
+		const response = await fetch("/ubus/", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			credentials: "same-origin",
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id: "auth_probe",
+				method: "call",
+				params: [config.sessionId, "luci.iloveluci", "session_info", {}],
+			}),
+		});
+
+		if (response.status === 403 || response.headers.get("X-LuCI-Login-Required") === "yes") {
+			return { status: "expired", message: "LuCI login required" };
+		}
+
+		if (!response.ok) {
+			return { status: "unknown", message: `Auth probe failed: ${response.status}` };
+		}
+
+		const payload = await response.json();
+		const ubusCode = payload?.result?.[0];
+		const result = payload?.result?.[1] as BridgeResponse<SessionInfo> | undefined;
+
+		if (ubusCode === 0 && result?.ok) {
+			return { status: "valid" };
+		}
+
+		if (payload?.error || (typeof ubusCode === "number" && ubusCode !== 0)) {
+			return { status: "expired", message: payload?.error?.message ?? "LuCI session rejected" };
+		}
+
+		return { status: "unknown", message: "Auth probe returned unexpected payload" };
+	}
+	catch (error) {
+		return { status: "unknown", message: error instanceof Error ? error.message : "Auth probe failed" };
 	}
 }
 
@@ -2013,6 +2081,20 @@ export async function createConfigBackup(dryRun = false): Promise<ConfigBackupRe
 			size: 0,
 			mime: "application/gzip",
 			data: "",
+		};
+	}
+}
+
+export async function saveSysupgradeConfig(text: string): Promise<SysupgradeConfigResult> {
+	try {
+		return await callBridge<SysupgradeConfigResult>("sysupgrade_config_save", { text });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Backup configuration list save failed.",
+			changed: false,
+			config: text,
 		};
 	}
 }

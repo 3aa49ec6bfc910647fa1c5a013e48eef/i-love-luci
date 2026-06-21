@@ -7170,6 +7170,56 @@ function create_config_backup(dry_run) {
 	};
 }
 
+function flash_backup_context() {
+	let list = command_exists('sysupgrade') ? split(trim(shell_output('/sbin/sysupgrade -l 2>/dev/null')), '\n') : [];
+	let filtered = [];
+
+	for (let line in list) {
+		line = trim(line);
+		if (length(line))
+			push(filtered, line);
+	}
+
+	return {
+		available: command_exists('sysupgrade'),
+		list: filtered,
+		config: readfile('/etc/sysupgrade.conf') || ''
+	};
+}
+
+function save_sysupgrade_config(text) {
+	text = '' + (text || '');
+
+	if (length(text) > 65536)
+		return {
+			saved: false,
+			message: 'Backup configuration list is too large.',
+			changed: false,
+			config: readfile('/etc/sysupgrade.conf') || ''
+		};
+
+	let normalized = replace(text, /\r\n/g, '\n');
+	normalized = replace(normalized, /\r/g, '\n');
+
+	if (length(normalized) && substr(normalized, length(normalized) - 1) != '\n')
+		normalized += '\n';
+
+	let current = readfile('/etc/sysupgrade.conf') || '';
+	let changed = current != normalized;
+
+	if (changed) {
+		writefile('/etc/sysupgrade.conf', normalized);
+		system('chmod 0644 /etc/sysupgrade.conf >/dev/null 2>&1 || true');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Backup configuration list saved.' : 'Backup configuration list already up to date.',
+		changed,
+		config: normalized
+	};
+}
+
 function native_page(page) {
 	const board = ubus.call('system', 'board') || {};
 	const system_info = ubus.call('system', 'info') || {};
@@ -7275,6 +7325,7 @@ function native_page(page) {
 		];
 	}
 	else if (page == 'flash') {
+		data.flashBackup = flash_backup_context();
 		data.commands = [
 			{ title: 'Mounted filesystems', output: shell_output('df -h') },
 			{ title: 'Flash partitions', output: shell_output('cat /proc/mtd 2>/dev/null || true') }
@@ -8197,6 +8248,15 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(create_config_backup(!!request.args.dry_run));
+		}
+	},
+
+	sysupgrade_config_save: {
+		args: {
+			text: ''
+		},
+		call: function(request) {
+			return respond(save_sysupgrade_config(request.args.text || ''));
 		}
 	},
 

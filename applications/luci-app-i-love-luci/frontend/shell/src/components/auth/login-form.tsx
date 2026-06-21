@@ -4,6 +4,7 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { storeReturnRouteFromHash } from "@/lib/auth";
 import { getShellConfig } from "@/lib/config";
 
 export function LoginForm() {
@@ -15,6 +16,8 @@ export function LoginForm() {
 		typeof window === "undefined" ? undefined : `${window.location.pathname}${window.location.search}`;
 
 	useEffect(() => {
+		storeReturnRouteFromHash();
+
 		if (defaultUser) {
 			passwordRef.current?.focus();
 		}
@@ -42,7 +45,7 @@ export function LoginForm() {
 					</div>
 				) : null}
 
-				<form action={loginAction} autoComplete="on" className="grid gap-4" method="post">
+				<form action={loginAction} autoComplete="on" className="grid gap-4" method="post" onSubmit={storeReturnRouteFromHash}>
 					<div className="grid gap-2">
 						<label className="text-sm font-medium" htmlFor="luci_username">
 							Username
