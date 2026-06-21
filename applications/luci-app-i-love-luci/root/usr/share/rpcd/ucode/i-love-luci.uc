@@ -11316,6 +11316,64 @@ const methods = {
 		}
 	},
 
+	console_poll: {
+		args: {
+			session_id: '',
+			sequence: 0
+		},
+		call: function() {
+			return respond({
+				available: false,
+				active: false,
+				output: '',
+				sequence: 0,
+				message: 'Console tunnel helper is not installed.'
+			});
+		}
+	},
+
+	console_write: {
+		args: {
+			session_id: '',
+			input: ''
+		},
+		call: function() {
+			return respond({
+				available: false,
+				accepted: false,
+				message: 'Console tunnel helper is not installed.'
+			});
+		}
+	},
+
+	console_resize: {
+		args: {
+			session_id: '',
+			columns: 80,
+			rows: 24
+		},
+		call: function() {
+			return respond({
+				available: false,
+				accepted: false,
+				message: 'Console tunnel helper is not installed.'
+			});
+		}
+	},
+
+	console_close: {
+		args: {
+			session_id: ''
+		},
+		call: function() {
+			return respond({
+				available: false,
+				accepted: false,
+				message: 'Console tunnel helper is not installed.'
+			});
+		}
+	},
+
 	auth_mfa_status: {
 		call: function() {
 			return respond({

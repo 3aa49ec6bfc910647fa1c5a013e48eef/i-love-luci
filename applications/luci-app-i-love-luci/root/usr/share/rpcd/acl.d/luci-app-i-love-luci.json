@@ -17,6 +17,7 @@
 					"package_job_status",
 					"service_detail",
 					"changes_list",
+					"console_poll",
 					"console_status",
 					"auth_mfa_status"
 				]
@@ -38,7 +39,10 @@
 					"config_backup_create",
 					"changes_apply",
 					"changes_revert",
+					"console_close",
 					"console_launch",
+					"console_resize",
+					"console_write",
 					"crontab_save",
 					"custom_command_run",
 					"custom_commands_save",

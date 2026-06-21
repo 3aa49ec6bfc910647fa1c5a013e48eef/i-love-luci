@@ -17,6 +17,7 @@ scan_roots = [
 	root / "docs" / "UI_REFACTOR.md",
 	root / "applications" / "luci-app-i-love-luci" / "frontend" / "shell" / "src",
 	root / "applications" / "luci-app-i-love-luci" / "root" / "usr" / "share" / "rpcd" / "ucode" / "i-love-luci.uc",
+	root / "applications" / "luci-app-i-love-luci" / "root" / "usr" / "share" / "rpcd" / "acl.d" / "luci-app-i-love-luci.json",
 	root / "scripts",
 ]
 
@@ -43,6 +44,7 @@ app_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/app/app.ts
 legacy_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/legacy.tsx")
 legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/legacy-route.ts")
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
+rpc_acl_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 navigation_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/navigation.ts")
 service_compat_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/service-compat.ts")
@@ -177,6 +179,9 @@ for base in scan_roots:
 						failures.append(f"{relative_path}: console_status must not expose or read helper {secret_term}")
 			if "console_launch:" not in text:
 				failures.append(f"{relative_path}: console_launch RPC is required for explicit console credential release")
+			for tunnel_method in ("console_poll:", "console_write:", "console_resize:", "console_close:"):
+				if tunnel_method not in text:
+					failures.append(f"{relative_path}: missing console tunnel RPC stub {tunnel_method}")
 		if relative_path == rpc_types_file:
 			status_type = re.search(r"export type ConsoleStatus = \{(?P<body>.*?)\n\};", text, re.S)
 			if not status_type:
@@ -190,6 +195,13 @@ for base in scan_roots:
 						failures.append(f"{relative_path}: ConsoleStatus must not include helper {secret_term}")
 			if "export type ConsoleLaunch" not in text or "console_launch" not in text:
 				failures.append(f"{relative_path}: ConsoleLaunch type and RPC call are required")
+			for required_tunnel_client in ("ConsolePollResult", "ConsoleActionResult", "console_poll", "console_write", "console_resize", "console_close"):
+				if required_tunnel_client not in text:
+					failures.append(f"{relative_path}: missing console tunnel client contract {required_tunnel_client}")
+		if relative_path == rpc_acl_file:
+			for required_console_acl in ("console_poll", "console_write", "console_resize", "console_close"):
+				if required_console_acl not in text:
+					failures.append(f"{relative_path}: missing ACL for console tunnel method {required_console_acl}")
 		if relative_path == navigation_file:
 			for compat_route in (
 				'"/admin/services/adblock-fast"',

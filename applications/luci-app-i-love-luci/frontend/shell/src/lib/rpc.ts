@@ -63,6 +63,24 @@ export type ConsoleLaunch = ConsoleStatus & {
 	username?: string;
 	password?: string;
 	rotated?: boolean;
+	sessionId?: string;
+	expiresAt?: number;
+	pollAfterMs?: number;
+	message?: string;
+};
+
+export type ConsolePollResult = {
+	available: boolean;
+	active: boolean;
+	output: string;
+	sequence?: number;
+	message?: string;
+};
+
+export type ConsoleActionResult = {
+	available: boolean;
+	accepted: boolean;
+	message?: string;
 };
 
 export type PendingChange = {
@@ -1682,6 +1700,55 @@ export async function getConsoleLaunch(): Promise<ConsoleLaunch> {
 		return {
 			available: false,
 			enabled: false,
+		};
+	}
+}
+
+export async function pollConsole(sessionId: string, sequence = 0): Promise<ConsolePollResult> {
+	try {
+		return await callBridge<ConsolePollResult>("console_poll", { session_id: sessionId, sequence });
+	}
+	catch {
+		return {
+			available: false,
+			active: false,
+			output: "",
+		};
+	}
+}
+
+export async function writeConsole(sessionId: string, input: string): Promise<ConsoleActionResult> {
+	try {
+		return await callBridge<ConsoleActionResult>("console_write", { session_id: sessionId, input });
+	}
+	catch {
+		return {
+			available: false,
+			accepted: false,
+		};
+	}
+}
+
+export async function resizeConsole(sessionId: string, columns: number, rows: number): Promise<ConsoleActionResult> {
+	try {
+		return await callBridge<ConsoleActionResult>("console_resize", { session_id: sessionId, columns, rows });
+	}
+	catch {
+		return {
+			available: false,
+			accepted: false,
+		};
+	}
+}
+
+export async function closeConsole(sessionId: string): Promise<ConsoleActionResult> {
+	try {
+		return await callBridge<ConsoleActionResult>("console_close", { session_id: sessionId });
+	}
+	catch {
+		return {
+			available: false,
+			accepted: false,
 		};
 	}
 }
