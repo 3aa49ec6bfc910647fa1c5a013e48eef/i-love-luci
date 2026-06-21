@@ -376,6 +376,16 @@ export type PackageActionOptions = {
 	i18nPackages?: string[];
 };
 
+export type PackageFileStageResult = {
+	ok: boolean;
+	message: string;
+	filename: string;
+	path: string;
+	size: number;
+	checksum: string;
+	sha256sum: string;
+};
+
 export type PackageFeedRow = {
 	id: string;
 	file: string;
@@ -1690,6 +1700,23 @@ export async function runPackageAction(action: PackageAction, name = "", simulat
 			command: "",
 			output: "",
 			message: "Package action failed.",
+		};
+	}
+}
+
+export async function stagePackageFile(filename: string, data: string): Promise<PackageFileStageResult> {
+	try {
+		return await callBridge<PackageFileStageResult>("package_file_stage", { filename, data });
+	}
+	catch {
+		return {
+			ok: false,
+			message: "Package file staging failed.",
+			filename,
+			path: "",
+			size: 0,
+			checksum: "",
+			sha256sum: "",
 		};
 	}
 }

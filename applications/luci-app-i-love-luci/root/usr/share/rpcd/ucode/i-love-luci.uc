@@ -5844,6 +5844,78 @@ function valid_package_reference(name, simulate) {
 	return false;
 }
 
+function package_safe_filename(value) {
+	value = replace(trim('' + (value || 'package.apk')), /[^A-Za-z0-9_.-]/g, '-');
+	return length(value) ? value : 'package.apk';
+}
+
+function package_file_stage(filename, data) {
+	filename = package_safe_filename(filename || 'package.apk');
+
+	if (!match(filename, /\.(apk|ipk)$/))
+		return {
+			ok: false,
+			message: 'Package upload must be an .apk or .ipk file.',
+			filename,
+			path: '',
+			size: 0,
+			checksum: '',
+			sha256sum: ''
+		};
+
+	if (length('' + (data || '')) > 24 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'Package file exceeds the native upload limit.',
+			filename,
+			path: '',
+			size: 0,
+			checksum: '',
+			sha256sum: ''
+		};
+
+	let decoded = base64_decode(data);
+	let size = length(decoded);
+
+	if (!size)
+		return {
+			ok: false,
+			message: 'Package file is empty or invalid.',
+			filename,
+			path: '',
+			size: 0,
+			checksum: '',
+			sha256sum: ''
+		};
+
+	if (size > 16 * 1024 * 1024)
+		return {
+			ok: false,
+			message: 'Package file exceeds the native upload limit.',
+			filename,
+			path: '',
+			size,
+			checksum: '',
+			sha256sum: ''
+		};
+
+	let path = '/tmp/i-love-luci-package-' + filename;
+	let quoted = quote_command_args([path])[0];
+
+	writefile(path, decoded);
+	system(`chmod 0600 ${quoted} >/dev/null 2>&1 || true`);
+
+	return {
+		ok: true,
+		message: 'Package file staged for install planning.',
+		filename,
+		path,
+		size,
+		checksum: trim(shell_output(`md5sum ${quoted} 2>/dev/null | awk '{print $1}'`)),
+		sha256sum: trim(shell_output(`sha256sum ${quoted} 2>/dev/null | awk '{print $1}'`))
+	};
+}
+
 function package_action(action, name, simulate, options) {
 	action = trim('' + (action || ''));
 	name = trim('' + (name || ''));
@@ -5891,7 +5963,7 @@ function package_action(action, name, simulate, options) {
 				simulate,
 				command: '',
 				output: '',
-				message: 'URL and uploaded package installs stay in LuCI compat until upload and rollback parity is complete.'
+				message: 'URL and staged package install apply stays in LuCI compat until rollback parity is complete.'
 			};
 		else if (action == 'upgrade' && !simulate)
 			return {
@@ -5961,18 +6033,37 @@ function package_action(action, name, simulate, options) {
 		};
 	}
 
+	if (simulate && match(name, /^\/tmp\/[A-Za-z0-9._+-]+\.(apk|ipk)$/)) {
+		let staged = stat(name);
+		if (staged?.type != 'file')
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'Staged package file is not available.'
+			};
+	}
+
 	let command = join(' ', quote_command_args(argv));
-	let output = shell_output(`${command} | sed -n "1,220p"`);
+	let output_path = '/tmp/i-love-luci-package-action.log';
+	let output_quoted = quote_command_args([output_path])[0];
+	let code = system(`${command} >${output_quoted} 2>&1`);
+	let output = shell_output(`sed -n "1,220p" ${output_quoted}`);
+	system(`rm -f ${output_quoted} >/dev/null 2>&1 || true`);
 
 	return {
-		ok: true,
+		ok: code == 0,
 		manager,
 		action,
 		name,
 		simulate,
 		command,
 		output,
-		message: simulate ? 'Package action simulated.' : 'Package action complete.'
+		message: code == 0 ? (simulate ? 'Package action simulated.' : 'Package action complete.') : (simulate ? 'Package action simulation failed.' : 'Package action failed.')
 	};
 }
 
@@ -9868,6 +9959,29 @@ const methods = {
 					command: '',
 					output: '',
 					message: 'Package action failed: ' + e
+				});
+			}
+		}
+	},
+
+	package_file_stage: {
+		args: {
+			filename: '',
+			data: ''
+		},
+		call: function(request) {
+			try {
+				return respond(package_file_stage(request.args.filename || '', request.args.data || ''));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					message: 'Package file staging failed: ' + e,
+					filename: package_safe_filename(request.args.filename || 'package.apk'),
+					path: '',
+					size: 0,
+					checksum: '',
+					sha256sum: ''
 				});
 			}
 		}

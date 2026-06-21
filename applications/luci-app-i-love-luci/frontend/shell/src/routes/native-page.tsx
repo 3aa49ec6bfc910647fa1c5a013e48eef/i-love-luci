@@ -30,6 +30,7 @@ import {
 	savePackageFeeds,
 	saveSysupgradeConfig,
 	saveUpnpdConfig,
+	stagePackageFile,
 	removeUhttpdCertificate,
 	saveUhttpdCertificateFile,
 	saveUhttpdConfigs,
@@ -63,6 +64,7 @@ import {
 	type PackageActionResult,
 	type PackageActionOptions,
 	type PackageFeedRow,
+	type PackageFileStageResult,
 	type PackageSearchResult,
 	type RestoreBackupValidationResult,
 	type ServiceFile,
@@ -108,6 +110,7 @@ type FlashPartitionEntry = {
 };
 
 const nativeFirmwareUploadLimit = 64 * 1024 * 1024;
+const packageUploadLimit = 16 * 1024 * 1024;
 
 type RouteEntry = {
 	target: string;
@@ -3369,6 +3372,8 @@ function ManualPackagePlanner({
 }) {
 	const [name, setName] = useState("");
 	const [overwrite, setOverwrite] = useState(false);
+	const [staging, setStaging] = useState(false);
+	const [stagedFile, setStagedFile] = useState<PackageFileStageResult | null>(null);
 
 	function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -3382,13 +3387,42 @@ function ManualPackagePlanner({
 		void onRunAction("install", value, true, { overwrite });
 	}
 
+	async function selectFile(file: File | undefined) {
+		if (!file) {
+			return;
+		}
+
+		if (!/\.(apk|ipk)$/i.test(file.name)) {
+			toast.error("Package upload must be an .apk or .ipk file.");
+			return;
+		}
+
+		if (file.size > packageUploadLimit) {
+			toast.error(`Package file exceeds the native upload limit of ${formatBytes(packageUploadLimit)}.`);
+			return;
+		}
+
+		setStaging(true);
+		const result = await stagePackageFile(file.name, await fileToBase64(file));
+		setStaging(false);
+		setStagedFile(result);
+
+		if (!result.ok) {
+			toast.error(result.message);
+			return;
+		}
+
+		setName(result.path);
+		toast.success(result.message);
+	}
+
 	return (
 		<Panel
 			title={
 				<div className="flex flex-col gap-1">
 					<div>Manual package install</div>
 					<div className="text-xs font-normal text-muted-foreground">
-						Plan package-name, URL, or staged `/tmp/*.apk` and `/tmp/*.ipk` installs without changing the router. Browser package-file upload stays in LuCI compat.
+						Plan package-name, URL, uploaded `.apk`, or uploaded `.ipk` installs without changing the router. Apply stays in LuCI compat.
 					</div>
 				</div>
 			}
@@ -3400,6 +3434,32 @@ function ManualPackagePlanner({
 						Plan install
 					</Button>
 				</div>
+				<div className="grid gap-2 text-sm">
+					<div className="font-medium">Package file</div>
+					<Input accept=".apk,.ipk" disabled={staging} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
+					<div className="text-xs text-muted-foreground">
+						File is staged under `/tmp` for install planning only. Native upload limit is {formatBytes(packageUploadLimit)}.
+					</div>
+				</div>
+				{stagedFile?.ok ? (
+					<div className="overflow-x-auto rounded-md border">
+						<table className="w-full min-w-[32rem] text-left text-sm">
+							<tbody>
+								{[
+									["File", stagedFile.filename],
+									["Path", stagedFile.path],
+									["Size", formatBytes(stagedFile.size)],
+									["SHA256", stagedFile.sha256sum || "unknown"],
+								].map(([field, value]) => (
+									<tr className="border-b last:border-0" key={field}>
+										<td className="px-3 py-2 font-medium">{field}</td>
+										<td className="px-3 py-2 font-mono text-xs">{value}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : null}
 				<label className="inline-flex items-center gap-2 text-sm">
 					<input checked={overwrite} onChange={(event) => setOverwrite(event.target.checked)} type="checkbox" />
 					Allow overwriting conflicting package files

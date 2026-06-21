@@ -60,6 +60,9 @@ echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
 ubus call luci.iloveluci firewall_includes_save
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
+echo '---ILOVELUCI-PACKAGE-FILE-STAGE---'
+ubus call luci.iloveluci package_file_stage '{\"filename\":\"audit.apk\",\"data\":\"bm90LWEtcGFja2FnZQo=\"}'
+rm -f /tmp/i-love-luci-package-audit.apk
 for action in check list blob; do
 	printf '%s\n' \"---ILOVELUCI-ASU-PLAN:\$action---\"
 	ubus call luci.iloveluci attendedsysupgrade_plan \"{\\\"action\\\":\\\"\$action\\\"}\"
@@ -378,6 +381,18 @@ else:
 		failures.append("package_search did not return package lines")
 	elif not package_data.get("lines"):
 		warnings.append("package_search returned no luci-app results")
+
+package_stage = json_after_marker("---ILOVELUCI-PACKAGE-FILE-STAGE---")
+if not package_stage or not package_stage.get("ok"):
+	failures.append("package_file_stage did not return ok")
+else:
+	stage_data = package_stage.get("data") or {}
+	if stage_data.get("ok") is not True:
+		failures.append("package_file_stage did not stage test package")
+	if stage_data.get("path") != "/tmp/i-love-luci-package-audit.apk":
+		failures.append("package_file_stage returned unexpected path")
+	if not stage_data.get("sha256sum"):
+		failures.append("package_file_stage did not return checksum")
 
 for action in ("check", "list", "blob"):
 	asu_plan = json_after_marker(f"---ILOVELUCI-ASU-PLAN:{action}---")

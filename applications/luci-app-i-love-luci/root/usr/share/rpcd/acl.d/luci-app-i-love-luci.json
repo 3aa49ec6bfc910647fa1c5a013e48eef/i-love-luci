@@ -68,6 +68,7 @@
 					"odhcpd_config_save",
 					"password_set",
 					"package_action",
+					"package_file_stage",
 					"package_feeds_save",
 					"rc_local_save",
 					"reboot_confirm",
