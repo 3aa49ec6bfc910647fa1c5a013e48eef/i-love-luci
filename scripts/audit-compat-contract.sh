@@ -55,6 +55,8 @@ header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/compone
 console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
 modern_shell_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/modern-shell.tsx")
 sidebar_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx")
+readme_file = Path("README.md")
+router_install_file = Path("scripts/router-install-package.sh")
 package_makefile = Path("applications/luci-app-i-love-luci/Makefile")
 uci_defaults_file = Path("applications/luci-app-i-love-luci/root/etc/uci-defaults/90_luci-app-i-love-luci")
 upgrade_keep_file = Path("applications/luci-app-i-love-luci/root/lib/upgrade/keep.d/luci-app-i-love-luci")
@@ -266,6 +268,26 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: sysupgrade keep file must preserve I Love LuCI settings")
 			if "/etc/config/ttyd" in text:
 				failures.append(f"{relative_path}: release keep file must not preserve generated ttyd config")
+		if relative_path == router_install_file:
+			for required_install_term in (
+				"[package.apk|package.ipk ...]",
+				'for package_path in "$@"; do',
+				"All packages in one install must use the same format",
+				"/etc/init.d/i-love-luci-console enable",
+				"/etc/init.d/i-love-luci-console restart",
+			):
+				if required_install_term not in text:
+					failures.append(f"{relative_path}: helper-aware release install missing {required_install_term}")
+		if relative_path == readme_file:
+			for required_readme_term in (
+				"utils/i-love-luci-console/",
+				"./scripts/feeds install i-love-luci-console",
+				"dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk",
+				"apk del luci-app-i-love-luci i-love-luci-console",
+				"opkg remove luci-app-i-love-luci i-love-luci-console",
+			):
+				if required_readme_term not in text:
+					failures.append(f"{relative_path}: install/rollback docs missing helper term {required_readme_term}")
 		if relative_path == modern_shell_file:
 			if "flex min-h-0 flex-1 overflow-hidden" not in text:
 				failures.append(f"{relative_path}: shell body must constrain overflow for independent sidebar/main scrolling")
