@@ -3198,6 +3198,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			<PackageUpgradeTable actionBusy={actionBusy} entries={upgrades} onRunAction={runAction} />
 			<PackageActionOutput result={actionResult} />
 			<ManualPackagePlanner busy={actionBusy} onRunAction={runAction} />
+			<AvailablePackageTable busy={actionBusy} lines={data.packageAvailable ?? []} onRunAction={runAction} />
 			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
 			<Panel
@@ -3350,6 +3351,85 @@ function ManualPackagePlanner({
 					Plan install
 				</Button>
 			</form>
+		</Panel>
+	);
+}
+
+function AvailablePackageTable({
+	busy,
+	lines,
+	onRunAction,
+}: {
+	busy: string | null;
+	lines: string[];
+	onRunAction: (action: "install", name: string, simulate: boolean) => void | Promise<void>;
+}) {
+	const [query, setQuery] = useState("");
+	const packages = useMemo(() => lines.map(parsePackageLine), [lines]);
+	const filtered = useMemo(() => {
+		const needle = query.trim().toLowerCase();
+
+		return packages
+			.filter((pkg) => !needle || pkg.name.toLowerCase().includes(needle) || pkg.description.toLowerCase().includes(needle))
+			.slice(0, 80);
+	}, [packages, query]);
+
+	return (
+		<Panel
+			title={
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<div>Available packages</div>
+						<div className="mt-1 text-xs font-normal text-muted-foreground">First 300 packages from configured feeds. Actions are plan-only.</div>
+					</div>
+					<div className="relative w-full sm:w-72">
+						<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+						<Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Filter available packages" value={query} />
+					</div>
+				</div>
+			}
+			flush
+		>
+			<div className="overflow-x-auto">
+				<table className="w-full min-w-[58rem] text-left text-sm">
+					<thead className="border-b text-xs uppercase text-muted-foreground">
+						<tr>
+							<th className="px-3 py-2 font-medium">Package</th>
+							<th className="px-3 py-2 font-medium">Version</th>
+							<th className="px-3 py-2 font-medium">Description</th>
+							<th className="px-3 py-2 font-medium">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{filtered.length ? (
+							filtered.map((pkg) => (
+								<tr className="border-b align-top last:border-0" key={pkg.line}>
+									<td className="px-3 py-3 font-medium">{pkg.name}</td>
+									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
+									<td className="px-3 py-3">{pkg.description || "none"}</td>
+									<td className="px-3 py-3">
+										<Button
+											disabled={busy === `install:${pkg.name}:plan`}
+											onClick={() => void onRunAction("install", pkg.name, true)}
+											size="sm"
+											type="button"
+											variant="outline"
+										>
+											Plan install
+										</Button>
+									</td>
+								</tr>
+							))
+						) : (
+							<tr>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+									No available packages to show.
+								</td>
+							</tr>
+						)}
+					</tbody>
+				</table>
+			</div>
 		</Panel>
 	);
 }

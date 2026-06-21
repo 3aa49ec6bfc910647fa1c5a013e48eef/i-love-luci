@@ -1299,6 +1299,7 @@ export type NativePageData = {
 	services: NativeService[];
 	lines: string[];
 	text: string;
+	packageAvailable?: string[];
 	packageFeeds?: PackageFeedRow[];
 	flashBackup?: FlashBackupContext;
 };

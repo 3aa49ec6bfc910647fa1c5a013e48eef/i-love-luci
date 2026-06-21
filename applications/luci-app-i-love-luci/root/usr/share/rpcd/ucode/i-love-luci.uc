@@ -5398,6 +5398,27 @@ function package_list() {
 	return split(trim(output), '\n');
 }
 
+function package_available_list() {
+	let output = command_exists('apk')
+		? shell_output('apk search -v 2>&1 | sort | sed -n "1,320p"')
+		: shell_output('opkg list 2>&1 | sort | sed -n "1,320p"');
+	let rows = [];
+
+	for (let line in split(trim(output), '\n')) {
+		line = trim(line);
+
+		if (!length(line) || substr(line, 0, 8) == 'WARNING:')
+			continue;
+
+		push(rows, line);
+
+		if (length(rows) >= 300)
+			break;
+	}
+
+	return rows;
+}
+
 function package_upgrades() {
 	if (command_exists('apk'))
 		return shell_output('apk version -l "<" 2>&1 | sed -n "1,160p"');
@@ -8474,6 +8495,7 @@ function native_page(page) {
 	}
 	else if (page == 'packages') {
 		data.lines = package_list();
+		data.packageAvailable = package_available_list();
 		data.packageFeeds = package_feed_rows();
 		data.commands = [
 			{ title: 'Available upgrades', output: package_upgrades() }
