@@ -74,9 +74,10 @@ function activeLegacyPath(search: string) {
 
 function isActive(item: MenuItem, pathname: string, search: string) {
 	const target = itemTarget(item);
+	const itemPath = item.resolvedPath ?? item.firstChildPath ?? item.path;
 
 	if (target.startsWith("/legacy")) {
-		return activeLegacyPath(search) === (item.resolvedPath ?? item.firstChildPath ?? item.path);
+		return activeLegacyPath(search) === itemPath || pathname === itemPath;
 	}
 
 	return pathname === target;

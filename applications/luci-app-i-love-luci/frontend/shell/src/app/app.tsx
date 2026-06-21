@@ -1,11 +1,11 @@
-import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { HashRouter, Route, Routes } from "react-router-dom";
 
 import { AuthRoute } from "@/components/auth/auth-route";
 import { LoginPage } from "@/routes/login";
 import { ModernShell } from "@/components/shell/modern-shell";
 import { CoreSettingsPage } from "@/routes/core-settings";
 import { DashboardPage } from "@/routes/dashboard";
-import { LegacyPage } from "@/routes/legacy";
+import { LegacyFallbackPage, LegacyPage } from "@/routes/legacy";
 import { NativePage, NativeServicePage } from "@/routes/native-page";
 import { SettingsPage } from "@/routes/settings";
 import { Toaster } from "@/components/ui/sonner";
@@ -49,7 +49,7 @@ export function App() {
 					<Route path="native/service/:service/:focus" element={<NativeServicePage />} />
 					<Route path="settings" element={<SettingsPage />} />
 					<Route path="legacy/*" element={<LegacyPage />} />
-					<Route path="*" element={<Navigate to="/" replace />} />
+					<Route path="*" element={<LegacyFallbackPage />} />
 				</Route>
 			</Routes>
 			<Toaster position="top-center" richColors closeButton />
