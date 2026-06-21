@@ -149,6 +149,10 @@ for base in scan_roots:
 		if relative_path == native_page_file:
 			if "nativePageCompatPath(page)" not in text or "return <Navigate replace to={legacyTarget(compatPath)} />" not in text:
 				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
+			if "firmwareValidation.output.split" in text:
+				failures.append(f"{relative_path}: firmware validation output must use structured rows, not inline raw split rendering")
+			if "FirmwareValidationOutputTable" not in text or "firmwareValidationLines" not in text:
+				failures.append(f"{relative_path}: flash adapter must render sysupgrade validation output as structured rows")
 			if "Package state fingerprint" not in text:
 				failures.append(f"{relative_path}: package manager output must show package state fingerprints")
 			for required_package_install_term in ("Install source", "allowRemote: remoteSource", "isRemotePackageSource"):

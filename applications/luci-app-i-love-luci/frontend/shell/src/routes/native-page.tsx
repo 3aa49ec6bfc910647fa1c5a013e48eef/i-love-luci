@@ -5957,13 +5957,7 @@ function FlashSummary({ data }: { data: NativePageData }) {
 							title="Validation"
 						/>
 						{firmwareValidation.output ? (
-							<div className="max-h-40 overflow-auto rounded-md border bg-secondary/30 p-3 text-xs">
-								{firmwareValidation.output.split("\n").map((line, index) => (
-									<div className="font-mono" key={`${index}.${line}`}>
-										{line || " "}
-									</div>
-								))}
-							</div>
+							<FirmwareValidationOutputTable lines={firmwareValidationLines(firmwareValidation.output)} />
 						) : null}
 						<div className="grid gap-2 text-sm">
 							<label className="flex items-center gap-2">
@@ -6034,6 +6028,41 @@ function BackupFileListTable({ available, entries }: { available: boolean; entri
 				</table>
 			</div>
 		</Panel>
+	);
+}
+
+function FirmwareValidationOutputTable({ lines }: { lines: OutputLine[] }) {
+	return (
+		<div className="max-h-48 overflow-auto rounded-md border">
+			<table className="w-full min-w-[34rem] text-left text-xs">
+				<thead className="sticky top-0 border-b bg-card uppercase text-muted-foreground">
+					<tr>
+						<th className="px-3 py-2 font-medium">Level</th>
+						<th className="px-3 py-2 font-medium">Line</th>
+						<th className="px-3 py-2 font-medium">Validation detail</th>
+					</tr>
+				</thead>
+				<tbody>
+					{lines.length ? (
+						lines.map((line) => (
+							<tr className="border-b align-top last:border-0" key={`${line.stream}.${line.number}.${line.text}`}>
+								<td className="px-3 py-2">
+									<Badge className={line.stream === "error" ? "text-destructive" : ""}>{line.stream}</Badge>
+								</td>
+								<td className="px-3 py-2 font-mono text-muted-foreground">{line.number}</td>
+								<td className="px-3 py-2">{line.text}</td>
+							</tr>
+						))
+					) : (
+						<tr>
+							<td className="px-3 py-6 text-muted-foreground" colSpan={3}>
+								No sysupgrade validation output.
+							</td>
+						</tr>
+					)}
+				</tbody>
+			</table>
+		</div>
 	);
 }
 
@@ -6677,6 +6706,30 @@ function parseOutputLines(streams: Array<{ stream: string; text: string }>): Out
 	}
 
 	return lines;
+}
+
+function firmwareValidationLines(output: string): OutputLine[] {
+	return output
+		.split(/\r?\n/)
+		.map((line) => line.trimEnd())
+		.filter(Boolean)
+		.map((text, index) => ({
+			stream: firmwareValidationLevel(text),
+			number: index + 1,
+			text,
+		}));
+}
+
+function firmwareValidationLevel(line: string) {
+	if (/(error|failed|invalid|refused|not supported)/i.test(line)) {
+		return "error";
+	}
+
+	if (/(warning|requires|force|downgrade)/i.test(line)) {
+		return "warning";
+	}
+
+	return "info";
 }
 
 function firstSection(sections: ConfigSection[], type: string) {
