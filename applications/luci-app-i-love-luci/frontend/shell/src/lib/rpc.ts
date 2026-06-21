@@ -995,6 +995,8 @@ export type PolicyRulesResult = {
 
 export type NetworkInterfaceConfig = {
 	section: string;
+	remove?: string;
+	isNew?: string;
 	proto: string;
 	device: string;
 	disabled: string;

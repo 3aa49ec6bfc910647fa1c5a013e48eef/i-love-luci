@@ -2273,14 +2273,56 @@ function save_network_interfaces(rows) {
 
 	let changed = false;
 	let validated = [];
+	let seen = {};
 
 	for (let row in rows) {
 		let section = dhcp_clean_value(row?.section || '');
+		let exists = length(section) && uci.get('network', section) == 'interface';
+		let remove = dhcp_zero_one(row?.remove) == '1';
 
-		if (!length(section) || uci.get('network', section) != 'interface')
+		if (!length(section) || !valid_network_route_interface(section))
 			return {
 				saved: false,
-				message: 'Network interface section was not found.',
+				message: 'Network interface name is required and must contain only supported characters.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		if (seen[section])
+			return {
+				saved: false,
+				message: 'Network interface names must be unique.',
+				changed: false,
+				interfaces: network_interface_rows(),
+				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+			};
+
+		seen[section] = true;
+
+		if (remove) {
+			if (section == 'loopback')
+				return {
+					saved: false,
+					message: 'Loopback interface cannot be removed.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
+
+			if (exists)
+				push(validated, {
+					section,
+					remove: true
+				});
+
+			continue;
+		}
+
+		if (!exists && uci.get('network', section) != null)
+			return {
+				saved: false,
+				message: 'Network interface name is already used by another network section.',
 				changed: false,
 				interfaces: network_interface_rows(),
 				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
@@ -2371,6 +2413,7 @@ function save_network_interfaces(rows) {
 
 		push(validated, {
 			section,
+			create: !exists,
 			ipaddr,
 			dns,
 			ip6class,
@@ -2381,7 +2424,19 @@ function save_network_interfaces(rows) {
 
 	for (let item in validated) {
 		let section = item.section;
+
+		if (item.remove) {
+			changed = true;
+			uci.delete('network', section);
+			continue;
+		}
+
 		let next = item.next;
+
+		if (item.create) {
+			changed = true;
+			uci.set('network', section, 'interface');
+		}
 
 		for (let key, value in next) {
 			let current = uci.get('network', section, key) || '';

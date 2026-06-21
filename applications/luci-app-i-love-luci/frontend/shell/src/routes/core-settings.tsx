@@ -6148,6 +6148,9 @@ function NetworkInterfaceEditor({
 	const [savedRows, setSavedRows] = useState(rows);
 	const [saving, setSaving] = useState(false);
 	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+	const visibleRows = rows
+		.map((row, index) => ({ row, index }))
+		.filter(({ row }) => row.remove !== "1");
 
 	function updateRow(index: number, field: keyof NetworkInterfaceConfig, value: string) {
 		setRows((current) =>
@@ -6160,6 +6163,22 @@ function NetworkInterfaceEditor({
 					: row,
 			),
 		);
+	}
+
+	function addRow() {
+		setRows((current) => [...current, newNetworkInterfaceRow(uniqueNetworkInterfaceName(current))]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => {
+			const row = current[index];
+
+			if (!row || row.isNew === "1") {
+				return current.filter((_, rowIndex) => rowIndex !== index);
+			}
+
+			return current.map((item, rowIndex) => (rowIndex === index ? { ...item, remove: "1" } : item));
+		});
 	}
 
 	async function submit(event: FormEvent<HTMLFormElement>) {
@@ -6187,11 +6206,17 @@ function NetworkInterfaceEditor({
 					<h2 className="text-base font-semibold">Interface configuration</h2>
 					<p className="text-sm text-muted-foreground">Edit common UCI interface fields while preserving advanced options.</p>
 				</div>
-				<span className="text-xs text-muted-foreground">{rows.length} interfaces</span>
+				<div className="flex items-center gap-2">
+					<span className="text-xs text-muted-foreground">{visibleRows.length} interfaces</span>
+					<Button onClick={addRow} size="sm" type="button" variant="outline">
+						<Plus className="size-4" />
+						Add interface
+					</Button>
+				</div>
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[172rem] text-left text-sm">
+					<table className="w-full min-w-[180rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Interface</th>
@@ -6219,12 +6244,19 @@ function NetworkInterfaceEditor({
 								<th className="px-3 py-2 font-medium">Client ID</th>
 								<th className="px-3 py-2 font-medium">Vendor</th>
 								<th className="px-3 py-2 font-medium">No release</th>
+								<th className="px-3 py-2 font-medium">Actions</th>
 							</tr>
 						</thead>
 						<tbody>
-							{rows.map((row, index) => (
-								<tr className="border-b align-top last:border-0" key={row.section}>
-									<td className="px-3 py-3 font-medium">{row.section}</td>
+							{visibleRows.map(({ row, index }) => (
+								<tr className="border-b align-top last:border-0" key={`network-interface-${index}`}>
+									<td className="px-3 py-3 font-medium">
+										{row.isNew === "1" ? (
+											<Input aria-label="Interface name" onChange={(event) => updateRow(index, "section", event.target.value)} value={row.section} />
+										) : (
+											row.section
+										)}
+									</td>
 									<td className="px-3 py-3">
 										<Input aria-label="Protocol" onChange={(event) => updateRow(index, "proto", event.target.value)} value={row.proto} />
 									</td>
@@ -6376,6 +6408,18 @@ function NetworkInterfaceEditor({
 											options={DEFAULT_FLAG_OPTIONS}
 											value={row.norelease}
 										/>
+									</td>
+									<td className="px-3 py-3">
+										<Button
+											aria-label={`Remove ${row.section}`}
+											disabled={row.section === "loopback"}
+											onClick={() => removeRow(index)}
+											size="icon"
+											type="button"
+											variant="ghost"
+										>
+											<Trash2 className="size-4" />
+										</Button>
 									</td>
 								</tr>
 							))}
@@ -7361,6 +7405,8 @@ function networkInterfaceValues(section: ConfigSection): NetworkInterfaceConfig 
 function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfaceConfig {
 	return {
 		section: row.section ?? "",
+		remove: row.remove === "1" ? "1" : "",
+		isNew: row.isNew === "1" ? "1" : "",
 		proto: row.proto ?? "",
 		device: row.device ?? "",
 		disabled: row.disabled === "1" || row.disabled === "0" ? row.disabled : "",
@@ -7386,6 +7432,49 @@ function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfac
 		vendorid: row.vendorid ?? "",
 		norelease: row.norelease === "1" || row.norelease === "0" ? row.norelease : "",
 	};
+}
+
+function newNetworkInterfaceRow(section: string): NetworkInterfaceConfig {
+	return normalizeNetworkInterface({
+		section,
+		remove: "",
+		isNew: "1",
+		proto: "none",
+		device: "",
+		disabled: "1",
+		auto: "0",
+		force_link: "",
+		defaultroute: "",
+		ipaddr: "",
+		netmask: "",
+		gateway: "",
+		broadcast: "",
+		ip6assign: "",
+		ip6hint: "",
+		ip6ifaceid: "",
+		ip6class: "",
+		ip6prefix: "",
+		dns: "",
+		dns_metric: "",
+		metric: "",
+		peerdns: "1",
+		delegate: "1",
+		hostname: "",
+		clientid: "",
+		vendorid: "",
+		norelease: "",
+	});
+}
+
+function uniqueNetworkInterfaceName(rows: NetworkInterfaceConfig[]) {
+	const names = new Set(rows.map((row) => row.section));
+	let index = 1;
+
+	while (names.has(`new_interface_${index}`)) {
+		index += 1;
+	}
+
+	return `new_interface_${index}`;
 }
 
 function networkDeviceValues(section: ConfigSection): NetworkDeviceConfig {
