@@ -1073,6 +1073,7 @@ Current implementation:
 - The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
 - `console_status` returns safe ttyd availability metadata without the helper credential.
 - `console_launch` reads the generated ttyd credential from UCI only after explicit user action, then the header opens the terminal URL with embedded basic-auth credentials.
+- The header opens the console tab with `noopener,noreferrer` to avoid opener access and reduce referrer leakage from the helper URL.
 - This means the user does not need to manually provide credentials again.
 
 Security gap:

@@ -54,7 +54,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 		const url = buildConsoleUrl(launch);
 
 		if (launch.available && launch.enabled && url) {
-			window.open(url, "_blank", "noopener");
+			window.open(url, "_blank", "noopener,noreferrer");
 			return;
 		}
 
