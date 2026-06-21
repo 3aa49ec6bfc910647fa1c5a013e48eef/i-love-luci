@@ -217,6 +217,9 @@ for base in scan_roots:
 			for required_package_job_term in ("package_job_output", "sh -c ${command_quoted} >${output_quoted} 2>&1", "echo $? >${rc_quoted}"):
 				if required_package_job_term not in text:
 					failures.append(f"{relative_path}: package jobs must capture full command output/rc term {required_package_job_term}")
+			for required_asu_job_term in ("attendedsysupgrade_job_output", "sh -c ${command_quoted} >${output_quoted} 2>&1", "attendedsysupgrade_job_status"):
+				if required_asu_job_term not in text:
+					failures.append(f"{relative_path}: attended sysupgrade jobs must capture full command output/rc term {required_asu_job_term}")
 			if "exit $rc" in text:
 				failures.append(f"{relative_path}: package job commands must not exit before the job wrapper writes rc state")
 		if relative_path == rpc_types_file:
@@ -346,6 +349,8 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: package manager promotion evidence must document guarded URL install apply")
 			if "bounded remote URL fetch jobs that complete with package state fingerprints" not in text:
 				failures.append(f"{relative_path}: package manager promotion evidence must document bounded remote URL job completion")
+			if "quoted job output/rc capture for ASU helper commands" not in text:
+				failures.append(f"{relative_path}: attended sysupgrade promotion evidence must document quoted job output/rc capture")
 			coverage_match = re.search(
 				r"Converted to native React/Vite surfaces:\n(?P<body>.*?)(?=\nInstalled LuCI app renderer policy:)",
 				text,

@@ -5907,6 +5907,14 @@ function attendedsysupgrade_live_plan(action, output, code, done) {
 
 let attendedsysupgrade_job_status;
 
+function attendedsysupgrade_job_output(path) {
+	if (stat(path)?.type != 'file')
+		return '';
+
+	let output_quoted = quote_command_args([path])[0];
+	return shell_output(`sed -n "1,260p" ${output_quoted}`);
+}
+
 function attendedsysupgrade_job_start(action) {
 	action = trim('' + (action || 'check'));
 	let allowed = {
@@ -5934,9 +5942,10 @@ function attendedsysupgrade_job_start(action) {
 	};
 	let output_quoted = quote_command_args([paths.output])[0];
 	let rc_quoted = quote_command_args([paths.rc])[0];
+	let command_quoted = quote_command_args([command])[0];
 
 	writefile(paths.meta, sprintf('%J', meta));
-	system(`(${command} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
+	system(`(sh -c ${command_quoted} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
 
 	return {
 		started: true,
@@ -5968,8 +5977,7 @@ attendedsysupgrade_job_status = function(id) {
 	let rc_text = trim(readfile(paths.rc) || '');
 	let done = length(rc_text) > 0;
 	let code = done ? +rc_text : null;
-	let output_quoted = quote_command_args([paths.output])[0];
-	let output = shell_output(`sed -n "1,260p" ${output_quoted} 2>/dev/null`);
+	let output = attendedsysupgrade_job_output(paths.output);
 
 	return {
 		id,
