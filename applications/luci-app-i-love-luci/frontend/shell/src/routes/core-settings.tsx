@@ -6080,6 +6080,7 @@ function NetworkSummary({
 		.sort(([a], [b]) => a.localeCompare(b));
 	const routes = settings.networkRoutes ?? [];
 	const rules = settings.networkRules ?? [];
+	const dhcpPools = settings.dhcpPools ?? [];
 	const configInterfaces = settings.network.filter((section) => section.type === "interface");
 	const configDevices = settings.network.filter((section) => section.type === "device");
 	const firewallZones = settings.firewall.filter((section) => section.type === "zone");
@@ -6103,6 +6104,16 @@ function NetworkSummary({
 					}
 				/>
 			) : null}
+			<DhcpPoolEditor
+				onSaved={(nextPools, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpPools: nextPools,
+					})
+				}
+				pools={dhcpPools}
+			/>
 			{configDevices.length ? (
 				<NetworkDeviceEditor
 					devices={configDevices}

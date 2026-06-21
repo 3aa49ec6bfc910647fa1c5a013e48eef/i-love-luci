@@ -8540,6 +8540,8 @@ function build_core_settings(page) {
 		data.networkRoutes = network_route_rows();
 		data.networkRules = network_rule_rows();
 		data.firewall = collect_uci_config('firewall', ['zone']);
+		data.dhcp = collect_uci_config('dhcp', ['dhcp']);
+		data.dhcpPools = dhcp_pool_rows();
 	}
 	else if (page == 'system') {
 		data.system = collect_system_settings_sections();
