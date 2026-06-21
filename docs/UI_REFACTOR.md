@@ -611,6 +611,13 @@ Converted to native React/Vite surfaces:
 - `/admin/services/upnp`: service status, lifecycle actions, active port-map table with guarded delete action, UPnP enable/internal-interface/bandwidth/port/IGDv1 editor, advanced protocol/STUN/security/identity/logging/lease-file options, permission-rule add/edit/remove/reorder editor, service activity log table, and UCI summary. This route now defaults to native because the installed LuCI view fields are covered.
 - `/admin/services/uhttpd`: uHTTPd service status, lifecycle actions, common and advanced multi-instance web-server editor, PEM/DER certificate upload, guarded certificate remove actions, certificate defaults, listener/web-server summary, service activity log table, and UCI summary. This route now defaults to native because the installed LuCI view fields are covered.
 
+Installed LuCI app renderer policy:
+
+- Default stance: installed LuCI app routes stay on LuCI compat in `auto` mode until the native adapter is explicitly approved as complete for the installed view and current router workflow.
+- Strict compat apps on the router: `luci-app-banip`, `luci-app-adblock-fast`, `luci-app-attendedsysupgrade`, and `luci-app-package-manager`.
+- Approved native app exceptions on the router: `luci-app-firewall`, `luci-app-commands`, `luci-app-uhttpd`, and `luci-app-upnp`. These are allowed to default to native because parity evidence and no-op/mutation safety tests are recorded below.
+- Unknown future `luci-app-*` routes must appear through LuCI compat automatically unless a native adapter explicitly supports them.
+
 Validation on `172.16.172.1`:
 
 - All visible LuCI menu routes have either a native route or a LuCI compat route. Service/package LuCI apps with incomplete native parity default to `legacy` effective mode in `auto`, so full LuCI functionality remains available.
@@ -623,7 +630,7 @@ Validation on `172.16.172.1`:
 - Browser smoke tests loaded `#/native/wireless` and `#/native/attendedsysupgrade`.
 - Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
 - Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
-- Menu policy validation confirmed incomplete LuCI app routes such as banIP, AdBlock Fast, UPnP, uHTTPd, attended sysupgrade, and package manager default to LuCI compat in auto mode while keeping native preview routes available for explicit `modern` selection.
+- Menu policy validation confirms strict compat LuCI app routes such as banIP, AdBlock Fast, attended sysupgrade, and package manager default to LuCI compat in auto mode while keeping native preview routes available for explicit `modern` selection. It also tracks approved native LuCI app exceptions so routes like firewall, custom commands, uHTTPd, and UPnP cannot default to native unless they are marked supported.
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
 - `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.
@@ -955,7 +962,7 @@ Acceptance gate:
 - Future app handling must be proven with an install/remove/reinstall smoke test for a LuCI app that was not hard-coded into I Love LuCI.
 - Native migration is not complete until every migrated route has parity evidence and every non-migrated or partial route has a working LuCI compat fallback.
 - Future installed apps are considered supported only when navigation, search, ACL visibility, direct route load, session recovery, and compat rendering all work without an I Love LuCI code change.
-- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=37`, `partial=23`, `menu_files=15`, and `luci_apps=9`.
+- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=37`, `partial=23`, `menu_files=15`, `luci_apps=9`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`.
 
 Final release/test gate:
 

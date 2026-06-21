@@ -175,6 +175,20 @@ compat_exact = {
 	"/admin/system/attendedsysupgrade/overview",
 	"/admin/system/attendedsysupgrade/configuration",
 }
+strict_compat_prefixes = (
+	"/admin/services/adblock-fast",
+	"/admin/services/banip",
+	"/admin/system/attendedsysupgrade",
+)
+strict_compat_exact = {
+	"/admin/system/package-manager",
+}
+approved_native_app_prefixes = (
+	"/admin/network/firewall",
+	"/admin/system/commands",
+	"/admin/services/uhttpd",
+	"/admin/services/upnp",
+)
 
 for item in visible:
 	path = item.get("path", "")
@@ -183,6 +197,17 @@ for item in visible:
 			failures.append(f"{path}: incomplete LuCI app route should default to compat in auto mode")
 		if not item.get("nativePath") and item.get("nativeStatus") in {"supported", "partial"}:
 			failures.append(f"{path}: native-capable app route has no native preview path")
+
+	if path in strict_compat_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in strict_compat_prefixes):
+		if item.get("configuredMode", "auto") == "auto":
+			if item.get("effectiveMode") != "legacy":
+				failures.append(f"{path}: installed LuCI app route must default to compat unless explicitly approved")
+			if item.get("nativeAutoMode") != "legacy":
+				failures.append(f"{path}: installed LuCI app route must declare autoMode=legacy")
+
+	if any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes):
+		if item.get("configuredMode", "auto") == "auto" and item.get("effectiveMode") == "modern" and item.get("nativeStatus") != "supported":
+			failures.append(f"{path}: approved native app route is modern but not fully supported")
 
 if not routes:
 	failures.append("menu_tree.routes is empty")
@@ -231,8 +256,21 @@ legacy_app_routes = [
 		or any(item.get("path", "").startswith(prefix) for prefix in compat_prefixes)
 	)
 ]
+strict_compat_routes = [
+	item for item in visible
+	if item.get("path", "") in strict_compat_exact
+	or any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in strict_compat_prefixes)
+]
+approved_native_app_routes = [
+	item for item in visible
+	if any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in approved_native_app_prefixes)
+]
 
 print(f"compat_default_routes={len(legacy_app_routes)}")
+print(
+	f"strict_compat_app_routes={len(strict_compat_routes)} "
+	f"approved_native_app_routes={len(approved_native_app_routes)}"
+)
 
 if warnings:
 	print("\nWarnings:")
