@@ -9323,7 +9323,7 @@ function build_menu() {
 		let action = action_type(spec);
 		let parts = split(trim(path, '/'), '/');
 		let nativeRoute = nativeRoutes[path] || null;
-		let nativeStatus = nativeRoute?.status || 'unsupported';
+		let nativeStatus = nativeRoute?.status || 'compat';
 		let configuredMode = modes[path] || 'auto';
 		let mode = effective_mode(configuredMode, nativeStatus, nativeRoute?.autoMode);
 		let entry = {

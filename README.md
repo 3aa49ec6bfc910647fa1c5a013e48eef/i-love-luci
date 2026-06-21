@@ -248,11 +248,12 @@ After install, run the route compatibility audit:
 ```sh
 scripts/audit-router-routes.sh
 scripts/audit-router-route-mode-guards.sh
+scripts/audit-router-future-luci-app.sh
 scripts/audit-router-native-pages.sh
 scripts/smoke-router-http-routes.sh
 ```
 
-The audit verifies that visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, compat routes reject native-mode overrides, incomplete LuCI app routes default to compat mode, and installed `luci-app-*` routes remain discoverable for current and future app installs.
+The audit verifies that visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, compat routes reject native-mode overrides, incomplete LuCI app routes default to compat mode, and installed `luci-app-*` routes remain discoverable for current and future app installs. The future-app audit temporarily installs and removes `luci-app-example`, then checks that new routes appear through compat and cleanup restores package state.
 
 ## Secondary uhttpd Testing
 
