@@ -695,14 +695,6 @@ function json_from_command(command, fallback) {
 	}
 }
 
-function console_helper_available() {
-	if (!command_exists('i-love-luci-console'))
-		return false;
-
-	let status = json_from_command('/usr/sbin/i-love-luci-console status', {});
-	return status?.available == true;
-}
-
 function console_helper_call(argv, fallback) {
 	if (!command_exists('i-love-luci-console'))
 		return fallback;

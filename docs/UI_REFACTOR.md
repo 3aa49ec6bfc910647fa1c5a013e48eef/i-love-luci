@@ -1145,6 +1145,7 @@ Selected future helper:
 
 - Build a small `i-love-luci-console` helper package that owns PTY sessions directly instead of reverse-proxying ttyd.
 - Expose launch, poll, write, resize, and close operations through authenticated same-origin LuCI RPC. This uses current uHTTPd/rpcd behavior and avoids requiring a generic uHTTPd WebSocket proxy.
+- The helper package now exists under `utils/i-love-luci-console`, has a procd service, owns a root-only UNIX control socket, and passed a Linux PTY smoke test for launch, poll, write, and close.
 - `console_launch` creates a short-lived helper session only after explicit user action from the header or console page.
 - Every console RPC validates the LuCI session, I Love LuCI ACL, helper session id, expiry, and idle timeout.
 - The React console route renders a terminal component and tunnels terminal I/O through same-origin RPC. The browser never connects to a second router port and never receives helper terminal credentials.

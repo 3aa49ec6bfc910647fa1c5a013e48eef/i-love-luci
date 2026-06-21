@@ -50,6 +50,15 @@ console_close -> closes session
 
 Initial transport can use short long-polling over ubus/rpcd because it works with current uHTTPd. A later WebSocket transport can be added behind the same session contract if uHTTPd gains a safe same-origin upgrade bridge.
 
+Current implementation:
+
+- `utils/i-love-luci-console` builds a small C helper binary and procd service.
+- the helper listens on `/var/run/i-love-luci-console/control.sock` with root-only permissions.
+- the helper can launch `/bin/login -f root` inside a PTY, poll output, write input, resize the terminal, and close sessions.
+- `luci-app-i-love-luci` depends on `i-love-luci-console` and switches `console_status` / `console_launch` to `transport: "tunnel"` when the helper responds.
+- if the helper is not installed or not running, current releases keep reporting `transport: "direct"` and use the old trusted-LAN ttyd fallback.
+- local Linux smoke coverage compiled the helper, started the daemon, opened a PTY session, polled shell output, wrote `id`, polled the command output, and closed the session.
+
 Implementation guardrails:
 
 - run helper as root only because router console is privileged by design

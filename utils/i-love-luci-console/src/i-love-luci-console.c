@@ -146,6 +146,16 @@ static bool generate_session_id(char id[SESSION_ID_CHARS + 1]) {
 }
 
 static struct session *find_session(const char *id) {
+	if (!id || strlen(id) != SESSION_ID_CHARS) {
+		return NULL;
+	}
+
+	for (size_t i = 0; i < SESSION_ID_CHARS; i++) {
+		if (!isxdigit((unsigned char)id[i])) {
+			return NULL;
+		}
+	}
+
 	for (size_t i = 0; i < MAX_SESSIONS; i++) {
 		if (sessions[i].used && strcmp(sessions[i].id, id) == 0) {
 			return &sessions[i];
@@ -505,16 +515,24 @@ static void handle_command(FILE *out, char *line) {
 		handle_launch(out);
 	}
 	else if (strcmp(command, "poll") == 0) {
-		handle_poll(out, strtok_r(NULL, "\t \r\n", &saveptr), strtok_r(NULL, "\t \r\n", &saveptr));
+		char *id = strtok_r(NULL, "\t \r\n", &saveptr);
+		char *sequence = strtok_r(NULL, "\t \r\n", &saveptr);
+		handle_poll(out, id, sequence);
 	}
 	else if (strcmp(command, "write") == 0) {
-		handle_write(out, strtok_r(NULL, "\t \r\n", &saveptr), strtok_r(NULL, "\t \r\n", &saveptr));
+		char *id = strtok_r(NULL, "\t \r\n", &saveptr);
+		char *input = strtok_r(NULL, "\t \r\n", &saveptr);
+		handle_write(out, id, input);
 	}
 	else if (strcmp(command, "resize") == 0) {
-		handle_resize(out, strtok_r(NULL, "\t \r\n", &saveptr), strtok_r(NULL, "\t \r\n", &saveptr), strtok_r(NULL, "\t \r\n", &saveptr));
+		char *id = strtok_r(NULL, "\t \r\n", &saveptr);
+		char *columns = strtok_r(NULL, "\t \r\n", &saveptr);
+		char *rows = strtok_r(NULL, "\t \r\n", &saveptr);
+		handle_resize(out, id, columns, rows);
 	}
 	else if (strcmp(command, "close") == 0) {
-		handle_close(out, strtok_r(NULL, "\t \r\n", &saveptr));
+		char *id = strtok_r(NULL, "\t \r\n", &saveptr);
+		handle_close(out, id);
 	}
 	else {
 		json_error(out, "Unknown command.");
@@ -545,7 +563,11 @@ static int create_server_socket(void) {
 		return -1;
 	}
 
-	chmod(CONTROL_SOCKET, 0600);
+	if (chmod(CONTROL_SOCKET, 0600) < 0 || chown(CONTROL_SOCKET, 0, 0) < 0) {
+		close(fd);
+		unlink(CONTROL_SOCKET);
+		return -1;
+	}
 
 	if (listen(fd, 8) < 0) {
 		close(fd);
@@ -565,9 +587,18 @@ static void serve_client(int client_fd) {
 
 	line[len] = '\0';
 
-	FILE *out = fdopen(dup(client_fd), "w");
+	int out_fd = dup(client_fd);
+
+	if (out_fd < 0) {
+		return;
+	}
+
+	set_cloexec(out_fd);
+
+	FILE *out = fdopen(out_fd, "w");
 
 	if (!out) {
+		close(out_fd);
 		return;
 	}
 
