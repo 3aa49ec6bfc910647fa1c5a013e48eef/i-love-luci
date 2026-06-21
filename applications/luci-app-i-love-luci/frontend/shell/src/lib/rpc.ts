@@ -814,6 +814,7 @@ export type DnsmasqConfigInput = {
 	tftp_root: string;
 	dhcp_boot: string;
 	server: string;
+	address: string;
 	interface: string;
 	listen_address: string;
 	notinterface: string;

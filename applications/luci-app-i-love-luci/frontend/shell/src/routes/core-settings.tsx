@@ -575,6 +575,16 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 						value={values.server}
 					/>
 				</Field>
+				<Field label="Resolved addresses" target="dns-addresses">
+					<textarea
+						className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+						id="dns-addresses"
+						onChange={(event) => updateField("address", event.target.value)}
+						placeholder="/example.com/192.0.2.10"
+						spellCheck={false}
+						value={values.address}
+					/>
+				</Field>
 				<div className="grid gap-4 md:grid-cols-3">
 					<Field label="Listen interfaces" target="dns-interface">
 						<textarea
@@ -698,6 +708,7 @@ function dnsmasqSettingsValues(section: ConfigSection): DnsmasqConfigInput {
 		tftp_root: rawValue(section.values.tftp_root),
 		dhcp_boot: rawValue(section.values.dhcp_boot),
 		server: rawListValue(section.values.server).join("\n"),
+		address: rawListValue(section.values.address).join("\n"),
 		interface: rawListValue(section.values.interface).join("\n"),
 		listen_address: rawListValue(section.values.listen_address).join("\n"),
 		notinterface: rawListValue(section.values.notinterface).join("\n"),

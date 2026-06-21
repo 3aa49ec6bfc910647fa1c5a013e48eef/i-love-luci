@@ -1342,6 +1342,7 @@ function save_dnsmasq_config(config) {
 
 	let section = dnsmasq_section();
 	let server_list = split_dhcp_list(config.server || '');
+	let address_list = split_dhcp_list(config.address || '');
 	let interface_list = split_dhcp_list(config.interface || '');
 	let listen_address_list = split_dhcp_list(config.listen_address || '');
 	let notinterface_list = split_dhcp_list(config.notinterface || '');
@@ -1382,11 +1383,11 @@ function save_dnsmasq_config(config) {
 			sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 		};
 
-	for (let value in [next.logfacility, next.tftp_root, next.dhcp_boot, ...interface_list, ...listen_address_list, ...notinterface_list]) {
+	for (let value in [next.logfacility, next.tftp_root, next.dhcp_boot, ...address_list, ...interface_list, ...listen_address_list, ...notinterface_list]) {
 		if (replace(value, /[^A-Za-z0-9_.:@/+%#-]/g, '') != value)
 			return {
 				saved: false,
-				message: 'DNS listen, logging, or PXE/TFTP settings contain unsupported characters.',
+				message: 'DNS address, listen, logging, or PXE/TFTP settings contain unsupported characters.',
 				changed: false,
 				section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
@@ -1415,6 +1416,7 @@ function save_dnsmasq_config(config) {
 	}
 
 	let list_options = {
+		address: address_list,
 		interface: interface_list,
 		listen_address: listen_address_list,
 		notinterface: notinterface_list
