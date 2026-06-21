@@ -389,6 +389,7 @@ export type PackageFeedsResult = {
 
 export type AttendedSysupgradeConfigInput = {
 	server_url: string;
+	rebuilder: string;
 	upgrade_packages: string;
 	auto_search: string;
 	advanced_mode: string;

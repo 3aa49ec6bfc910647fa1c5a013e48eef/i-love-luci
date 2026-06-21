@@ -2883,6 +2883,7 @@ function banipConfigValues(config: ConfigSection | undefined): BanipConfigInput 
 function attendedSysupgradeConfigValues(server: ConfigSection | undefined, client: ConfigSection | undefined): AttendedSysupgradeConfigInput {
 	return {
 		server_url: configValue(server, "url") || "https://sysupgrade.openwrt.org",
+		rebuilder: textareaConfigList(server?.values.rebuilder),
 		upgrade_packages: configValue(client, "upgrade_packages") === "0" ? "0" : "1",
 		auto_search: configValue(client, "auto_search") === "1" ? "1" : "0",
 		advanced_mode: configValue(client, "advanced_mode") === "1" ? "1" : "0",
@@ -4744,6 +4745,16 @@ function AttendedSysupgradeConfigPanel({
 					<label className="grid gap-2 text-sm md:col-span-2">
 						<span className="font-medium">Build server URL</span>
 						<Input onChange={(event) => update("server_url", event.target.value)} value={values.server_url} />
+					</label>
+					<label className="grid gap-2 text-sm md:col-span-2">
+						<span className="font-medium">Rebuilders</span>
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => update("rebuilder", event.target.value)}
+							placeholder="One URL per line"
+							spellCheck={false}
+							value={values.rebuilder}
+						/>
 					</label>
 					<AttendedSelect label="Retain installed packages" onChange={(value) => update("upgrade_packages", value)} value={values.upgrade_packages} />
 					<AttendedSelect label="Auto search upgrades" onChange={(value) => update("auto_search", value)} value={values.auto_search} />

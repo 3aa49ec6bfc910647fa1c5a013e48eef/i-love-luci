@@ -5569,6 +5569,10 @@ function attendedsysupgrade_sections() {
 	return collect_uci_config('attendedsysupgrade', ['server', 'client', 'owut']);
 }
 
+function valid_attendedsysupgrade_url(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\\]-]/g, '') == value;
+}
+
 function save_attendedsysupgrade_config(config) {
 	config ||= {};
 	uci.load('attendedsysupgrade');
@@ -5587,14 +5591,24 @@ function save_attendedsysupgrade_config(config) {
 	client ||= uci.add('attendedsysupgrade', 'client');
 
 	let url = replace(trim('' + (config.server_url || '')), /[\r\n]/g, '');
+	let rebuilders = split_dhcp_lines(config.rebuilder || '');
 
-	if (!length(url) || replace(url, /[^A-Za-z0-9_./:?=&%#@+~,;!$*'()[\\]-]/g, '') != url)
+	if (!valid_attendedsysupgrade_url(url))
 		return {
 			saved: false,
 			message: 'Attended sysupgrade build server URL is required.',
 			changed: false,
 			sections: attendedsysupgrade_sections()
 		};
+
+	for (let rebuilder in rebuilders)
+		if (!valid_attendedsysupgrade_url(rebuilder))
+			return {
+				saved: false,
+				message: 'Attended sysupgrade rebuilder URL contains unsupported characters.',
+				changed: false,
+				sections: attendedsysupgrade_sections()
+			};
 
 	let client_options = {
 		upgrade_packages: ('' + config.upgrade_packages) == '1' ? '1' : '0',
@@ -5607,6 +5621,14 @@ function save_attendedsysupgrade_config(config) {
 	if ((uci.get('attendedsysupgrade', server, 'url') || '') != url) {
 		changed = true;
 		uci.set('attendedsysupgrade', server, 'url', url);
+	}
+
+	if (!same_dhcp_list(uci.get('attendedsysupgrade', server, 'rebuilder') || [], rebuilders)) {
+		changed = true;
+		if (length(rebuilders))
+			uci.set('attendedsysupgrade', server, 'rebuilder', length(rebuilders) == 1 ? rebuilders[0] : rebuilders);
+		else
+			uci.delete('attendedsysupgrade', server, 'rebuilder');
 	}
 
 	for (let key, value in client_options) {
