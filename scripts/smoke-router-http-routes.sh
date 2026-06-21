@@ -93,6 +93,18 @@ def legacy_href(path):
 		return legacy_base + path
 	return legacy_base + "/" + path
 
+def frame_href(path):
+	parsed = urllib.parse.urlsplit(legacy_href(path))
+	query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+	query.append(("iloveluci_frame", "1"))
+	return urllib.parse.urlunsplit((
+		parsed.scheme,
+		parsed.netloc,
+		parsed.path,
+		urllib.parse.urlencode(query),
+		parsed.fragment,
+	))
+
 def open_url(opener, url, data=None):
 	request = urllib.request.Request(url, data=data, method="POST" if data is not None else "GET")
 	if data is not None:
@@ -144,6 +156,7 @@ if 'data-iloveluci-login="true"' in app_body:
 
 native_seen = 0
 legacy_seen = 0
+legacy_frame_seen = 0
 
 for item in visible:
 	path = item.get("resolvedPath") or item.get("firstChildPath") or item.get("path")
@@ -170,13 +183,28 @@ for item in visible:
 		if final_url.endswith("/logout"):
 			warnings.append(f"{item.get('path')}: resolved to logout URL")
 
+		legacy_frame_seen += 1
+		frame_status, frame_final_url, frame_body = open_url(opener, base + frame_href(path))
+		if frame_status >= 400:
+			failures.append(f"{item.get('path')}: legacy iframe source returned HTTP {frame_status}")
+			continue
+		if 'data-iloveluci-login="true"' in frame_body or "Log in | I Love LuCI" in frame_body:
+			failures.append(f"{item.get('path')}: legacy iframe source redirected to login")
+		if "404 Not Found" in frame_body or "Unable to dispatch" in frame_body:
+			failures.append(f"{item.get('path')}: legacy iframe source dispatch failed")
+		if frame_final_url.endswith("/logout"):
+			warnings.append(f"{item.get('path')}: legacy iframe source resolved to logout URL")
+
 if native_seen == 0:
 	failures.append("No native routes were smoked")
 if legacy_seen == 0:
 	failures.append("No legacy compat routes were smoked")
 
 print("I Love LuCI HTTP route smoke")
-print(f"visible_routes={len(visible)} native_shell_checks={native_seen} legacy_route_checks={legacy_seen}")
+print(
+	f"visible_routes={len(visible)} native_shell_checks={native_seen} "
+	f"legacy_route_checks={legacy_seen} legacy_frame_checks={legacy_frame_seen}"
+)
 
 if warnings:
 	print("\nWarnings:")
