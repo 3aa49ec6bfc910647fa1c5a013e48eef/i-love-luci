@@ -42,7 +42,7 @@ const nativeRoutes = {
 	'/admin/network/dns': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/firewall': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/zones': { status: 'partial', nativePath: '/core/firewall' },
-	'/admin/network/firewall/forwards': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/forwards': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/rules': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/snats': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
@@ -2331,7 +2331,7 @@ function firewall_rule_rows() {
 }
 
 function valid_firewall_rule_value(value) {
-	return value == '' || replace(value, /[^A-Za-z0-9:._/*%-]/g, '') == value;
+	return value == '' || replace(value, /[^A-Za-z0-9:._/*%!, -]/g, '') == value;
 }
 
 function valid_firewall_rule_list(values) {
@@ -2534,13 +2534,28 @@ function firewall_redirect_rows() {
 			name: section.name || '',
 			enabled: section.enabled == '0' ? '0' : '1',
 			src: section.src || '',
+			src_ip: section.src_ip || '',
+			src_mac: join('\n', dhcp_normalize_list(section.src_mac)),
+			src_port: section.src_port || '',
+			src_dip: section.src_dip || '',
 			src_dport: section.src_dport || '',
 			dest: section.dest || '',
 			dest_ip: section.dest_ip || '',
 			dest_port: section.dest_port || '',
 			proto: join('\n', dhcp_normalize_list(section.proto)),
 			family: section.family || '',
-			target: section.target || 'DNAT'
+			target: section.target || 'DNAT',
+			ipset: section.ipset || '',
+			reflection: section.reflection == '0' ? '0' : '1',
+			reflection_src: section.reflection_src || '',
+			reflection_zone: join('\n', dhcp_normalize_list(section.reflection_zone)),
+			helper: section.helper || '',
+			mark: section.mark || '',
+			limit: section.limit || '',
+			limit_burst: section.limit_burst || '',
+			log: section.log == '1' ? '1' : '0',
+			log_limit: section.log_limit || '',
+			extra: section.extra || ''
 		});
 	});
 
@@ -2577,18 +2592,34 @@ function save_firewall_redirects(rows) {
 		let section = dhcp_clean_value(row?.section || '');
 		let is_existing = length(section) && uci.get('firewall', section) == 'redirect';
 		let proto = split_dhcp_list(row?.proto || '');
+		let src_mac = split_dhcp_list(row?.src_mac || '');
+		let reflection_zone = split_dhcp_list(row?.reflection_zone || '');
 		let family = firewall_family_value(row?.family || '');
 		let target = firewall_redirect_target_value(row?.target || 'DNAT');
+		let reflection_src = dhcp_clean_value(row?.reflection_src || '');
 		let next = {
 			name: dhcp_clean_value(row?.name || ''),
 			enabled: dhcp_zero_one(row?.enabled),
 			src: dhcp_clean_value(row?.src || ''),
+			src_ip: dhcp_clean_value(row?.src_ip || ''),
+			src_port: dhcp_clean_value(row?.src_port || ''),
+			src_dip: dhcp_clean_value(row?.src_dip || ''),
 			src_dport: dhcp_clean_value(row?.src_dport || ''),
 			dest: dhcp_clean_value(row?.dest || ''),
 			dest_ip: dhcp_clean_value(row?.dest_ip || ''),
 			dest_port: dhcp_clean_value(row?.dest_port || ''),
 			family,
-			target
+			target,
+			ipset: dhcp_clean_value(row?.ipset || ''),
+			reflection: dhcp_zero_one(row?.reflection),
+			reflection_src,
+			helper: dhcp_clean_value(row?.helper || ''),
+			mark: dhcp_clean_value(row?.mark || ''),
+			limit: dhcp_clean_value(row?.limit || ''),
+			limit_burst: dhcp_clean_value(row?.limit_burst || ''),
+			log: dhcp_zero_one(row?.log),
+			log_limit: dhcp_clean_value(row?.log_limit || ''),
+			extra: dhcp_clean_value(row?.extra || '')
 		};
 
 		if (!length(next.name))
@@ -2618,6 +2649,15 @@ function save_firewall_redirects(rows) {
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 			};
 
+		if (reflection_src != '' && reflection_src != 'internal' && reflection_src != 'external')
+			return {
+				saved: false,
+				message: 'Firewall redirect loopback source must be internal or external.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
 		for (let key, value in next) {
 			if ((key == 'src' || key == 'dest') && value != '' && value != '*' && !valid_firewall_name(value))
 				return {
@@ -2628,7 +2668,7 @@ function save_firewall_redirects(rows) {
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				};
 
-			if ((key == 'src_dport' || key == 'dest_ip' || key == 'dest_port') && !valid_firewall_rule_value(value))
+			if ((key == 'src_ip' || key == 'src_port' || key == 'src_dip' || key == 'src_dport' || key == 'dest_ip' || key == 'dest_port' || key == 'ipset' || key == 'helper' || key == 'mark' || key == 'limit' || key == 'limit_burst' || key == 'log_limit' || key == 'extra') && !valid_firewall_rule_value(value))
 				return {
 					saved: false,
 					message: 'Firewall redirect match fields contain unsupported characters.',
@@ -2647,10 +2687,21 @@ function save_firewall_redirects(rows) {
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 			};
 
+		if (!valid_firewall_rule_list(src_mac) || !valid_firewall_list_values(reflection_zone))
+			return {
+				saved: false,
+				message: 'Firewall redirect MAC or reflection zone fields contain unsupported characters.',
+				changed: false,
+				redirects: firewall_redirect_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
 		push(validated, {
 			section,
 			is_existing,
 			proto,
+			src_mac,
+			reflection_zone,
 			next
 		});
 	}
@@ -2666,6 +2717,8 @@ function save_firewall_redirects(rows) {
 		keep[section] = true;
 
 		let proto = item.proto;
+		let src_mac = item.src_mac;
+		let reflection_zone = item.reflection_zone;
 		let next = item.next;
 
 		for (let key, value in next) {
@@ -2677,9 +2730,23 @@ function save_firewall_redirects(rows) {
 			if (key == 'target' && value == 'DNAT' && current == '')
 				continue;
 
+			if ((key == 'enabled' || key == 'reflection') && value == '1' && current == '')
+				continue;
+
+			if (key == 'reflection_src' && value == 'internal') {
+				if (current != '') {
+					changed = true;
+					uci.delete('firewall', section, key);
+				}
+				continue;
+			}
+
+			if (key == 'log' && value == '0' && current == '')
+				continue;
+
 			if (current != value) {
 				changed = true;
-				if ((key == 'enabled' && value == '1') || (key == 'target' && value == 'DNAT') || value == '')
+				if (((key == 'enabled' || key == 'reflection') && value == '1') || (key == 'log' && value == '0') || (key == 'target' && value == 'DNAT') || value == '')
 					uci.delete('firewall', section, key);
 				else
 					uci.set('firewall', section, key, value);
@@ -2692,6 +2759,22 @@ function save_firewall_redirects(rows) {
 				uci.set('firewall', section, 'proto', length(proto) == 1 ? proto[0] : proto);
 			else
 				uci.delete('firewall', section, 'proto');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'src_mac') || [], src_mac)) {
+			changed = true;
+			if (length(src_mac))
+				uci.set('firewall', section, 'src_mac', length(src_mac) == 1 ? src_mac[0] : src_mac);
+			else
+				uci.delete('firewall', section, 'src_mac');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'reflection_zone') || [], reflection_zone)) {
+			changed = true;
+			if (length(reflection_zone))
+				uci.set('firewall', section, 'reflection_zone', length(reflection_zone) == 1 ? reflection_zone[0] : reflection_zone);
+			else
+				uci.delete('firewall', section, 'reflection_zone');
 		}
 	}
 

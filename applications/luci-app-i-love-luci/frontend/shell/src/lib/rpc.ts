@@ -897,6 +897,10 @@ export type FirewallRedirect = {
 	name: string;
 	enabled: string;
 	src: string;
+	src_ip: string;
+	src_mac: string;
+	src_port: string;
+	src_dip: string;
 	src_dport: string;
 	dest: string;
 	dest_ip: string;
@@ -904,6 +908,17 @@ export type FirewallRedirect = {
 	proto: string;
 	family: string;
 	target: string;
+	ipset: string;
+	reflection: string;
+	reflection_src: string;
+	reflection_zone: string;
+	helper: string;
+	mark: string;
+	limit: string;
+	limit_burst: string;
+	log: string;
+	log_limit: string;
+	extra: string;
 };
 
 export type FirewallRedirectsResult = {

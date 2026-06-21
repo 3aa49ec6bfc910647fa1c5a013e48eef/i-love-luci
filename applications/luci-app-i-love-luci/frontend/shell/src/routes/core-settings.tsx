@@ -2542,6 +2542,10 @@ function FirewallRedirectEditor({
 				name: "",
 				enabled: "1",
 				src: "wan",
+				src_ip: "",
+				src_mac: "",
+				src_port: "",
+				src_dip: "",
 				src_dport: "",
 				dest: "lan",
 				dest_ip: "",
@@ -2549,6 +2553,17 @@ function FirewallRedirectEditor({
 				proto: "tcp",
 				family: "",
 				target: "DNAT",
+				ipset: "",
+				reflection: "1",
+				reflection_src: "",
+				reflection_zone: "",
+				helper: "",
+				mark: "",
+				limit: "",
+				limit_burst: "",
+				log: "0",
+				log_limit: "",
+				extra: "",
 			},
 		]);
 	}
@@ -2589,12 +2604,16 @@ function FirewallRedirectEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[92rem] text-left text-sm">
+					<table className="w-full min-w-[180rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Name</th>
 								<th className="px-3 py-2 font-medium">Status</th>
 								<th className="px-3 py-2 font-medium">Source</th>
+								<th className="px-3 py-2 font-medium">Source IP</th>
+								<th className="px-3 py-2 font-medium">Source MAC</th>
+								<th className="px-3 py-2 font-medium">Source port</th>
+								<th className="px-3 py-2 font-medium">External IP</th>
 								<th className="px-3 py-2 font-medium">External port</th>
 								<th className="px-3 py-2 font-medium">Destination</th>
 								<th className="px-3 py-2 font-medium">Internal IP</th>
@@ -2602,6 +2621,17 @@ function FirewallRedirectEditor({
 								<th className="px-3 py-2 font-medium">Protocols</th>
 								<th className="px-3 py-2 font-medium">Family</th>
 								<th className="px-3 py-2 font-medium">Target</th>
+								<th className="px-3 py-2 font-medium">IP set</th>
+								<th className="px-3 py-2 font-medium">NAT loopback</th>
+								<th className="px-3 py-2 font-medium">Loopback source</th>
+								<th className="px-3 py-2 font-medium">Reflection zones</th>
+								<th className="px-3 py-2 font-medium">Helper</th>
+								<th className="px-3 py-2 font-medium">Mark</th>
+								<th className="px-3 py-2 font-medium">Limit</th>
+								<th className="px-3 py-2 font-medium">Burst</th>
+								<th className="px-3 py-2 font-medium">Log</th>
+								<th className="px-3 py-2 font-medium">Log limit</th>
+								<th className="px-3 py-2 font-medium">Extra</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
 						</thead>
@@ -2632,6 +2662,36 @@ function FirewallRedirectEditor({
 												aria-label="Source zone"
 												onChange={(event) => updateRow(index, "src", event.target.value)}
 												value={redirect.src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source IP"
+												onChange={(event) => updateRow(index, "src_ip", event.target.value)}
+												value={redirect.src_ip}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Source MAC"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "src_mac", event.target.value)}
+												spellCheck={false}
+												value={redirect.src_mac}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source port"
+												onChange={(event) => updateRow(index, "src_port", event.target.value)}
+												value={redirect.src_port}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="External IP"
+												onChange={(event) => updateRow(index, "src_dip", event.target.value)}
+												value={redirect.src_dip}
 											/>
 										</td>
 										<td className="px-3 py-3">
@@ -2694,6 +2754,79 @@ function FirewallRedirectEditor({
 												value={redirect.target}
 											/>
 										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="IP set" onChange={(event) => updateRow(index, "ipset", event.target.value)} value={redirect.ipset} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-reflection-${index}`}
+												onChange={(value) => updateRow(index, "reflection", value)}
+												options={[
+													["1", "Enabled"],
+													["0", "Disabled"],
+												]}
+												value={redirect.reflection}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-reflection-src-${index}`}
+												onChange={(value) => updateRow(index, "reflection_src", value)}
+												options={[
+													["", "default"],
+													["internal", "internal"],
+													["external", "external"],
+												]}
+												value={redirect.reflection_src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Reflection zones"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "reflection_zone", event.target.value)}
+												spellCheck={false}
+												value={redirect.reflection_zone}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Helper" onChange={(event) => updateRow(index, "helper", event.target.value)} value={redirect.helper} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Mark" onChange={(event) => updateRow(index, "mark", event.target.value)} value={redirect.mark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Limit" onChange={(event) => updateRow(index, "limit", event.target.value)} value={redirect.limit} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Limit burst"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "limit_burst", event.target.value)}
+												value={redirect.limit_burst}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-redirect-log-${index}`}
+												onChange={(value) => updateRow(index, "log", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={redirect.log}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Log limit"
+												onChange={(event) => updateRow(index, "log_limit", event.target.value)}
+												value={redirect.log_limit}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Extra arguments" onChange={(event) => updateRow(index, "extra", event.target.value)} value={redirect.extra} />
+										</td>
 										<td className="px-3 py-3 text-right">
 											<Button
 												aria-label={`Remove ${redirect.name || "redirect"}`}
@@ -2709,7 +2842,7 @@ function FirewallRedirectEditor({
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={26}>
 										No port forwards configured.
 									</td>
 								</tr>
@@ -2736,6 +2869,10 @@ function firewallRedirectValues(section: ConfigSection): FirewallRedirect {
 		name: rawValue(section.values.name || section.name),
 		enabled: isEnabledValue(section.values.enabled) ? "1" : "0",
 		src: rawValue(section.values.src),
+		src_ip: rawValue(section.values.src_ip),
+		src_mac: rawListValue(section.values.src_mac).join("\n"),
+		src_port: rawValue(section.values.src_port),
+		src_dip: rawValue(section.values.src_dip),
 		src_dport: rawValue(section.values.src_dport),
 		dest: rawValue(section.values.dest),
 		dest_ip: rawValue(section.values.dest_ip),
@@ -2743,6 +2880,17 @@ function firewallRedirectValues(section: ConfigSection): FirewallRedirect {
 		proto: rawListValue(section.values.proto).join("\n"),
 		family: firewallFamilyText(section.values.family),
 		target: firewallRedirectTargetText(section.values.target),
+		ipset: rawValue(section.values.ipset),
+		reflection: isEnabledValue(section.values.reflection) ? "1" : "0",
+		reflection_src: rawValue(section.values.reflection_src),
+		reflection_zone: rawListValue(section.values.reflection_zone).join("\n"),
+		helper: rawValue(section.values.helper),
+		mark: rawValue(section.values.mark),
+		limit: rawValue(section.values.limit),
+		limit_burst: rawValue(section.values.limit_burst),
+		log: booleanValue(section.values.log),
+		log_limit: rawValue(section.values.log_limit),
+		extra: rawValue(section.values.extra),
 	});
 }
 
@@ -2752,6 +2900,10 @@ function normalizeFirewallRedirect(redirect: FirewallRedirect): FirewallRedirect
 		name: redirect.name ?? "",
 		enabled: redirect.enabled === "0" ? "0" : "1",
 		src: redirect.src ?? "",
+		src_ip: redirect.src_ip ?? "",
+		src_mac: redirect.src_mac ?? "",
+		src_port: redirect.src_port ?? "",
+		src_dip: redirect.src_dip ?? "",
 		src_dport: redirect.src_dport ?? "",
 		dest: redirect.dest ?? "",
 		dest_ip: redirect.dest_ip ?? "",
@@ -2759,6 +2911,17 @@ function normalizeFirewallRedirect(redirect: FirewallRedirect): FirewallRedirect
 		proto: redirect.proto ?? "",
 		family: firewallFamilyText(redirect.family),
 		target: firewallRedirectTargetText(redirect.target),
+		ipset: redirect.ipset ?? "",
+		reflection: redirect.reflection === "0" ? "0" : "1",
+		reflection_src: ["", "internal", "external"].includes(redirect.reflection_src) ? redirect.reflection_src : "",
+		reflection_zone: redirect.reflection_zone ?? "",
+		helper: redirect.helper ?? "",
+		mark: redirect.mark ?? "",
+		limit: redirect.limit ?? "",
+		limit_burst: redirect.limit_burst ?? "",
+		log: redirect.log === "1" ? "1" : "0",
+		log_limit: redirect.log_limit ?? "",
+		extra: redirect.extra ?? "",
 	};
 }
 
