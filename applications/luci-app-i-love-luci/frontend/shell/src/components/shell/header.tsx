@@ -19,10 +19,11 @@ import {
 } from "@/lib/rpc";
 
 type HeaderProps = {
+	navigationOpen: boolean;
 	onMenuClick: () => void;
 };
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ navigationOpen, onMenuClick }: HeaderProps) {
 	const [pending, setPending] = useState(0);
 	const [session, setSession] = useState<SessionInfo | null>(null);
 	const [consoleStatus, setConsoleStatus] = useState<ConsoleStatus | null>(null);
@@ -76,7 +77,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-card/95 px-3 backdrop-blur sm:px-5">
-			<Button className="shrink-0" size="icon" variant="ghost" aria-label="Toggle navigation" onClick={onMenuClick}>
+			<Button
+				className="shrink-0"
+				size="icon"
+				variant="ghost"
+				aria-expanded={navigationOpen}
+				aria-label={navigationOpen ? "Hide navigation" : "Show navigation"}
+				onClick={onMenuClick}
+			>
 				<Menu className="size-5" />
 			</Button>
 			<Link className="hidden items-center gap-2 font-semibold sm:flex" to="/">

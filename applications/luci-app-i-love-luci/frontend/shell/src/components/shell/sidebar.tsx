@@ -134,14 +134,19 @@ function NavItem({
 						aria-expanded={isExpanded}
 						onClick={() => onToggle(item.path)}
 					>
-						<ChevronRight className={cn("size-4 transition-transform duration-300 ease-out", isExpanded && "rotate-90")} />
+						<ChevronRight
+							className={cn(
+								"size-4 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+								isExpanded && "rotate-90",
+							)}
+						/>
 					</Button>
 				) : null}
 			</div>
 			{hasChildren ? (
 				<div
 					className={cn(
-						"grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+						"grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
 						isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
 					)}
 				>
@@ -246,19 +251,24 @@ export function Sidebar({ desktopOpen, open, onClose }: SidebarProps) {
 		<>
 			<aside
 				className={cn(
-					"hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r bg-card transition-[width,opacity,padding,border-color] duration-300 ease-out lg:flex",
+					"hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r bg-card transition-[width,opacity,padding,border-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none lg:flex",
 					desktopOpen ? "w-72 border-border p-3 opacity-100" : "w-0 border-transparent p-0 opacity-0",
 				)}
 				aria-hidden={!desktopOpen}
 			>
-				<div className={cn("min-h-0 w-[16.5rem] flex-1 transition-transform duration-300 ease-out", desktopOpen ? "translate-x-0" : "-translate-x-4")}>
+				<div
+					className={cn(
+						"min-h-0 w-[16.5rem] flex-1 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+						desktopOpen ? "translate-x-0" : "-translate-x-4",
+					)}
+				>
 					<NavItems />
 				</div>
 			</aside>
 			<div className={cn("fixed inset-0 z-50 lg:hidden", open ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
 				<button
 					className={cn(
-						"absolute inset-0 bg-foreground/30 transition-opacity duration-300 ease-out",
+						"absolute inset-0 bg-foreground/30 transition-opacity duration-300 ease-out motion-reduce:transition-none",
 						open ? "opacity-100" : "opacity-0",
 					)}
 					type="button"
@@ -268,8 +278,8 @@ export function Sidebar({ desktopOpen, open, onClose }: SidebarProps) {
 				/>
 				<aside
 					className={cn(
-						"absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-hidden border-r bg-card p-3 shadow-xl transition-transform duration-300 ease-out",
-						open ? "translate-x-0" : "-translate-x-full",
+						"absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-hidden border-r bg-card p-3 shadow-xl transition-[transform,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+						open ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0",
 					)}
 				>
 					<div className="mb-2 flex shrink-0 items-center justify-between px-2">

@@ -137,6 +137,8 @@ Required behavior:
 
 - header actions must not overlap search, pending-change badges, refresh indicators, or the profile menu
 - sidebar navigation must collapse predictably, close on outside tap, and avoid duplicate close buttons
+- desktop sidebar navigation must be toggleable, default visible, and persist the hide/show state locally
+- sidebar show/hide and section expand/collapse transitions must be smooth, but disabled when reduced motion is requested
 - command/search popovers must be viewport-aware and usable with the on-screen keyboard open
 - tab bars and action rows must wrap or scroll horizontally without pushing the page wider than the viewport
 - tables must use responsive column priority, compact density, or horizontal scroll containers instead of clipping content

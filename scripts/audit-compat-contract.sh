@@ -326,11 +326,21 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: shell body must constrain overflow for independent sidebar/main scrolling")
 			if "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto" not in text:
 				failures.append(f"{relative_path}: main content must own its vertical scroll container")
+			if "i-love-luci.desktopSidebarOpen" not in text or "localStorage.setItem" not in text:
+				failures.append(f"{relative_path}: desktop sidebar toggle state must persist in localStorage")
 		if relative_path == sidebar_file:
 			if "lg:flex" not in text or "h-full min-h-0" not in text:
 				failures.append(f"{relative_path}: desktop sidebar must be a constrained flex column")
 			if "min-h-0 flex-1 overflow-y-auto" not in text:
 				failures.append(f"{relative_path}: nav list must own sidebar vertical overflow")
+			for required_sidebar_motion in (
+				"transition-[transform,opacity]",
+				"transition-[grid-template-rows,opacity]",
+				"duration-500",
+				"motion-reduce:transition-none",
+			):
+				if required_sidebar_motion not in text:
+					failures.append(f"{relative_path}: sidebar animation contract missing {required_sidebar_motion}")
 		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
 			if "| LuCI compat |" not in text:
 				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")
