@@ -104,6 +104,7 @@ warnings = []
 
 known_native_pages = {
 	"attendedsysupgrade",
+	"attendedsysupgrade-config",
 	"connections",
 	"crontab",
 	"diagnostics",
@@ -190,15 +191,18 @@ compat_exact = {
 	"/admin/system/package-manager",
 	"/admin/system/attendedsysupgrade",
 	"/admin/system/attendedsysupgrade/overview",
-	"/admin/system/attendedsysupgrade/configuration",
 }
 strict_compat_prefixes = (
 	"/admin/services/adblock-fast",
 	"/admin/services/banip",
-	"/admin/system/attendedsysupgrade",
 )
 strict_compat_exact = {
 	"/admin/system/package-manager",
+	"/admin/system/attendedsysupgrade",
+	"/admin/system/attendedsysupgrade/overview",
+}
+approved_native_app_exact = {
+	"/admin/system/attendedsysupgrade/configuration",
 }
 approved_native_app_prefixes = (
 	"/admin/network/firewall",
@@ -222,7 +226,7 @@ for item in visible:
 			if item.get("nativeAutoMode") != "legacy":
 				failures.append(f"{path}: installed LuCI app route must declare autoMode=legacy")
 
-	if any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes):
+	if path in approved_native_app_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes):
 		if item.get("configuredMode", "auto") == "auto" and item.get("effectiveMode") == "modern" and item.get("nativeStatus") != "supported":
 			failures.append(f"{path}: approved native app route is modern but not fully supported")
 
@@ -281,7 +285,8 @@ strict_compat_routes = [
 ]
 approved_native_app_routes = [
 	item for item in visible
-	if any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in approved_native_app_prefixes)
+	if item.get("path", "") in approved_native_app_exact
+	or any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in approved_native_app_prefixes)
 ]
 compat_internal_routes = [
 	item for item in visible

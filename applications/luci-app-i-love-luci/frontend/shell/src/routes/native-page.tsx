@@ -288,6 +288,10 @@ const pageMeta: Record<string, PageMeta> = {
 		title: "Attended sysupgrade",
 		description: "Firmware compatibility context and helper configuration. Image building and flashing remain guarded.",
 	},
+	"attendedsysupgrade-config": {
+		title: "Attended sysupgrade configuration",
+		description: "Native settings editor for the installed LuCI attended sysupgrade configuration form.",
+	},
 	packages: {
 		title: "Software",
 		description: "Installed package inventory. Package install and removal remain in legacy LuCI for now.",
@@ -333,13 +337,14 @@ const pageMeta: Record<string, PageMeta> = {
 export function NativePage() {
 	const params = useParams();
 	const page = params.page ?? "status-routes";
+	const dataPage = page === "attendedsysupgrade-config" ? "attendedsysupgrade" : page;
 	const meta = pageMeta[page] ?? { title: pageTitle(page), description: "Modern route surface." };
 	const [data, setData] = useState<NativePageData | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
 
-		void getNativePage(page).then((nextData) => {
+		void getNativePage(dataPage).then((nextData) => {
 			if (!cancelled) {
 				setData(nextData);
 			}
@@ -348,7 +353,7 @@ export function NativePage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [page]);
+	}, [dataPage]);
 
 	return (
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
@@ -364,6 +369,7 @@ export function NativePage() {
 			{page === "diagnostics" ? <DiagnosticsRunner /> : null}
 			{page === "packages" && data ? <PackageInventory data={data} /> : null}
 			{page === "attendedsysupgrade" && data ? <AttendedSysupgradeSummary data={data} /> : null}
+			{page === "attendedsysupgrade-config" && data ? <AttendedSysupgradeConfigSummary data={data} /> : null}
 			{page === "startup" ? <StartupTable services={data?.services ?? []} /> : null}
 			{page === "startup" && data?.page === "startup" ? (
 				<TextFileEditor
@@ -4982,6 +4988,14 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 			</Panel>
 		</div>
 	);
+}
+
+function AttendedSysupgradeConfigSummary({ data }: { data: NativePageData }) {
+	const helper = commandOutput(data.commands, "Upgrade helper").trim();
+	const server = data.sections.find((section) => section.type === "server");
+	const client = data.sections.find((section) => section.type === "client");
+
+	return <AttendedSysupgradeConfigPanel client={client} helper={helper} server={server} />;
 }
 
 const attendedPlanActions: Array<{ action: AttendedSysupgradePlanAction; label: string; description: string }> = [

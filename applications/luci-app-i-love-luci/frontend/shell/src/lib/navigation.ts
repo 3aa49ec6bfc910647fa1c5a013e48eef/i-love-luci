@@ -54,6 +54,7 @@ export function nativePathFor(path: string) {
 		"/admin/system/admin/sshkeys": "/native/sshkeys",
 		"/admin/system/admin/uhttpd": "/native/service/uhttpd",
 		"/admin/system/admin/repokeys": "/native/repokeys",
+		"/admin/system/attendedsysupgrade/configuration": "/native/attendedsysupgrade-config",
 		"/admin/system/startup": "/native/startup",
 		"/admin/system/crontab": "/native/crontab",
 		"/admin/system/commands": "/native/service/commands",

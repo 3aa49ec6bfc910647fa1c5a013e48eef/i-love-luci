@@ -59,6 +59,20 @@ describe("itemTarget", () => {
 		).toBe("/realtime");
 	});
 
+	it("routes supported attended sysupgrade configuration to native settings", () => {
+		expect(
+			itemTarget({
+				title: "Configuration",
+				path: "/admin/system/attendedsysupgrade/configuration",
+				nativePath: "/native/attendedsysupgrade-config",
+				effectiveMode: "modern",
+				configuredMode: "auto",
+				nativeStatus: "supported",
+				legacy: false,
+			}),
+		).toBe("/native/attendedsysupgrade-config");
+	});
+
 	it("keeps compat routes in LuCI compatibility even if stale metadata includes a native path", () => {
 		expect(
 			itemTarget({

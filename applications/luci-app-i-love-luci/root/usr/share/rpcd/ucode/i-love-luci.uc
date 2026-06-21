@@ -57,7 +57,7 @@ const nativeRoutes = {
 	'/admin/system/admin/repokeys': { status: 'supported', nativePath: '/native/repokeys' },
 	'/admin/system/attendedsysupgrade': { status: 'compat', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
 	'/admin/system/attendedsysupgrade/overview': { status: 'compat', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
-	'/admin/system/attendedsysupgrade/configuration': { status: 'compat', nativePath: '/native/attendedsysupgrade', autoMode: 'legacy' },
+	'/admin/system/attendedsysupgrade/configuration': { status: 'supported', nativePath: '/native/attendedsysupgrade-config' },
 	'/admin/system/package-manager': { status: 'compat', nativePath: '/native/packages', autoMode: 'legacy' },
 	'/admin/system/startup': { status: 'supported', nativePath: '/native/startup' },
 	'/admin/system/crontab': { status: 'supported', nativePath: '/native/crontab' },
