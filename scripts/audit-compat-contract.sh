@@ -192,6 +192,13 @@ for base in scan_roots:
 				if "OutputLinesTable" in match.group("body"):
 					failures.append(f"{relative_path}: {function_name} must render structured tables, not generic command output")
 		if relative_path == core_settings_file:
+			core_page_meta_match = re.search(r"const pageMeta: Record<CorePage, \{ title: string; description: string; configKey: keyof CoreSettings \}> = \{(?P<body>.*?)\n\};\n\nexport function CoreSettingsPage", text, re.S)
+			if not core_page_meta_match:
+				failures.append(f"{relative_path}: expected core pageMeta guard target")
+			else:
+				for forbidden_core_page_header_term in ("Modern", "LuCI compat", "compat until"):
+					if forbidden_core_page_header_term in core_page_meta_match.group("body"):
+						failures.append(f"{relative_path}: core page headers must not expose internal mode/migration wording ({forbidden_core_page_header_term})")
 			if 'page === "network"' not in text or 'legacyTarget("/admin/network/network")' not in text:
 				failures.append(f"{relative_path}: stale /core/network must redirect to LuCI interface compat")
 			if 'page === "network-routes"' not in text or "NetworkRoutesSummary" not in text:

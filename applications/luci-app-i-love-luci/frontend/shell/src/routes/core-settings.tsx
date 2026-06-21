@@ -88,27 +88,27 @@ type PendingStaticHost = {
 const pageMeta: Record<CorePage, { title: string; description: string; configKey: keyof CoreSettings }> = {
 	network: {
 		title: "Network interfaces",
-		description: "Modern network view with interface, device, static route, policy rule, and live link state.",
+		description: "Interface, device, static route, policy rule, and live link state.",
 		configKey: "network",
 	},
 	"network-routes": {
 		title: "Network routing",
-		description: "Modern route and policy rule editor for UCI-managed network routing.",
+		description: "Route and policy rule editor for UCI-managed network routing.",
 		configKey: "network",
 	},
 	dhcp: {
 		title: "DHCP and DNS",
-		description: "Modern DHCP view with static host reservations, active leases, and DNS summaries.",
+		description: "Static host reservations, active leases, and DNS summaries.",
 		configKey: "dhcp",
 	},
 	firewall: {
 		title: "Firewall",
-		description: "Modern firewall view with defaults, zones, forwarding, rules, and redirects.",
+		description: "Firewall defaults, zones, forwarding, traffic rules, NAT rules, and redirects.",
 		configKey: "firewall",
 	},
 	system: {
 		title: "System administration",
-		description: "Modern editor for identity, logging, and NTP with summaries for SSH, uHTTPd, LEDs, and keys.",
+		description: "Identity, logging, and NTP with summaries for SSH, uHTTPd, LEDs, and keys.",
 		configKey: "system",
 	},
 };
