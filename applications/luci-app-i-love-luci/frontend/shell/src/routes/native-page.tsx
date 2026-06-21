@@ -1,12 +1,13 @@
 import { ArrowDown, ArrowUp, Download, ExternalLink, Play, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { legacyTarget, serviceCompatPath } from "@/lib/service-compat";
 import {
 	applyFactoryReset,
 	applyRestoreBackup,
@@ -420,6 +421,7 @@ export function NativeServicePage() {
 	const focus = params.focus ?? "";
 	const [detail, setDetail] = useState<NativeService | null>(null);
 	const focusMeta = serviceFocusMeta(service, focus);
+	const compatPath = serviceCompatPath(service, focus);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -439,6 +441,10 @@ export function NativeServicePage() {
 	const focusedFiles = focusMeta?.fileTitles
 		? (detail?.files ?? []).filter((file) => focusMeta.fileTitles?.includes(file.title))
 		: [];
+
+	if (compatPath) {
+		return <Navigate replace to={legacyTarget(compatPath)} />;
+	}
 
 	return (
 		<div className="mx-auto grid w-full max-w-7xl gap-5">
@@ -1180,6 +1186,7 @@ function ServiceStateCard({ service }: { service: NativeService }) {
 	const [override, setOverride] = useState(service.init ?? null);
 	const [pending, setPending] = useState<string | null>(null);
 	const state = override ?? service.init ?? null;
+	const serviceTarget = service.compatPath ? legacyTarget(service.compatPath) : service.id ? `/native/service/${service.id}` : null;
 
 	async function run(action: InitAction) {
 		if (!service.id || !state) {
@@ -1205,8 +1212,8 @@ function ServiceStateCard({ service }: { service: NativeService }) {
 	return (
 		<Panel
 			title={
-				service.id ? (
-					<Link className="hover:underline" to={`/native/service/${service.id}`}>
+				serviceTarget ? (
+					<Link className="hover:underline" to={serviceTarget}>
 						{service.title}
 					</Link>
 				) : (
@@ -1221,7 +1228,17 @@ function ServiceStateCard({ service }: { service: NativeService }) {
 					{state ? stateBadge(state.running, "running", "stopped") : null}
 				</div>
 				<p className="text-muted-foreground">{service.sections?.length ?? 0} UCI sections detected.</p>
-				{state ? (
+				{service.compatPath ? (
+					<div className="flex justify-end">
+						<Link
+							className="inline-flex h-8 items-center justify-center gap-2 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-secondary"
+							to={legacyTarget(service.compatPath)}
+						>
+							<ExternalLink className="h-3.5 w-3.5" />
+							Open full LuCI app
+						</Link>
+					</div>
+				) : state ? (
 					<ServiceActionButtons
 						disabledPrefix={pending}
 						enabled={state.enabled}

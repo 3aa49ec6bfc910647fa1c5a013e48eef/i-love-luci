@@ -159,10 +159,11 @@ expected_core_pages = {
 }
 
 expected_services = {
-	"adblock-fast": {"sections": True, "files": True},
+	"adblock-fast": {"sections": True, "files": True, "compatPath": "/admin/services/adblock-fast"},
 	"banip": {
 		"sections": True,
 		"files": True,
+		"compatPath": "/admin/services/banip",
 		"file_titles": ["Allowlist", "Blocklist", "Custom feeds"],
 		"logs": ["activity"],
 	},
@@ -285,6 +286,17 @@ for page, rules in expected_pages.items():
 
 	if rules.get("services") and not data.get("services"):
 		failures.append(f"{page}: expected services data")
+	elif page == "services":
+		service_paths = {service.get("id"): service.get("compatPath") for service in data.get("services") or []}
+		for service_id, compat_path in {
+			"adblock-fast": "/admin/services/adblock-fast",
+			"banip": "/admin/services/banip",
+		}.items():
+			if service_paths.get(service_id) != compat_path:
+				failures.append(f"services: expected {service_id} to link to LuCI compat path {compat_path!r}")
+		for service_id in ("commands", "dropbear", "uhttpd", "upnpd"):
+			if service_paths.get(service_id):
+				failures.append(f"services: approved native service {service_id} should not expose compatPath={service_paths.get(service_id)!r}")
 
 	if rules.get("sections") and not data.get("sections"):
 		failures.append(f"{page}: expected UCI sections")
@@ -332,6 +344,13 @@ for service, rules in expected_services.items():
 	data = payload.get("data") or {}
 	if data.get("id") != service:
 		failures.append(f"{service}: returned id={data.get('id')!r}")
+
+	expected_compat_path = rules.get("compatPath")
+	if expected_compat_path and data.get("compatPath") != expected_compat_path:
+		failures.append(f"{service}: expected LuCI compat path {expected_compat_path!r}")
+
+	if not expected_compat_path and data.get("compatPath"):
+		failures.append(f"{service}: approved native service should not expose compatPath={data.get('compatPath')!r}")
 
 	if rules.get("sections") and not data.get("sections"):
 		failures.append(f"{service}: expected UCI sections")

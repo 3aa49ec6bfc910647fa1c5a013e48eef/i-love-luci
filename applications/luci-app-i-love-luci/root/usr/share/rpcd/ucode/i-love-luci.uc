@@ -86,6 +86,7 @@ const servicePackages = {
 		package: 'adblock-fast',
 		init: 'adblock-fast',
 		title: 'AdBlock Fast',
+		compatPath: '/admin/services/adblock-fast',
 		sections: ['adblock-fast', 'file_url'],
 		logPattern: 'adblock-fast',
 		files: [
@@ -96,6 +97,7 @@ const servicePackages = {
 		package: 'banip',
 		init: 'banip',
 		title: 'banIP',
+		compatPath: '/admin/services/banip',
 		sections: ['banip'],
 		logPattern: 'banip',
 		files: [
@@ -5204,6 +5206,7 @@ function service_overview() {
 			id,
 			title: meta.title,
 			package: meta.package,
+			compatPath: meta.compatPath || null,
 			init: fast_service_state(meta.init),
 			sections: collect_uci_config(meta.package, meta.sections || [])
 		});
@@ -6830,6 +6833,7 @@ function service_detail(id) {
 		id,
 		title: meta.title,
 		package: meta.package,
+		compatPath: meta.compatPath || null,
 		init: fast_service_state(meta.init),
 		sections: collect_uci_config(meta.package, meta.sections || []),
 		customCommands: id == 'commands' ? custom_command_entries() : [],

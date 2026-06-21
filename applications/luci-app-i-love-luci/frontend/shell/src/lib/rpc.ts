@@ -548,6 +548,7 @@ export type NativeService = {
 	name?: string;
 	title: string;
 	package?: string;
+	compatPath?: string | null;
 	init?: ServiceState | null;
 	sections?: ConfigSection[];
 	customCommands?: CustomCommand[];
