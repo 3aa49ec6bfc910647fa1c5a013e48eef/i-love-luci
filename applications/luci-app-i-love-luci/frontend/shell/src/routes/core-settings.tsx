@@ -22,8 +22,12 @@ import {
 	saveDhcpBoots,
 	saveDhcpDomains,
 	saveDhcpHosts,
+	saveDhcpMatches,
 	saveDhcpPools,
 	saveDhcpRelays,
+	saveDhcpTags,
+	saveDhcpUserClasses,
+	saveDhcpVendorClasses,
 	saveDnsmasqConfig,
 	saveOdhcpdConfig,
 	saveLuciUiSettings,
@@ -42,8 +46,12 @@ import {
 	type DhcpDomain,
 	type DhcpHost,
 	type DhcpLease,
+	type DhcpMatch,
 	type DhcpPool,
 	type DhcpRelay,
+	type DhcpTag,
+	type DhcpUserClass,
+	type DhcpVendorClass,
 	type DnsmasqConfigInput,
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
@@ -202,6 +210,10 @@ function DhcpSummary({
 	const relays = settings.dhcpRelays ?? [];
 	const boots = settings.dhcpBoots ?? [];
 	const boot6s = settings.dhcpBoot6s ?? [];
+	const tags = settings.dhcpTags ?? [];
+	const matches = settings.dhcpMatches ?? [];
+	const vendorClasses = settings.dhcpVendorClasses ?? [];
+	const userClasses = settings.dhcpUserClasses ?? [];
 	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
 	const odhcpd = settings.dhcp.find((section) => section.type === "odhcpd") ?? null;
 	const [pendingStaticHost, setPendingStaticHost] = useState<PendingStaticHost | null>(null);
@@ -300,6 +312,48 @@ function DhcpSummary({
 						...settings,
 						dhcp: sections,
 						dhcpBoot6s: nextBoots,
+					})
+				}
+			/>
+			<DhcpTagEditor
+				onSaved={(nextTags, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpTags: nextTags,
+					})
+				}
+				tags={tags}
+			/>
+			<DhcpMatchEditor
+				matches={matches}
+				onSaved={(nextMatches, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpMatches: nextMatches,
+					})
+				}
+			/>
+			<DhcpClassEditor
+				classes={vendorClasses}
+				kind="vendor"
+				onSaved={(nextClasses, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpVendorClasses: nextClasses as DhcpVendorClass[],
+					})
+				}
+			/>
+			<DhcpClassEditor
+				classes={userClasses}
+				kind="user"
+				onSaved={(nextClasses, sections) =>
+					onSettingsChange({
+						...settings,
+						dhcp: sections,
+						dhcpUserClasses: nextClasses as DhcpUserClass[],
 					})
 				}
 			/>
@@ -1622,6 +1676,421 @@ function normalizeDhcpBoot6(boot: DhcpBoot6): DhcpBoot6 {
 		url: boot.url ?? "",
 		arch: boot.arch ?? "",
 	};
+}
+
+function DhcpTagEditor({
+	onSaved,
+	tags,
+}: {
+	onSaved: (tags: DhcpTag[], sections: ConfigSection[]) => void;
+	tags: DhcpTag[];
+}) {
+	const [rows, setRows] = useState(() => tags.map(normalizeDhcpTag));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpTag, value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRow() {
+		setRows((current) => [...current, { section: "", dhcp_option: "", force: "" }]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpTags(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.tags.map(normalizeDhcpTag);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">DHCP tags</h2>
+					<p className="text-sm text-muted-foreground">Apply DHCP options when matching clients receive a tag.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add tag
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[56rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Tag</th>
+								<th className="px-3 py-2 font-medium">DHCP options</th>
+								<th className="px-3 py-2 font-medium">Force</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((row, index) => (
+									<tr className="border-b align-top last:border-0" key={`${row.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Tag name"
+												onChange={(event) => updateRow(index, "section", event.target.value)}
+												value={row.section}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="DHCP options"
+												className="min-h-20 w-96 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "dhcp_option", event.target.value)}
+												value={row.dhcp_option}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<ForceSelect id={`dhcp-tag-force-${index}`} onChange={(value) => updateRow(index, "force", value)} value={row.force} />
+										</td>
+										<td className="px-3 py-3 text-right">
+											<RowRemoveButton label={row.section || "tag"} onClick={() => removeRow(index)} />
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+										No DHCP tags configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<FormActions dirty={dirty} onCancel={() => setRows(savedRows)} saving={saving} />
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpTag(row: DhcpTag): DhcpTag {
+	return {
+		section: row.section ?? "",
+		dhcp_option: row.dhcp_option ?? "",
+		force: row.force === "1" || row.force === "0" ? row.force : "",
+	};
+}
+
+function DhcpMatchEditor({
+	matches,
+	onSaved,
+}: {
+	matches: DhcpMatch[];
+	onSaved: (matches: DhcpMatch[], sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => matches.map(normalizeDhcpMatch));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof DhcpMatch, value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRow() {
+		setRows((current) => [...current, { section: "", match: "", networkid: "", force: "" }]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveDhcpMatches(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.matches.map(normalizeDhcpMatch);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">DHCP option matches</h2>
+					<p className="text-sm text-muted-foreground">Set tags when clients present matching DHCP options.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add match
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<DhcpConditionTable
+					emptyText="No DHCP option matches configured."
+					forcePrefix="dhcp-match"
+					labelField="match"
+					labelTitle="Match"
+					onRemove={removeRow}
+					onUpdate={updateRow}
+					rows={rows}
+					tagTitle="Set tag"
+				/>
+				<FormActions dirty={dirty} onCancel={() => setRows(savedRows)} saving={saving} />
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpMatch(row: DhcpMatch): DhcpMatch {
+	return {
+		section: row.section ?? "",
+		match: row.match ?? "",
+		networkid: row.networkid ?? "",
+		force: row.force === "1" || row.force === "0" ? row.force : "",
+	};
+}
+
+type DhcpClassKind = "vendor" | "user";
+type DhcpClassRow = {
+	section: string;
+	networkid: string;
+	force: string;
+	vendorclass?: string;
+	userclass?: string;
+};
+
+function DhcpClassEditor({
+	classes,
+	kind,
+	onSaved,
+}: {
+	classes: DhcpClassRow[];
+	kind: DhcpClassKind;
+	onSaved: (classes: DhcpClassRow[], sections: ConfigSection[]) => void;
+}) {
+	const normalize = kind === "vendor" ? normalizeDhcpVendorClass : normalizeDhcpUserClass;
+	const [rows, setRows] = useState<DhcpClassRow[]>(() => classes.map((row) => normalize(row as never)));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+	const labelField = kind === "vendor" ? "vendorclass" : "userclass";
+	const title = kind === "vendor" ? "Vendor class matches" : "User class matches";
+	const description =
+		kind === "vendor" ? "Set tags when clients present a vendor class." : "Set tags when clients present a user class.";
+
+	function updateRow(index: number, field: keyof (DhcpVendorClass & DhcpUserClass), value: string) {
+		setRows((current) => current.map((row, rowIndex) => (rowIndex === index ? { ...row, [field]: value } : row)));
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			kind === "vendor"
+				? { section: "", vendorclass: "", networkid: "", force: "" }
+				: { section: "", userclass: "", networkid: "", force: "" },
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = kind === "vendor" ? await saveDhcpVendorClasses(rows as DhcpVendorClass[]) : await saveDhcpUserClasses(rows as DhcpUserClass[]);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows: DhcpClassRow[] = result.classes.map((row) => normalize(row as never));
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(nextRows, result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">{title}</h2>
+					<p className="text-sm text-muted-foreground">{description}</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add {kind === "vendor" ? "vendor" : "user"} class
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<DhcpConditionTable
+					emptyText={`No DHCP ${kind} class matches configured.`}
+					forcePrefix={`dhcp-${kind}-class`}
+					labelField={labelField}
+					labelTitle={kind === "vendor" ? "Vendor class" : "User class"}
+					onRemove={removeRow}
+					onUpdate={updateRow}
+					rows={rows}
+					tagTitle="Set tag"
+				/>
+				<FormActions dirty={dirty} onCancel={() => setRows(savedRows)} saving={saving} />
+			</form>
+		</section>
+	);
+}
+
+function normalizeDhcpVendorClass(row: DhcpVendorClass): DhcpVendorClass {
+	return {
+		section: row.section ?? "",
+		vendorclass: row.vendorclass ?? "",
+		networkid: row.networkid ?? "",
+		force: row.force === "1" || row.force === "0" ? row.force : "",
+	};
+}
+
+function normalizeDhcpUserClass(row: DhcpUserClass): DhcpUserClass {
+	return {
+		section: row.section ?? "",
+		userclass: row.userclass ?? "",
+		networkid: row.networkid ?? "",
+		force: row.force === "1" || row.force === "0" ? row.force : "",
+	};
+}
+
+function DhcpConditionTable({
+	emptyText,
+	forcePrefix,
+	labelField,
+	labelTitle,
+	onRemove,
+	onUpdate,
+	rows,
+	tagTitle,
+}: {
+	emptyText: string;
+	forcePrefix: string;
+	labelField: string;
+	labelTitle: string;
+	onRemove: (index: number) => void;
+	onUpdate: (index: number, field: never, value: string) => void;
+	rows: Array<Record<string, string>>;
+	tagTitle: string;
+}) {
+	return (
+		<div className="overflow-x-auto rounded-md border bg-card">
+			<table className="w-full min-w-[52rem] text-left text-sm">
+				<thead className="border-b text-xs uppercase text-muted-foreground">
+					<tr>
+						<th className="px-3 py-2 font-medium">{labelTitle}</th>
+						<th className="px-3 py-2 font-medium">{tagTitle}</th>
+						<th className="px-3 py-2 font-medium">Force</th>
+						<th className="px-3 py-2 text-right font-medium">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rows.length ? (
+						rows.map((row, index) => (
+							<tr className="border-b align-top last:border-0" key={`${row.section || "new"}.${index}`}>
+								<td className="px-3 py-3">
+									<Input
+										aria-label={labelTitle}
+										onChange={(event) => onUpdate(index, labelField as never, event.target.value)}
+										value={row[labelField] ?? ""}
+									/>
+								</td>
+								<td className="px-3 py-3">
+									<Input
+										aria-label={tagTitle}
+										onChange={(event) => onUpdate(index, "networkid" as never, event.target.value)}
+										value={row.networkid ?? ""}
+									/>
+								</td>
+								<td className="px-3 py-3">
+									<ForceSelect
+										id={`${forcePrefix}-${index}`}
+										onChange={(value) => onUpdate(index, "force" as never, value)}
+										value={row.force ?? ""}
+									/>
+								</td>
+								<td className="px-3 py-3 text-right">
+									<RowRemoveButton label={row[labelField] || "row"} onClick={() => onRemove(index)} />
+								</td>
+							</tr>
+						))
+					) : (
+						<tr>
+							<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+								{emptyText}
+							</td>
+						</tr>
+					)}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function ForceSelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<SelectField
+			id={id}
+			onChange={onChange}
+			options={[
+				["", "Default"],
+				["1", "Yes"],
+				["0", "No"],
+			]}
+			value={value}
+		/>
+	);
+}
+
+function RowRemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+	return (
+		<Button aria-label={`Remove ${label}`} onClick={onClick} size="icon" type="button" variant="ghost">
+			<Trash2 className="size-4" />
+		</Button>
+	);
+}
+
+function FormActions({ dirty, onCancel, saving }: { dirty: boolean; onCancel: () => void; saving: boolean }) {
+	return (
+		<div className="flex justify-end gap-2">
+			<Button disabled={!dirty || saving} onClick={onCancel} type="button" variant="outline">
+				Cancel
+			</Button>
+			<Button disabled={!dirty || saving} type="submit">
+				Save
+			</Button>
+		</div>
+	);
 }
 
 function ServiceStatusBlock({ label, state }: { label: string; state?: ServiceState | null }) {

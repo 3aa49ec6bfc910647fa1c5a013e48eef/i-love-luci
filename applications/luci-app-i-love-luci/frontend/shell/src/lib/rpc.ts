@@ -241,6 +241,33 @@ export type DhcpBoot6 = {
 	arch: string;
 };
 
+export type DhcpTag = {
+	section: string;
+	dhcp_option: string;
+	force: string;
+};
+
+export type DhcpMatch = {
+	section: string;
+	match: string;
+	networkid: string;
+	force: string;
+};
+
+export type DhcpVendorClass = {
+	section: string;
+	vendorclass: string;
+	networkid: string;
+	force: string;
+};
+
+export type DhcpUserClass = {
+	section: string;
+	userclass: string;
+	networkid: string;
+	force: string;
+};
+
 export type DhcpStatus = {
 	dnsmasq?: ServiceState | null;
 	odhcpd?: ServiceState | null;
@@ -299,6 +326,10 @@ export type CoreSettings = {
 	dhcpRelays?: DhcpRelay[];
 	dhcpBoots?: DhcpBoot[];
 	dhcpBoot6s?: DhcpBoot6[];
+	dhcpTags?: DhcpTag[];
+	dhcpMatches?: DhcpMatch[];
+	dhcpVendorClasses?: DhcpVendorClass[];
+	dhcpUserClasses?: DhcpUserClass[];
 	dhcpStatus?: DhcpStatus;
 	firewall: ConfigSection[];
 	firewallFiles?: ServiceFile[];
@@ -827,6 +858,38 @@ export type DhcpBoot6sResult = {
 	message: string;
 	changed: boolean;
 	boots: DhcpBoot6[];
+	sections: ConfigSection[];
+};
+
+export type DhcpTagsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	tags: DhcpTag[];
+	sections: ConfigSection[];
+};
+
+export type DhcpMatchesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	matches: DhcpMatch[];
+	sections: ConfigSection[];
+};
+
+export type DhcpVendorClassesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	classes: DhcpVendorClass[];
+	sections: ConfigSection[];
+};
+
+export type DhcpUserClassesResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	classes: DhcpUserClass[];
 	sections: ConfigSection[];
 };
 
@@ -1908,6 +1971,66 @@ export async function saveDhcpBoot6s(rows: DhcpBoot6[]): Promise<DhcpBoot6sResul
 			message: "IPv6 PXE boot options save failed.",
 			changed: false,
 			boots: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpTags(rows: DhcpTag[]): Promise<DhcpTagsResult> {
+	try {
+		return await callBridge<DhcpTagsResult>("dhcp_tags_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP tag save failed.",
+			changed: false,
+			tags: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpMatches(rows: DhcpMatch[]): Promise<DhcpMatchesResult> {
+	try {
+		return await callBridge<DhcpMatchesResult>("dhcp_matches_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP match save failed.",
+			changed: false,
+			matches: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpVendorClasses(rows: DhcpVendorClass[]): Promise<DhcpVendorClassesResult> {
+	try {
+		return await callBridge<DhcpVendorClassesResult>("dhcp_vendorclasses_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP vendor class save failed.",
+			changed: false,
+			classes: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveDhcpUserClasses(rows: DhcpUserClass[]): Promise<DhcpUserClassesResult> {
+	try {
+		return await callBridge<DhcpUserClassesResult>("dhcp_userclasses_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "DHCP user class save failed.",
+			changed: false,
+			classes: [],
 			sections: [],
 		};
 	}

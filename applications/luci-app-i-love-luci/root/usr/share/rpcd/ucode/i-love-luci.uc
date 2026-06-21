@@ -873,6 +873,93 @@ function dhcp_boot6_rows() {
 	return boots;
 }
 
+function dhcp_tag_rows() {
+	let tags = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return tags;
+	}
+
+	uci.foreach('dhcp', 'tag', function(section) {
+		push(tags, {
+			section: section['.name'] || '',
+			dhcp_option: type(section.dhcp_option) == 'array' ? join('\n', section.dhcp_option) : (section.dhcp_option || ''),
+			force: section.force || ''
+		});
+	});
+
+	return tags;
+}
+
+function dhcp_match_rows() {
+	let rows = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return rows;
+	}
+
+	uci.foreach('dhcp', 'match', function(section) {
+		push(rows, {
+			section: section['.name'] || '',
+			match: section.match || '',
+			networkid: section.networkid || '',
+			force: section.force || ''
+		});
+	});
+
+	return rows;
+}
+
+function dhcp_vendorclass_rows() {
+	let rows = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return rows;
+	}
+
+	uci.foreach('dhcp', 'vendorclass', function(section) {
+		push(rows, {
+			section: section['.name'] || '',
+			vendorclass: section.vendorclass || '',
+			networkid: section.networkid || '',
+			force: section.force || ''
+		});
+	});
+
+	return rows;
+}
+
+function dhcp_userclass_rows() {
+	let rows = [];
+
+	try {
+		uci.load('dhcp');
+	}
+	catch (e) {
+		return rows;
+	}
+
+	uci.foreach('dhcp', 'userclass', function(section) {
+		push(rows, {
+			section: section['.name'] || '',
+			userclass: section.userclass || '',
+			networkid: section.networkid || '',
+			force: section.force || ''
+		});
+	});
+
+	return rows;
+}
+
 function dhcp_clean_value(value) {
 	value = trim('' + (value || ''));
 	return replace(value, /[\r\n]/g, '');
@@ -1389,6 +1476,238 @@ function save_dhcp_boot6s(rows) {
 		changed,
 		boots: dhcp_boot6_rows(),
 		sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+	};
+}
+
+function dhcp_extended_sections() {
+	return collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6', 'tag', 'match', 'vendorclass', 'userclass']);
+}
+
+function valid_dhcp_tag_name(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_.!-]/g, '') == value;
+}
+
+function valid_dhcp_tag_value(value) {
+	return replace(value, /[^A-Za-z0-9_.:@/+%#,\[\] !-]/g, '') == value;
+}
+
+function save_dhcp_tags(rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let seen = {};
+	let existing = {};
+
+	uci.foreach('dhcp', 'tag', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let name = dhcp_clean_value(row?.section || '');
+		let option_list = split_dhcp_lines(row?.dhcp_option || '');
+		let force = dhcp_optional_zero_one(row?.force);
+
+		if (!valid_dhcp_tag_name(name) || seen[name])
+			return {
+				saved: false,
+				message: 'DHCP tag name is required, unique, and may contain letters, numbers, dots, underscores, dashes, or !.',
+				changed: false,
+				tags: dhcp_tag_rows(),
+				sections: dhcp_extended_sections()
+			};
+
+		seen[name] = true;
+
+		for (let value in option_list) {
+			if (!valid_dhcp_tag_value(value))
+				return {
+					saved: false,
+					message: 'DHCP tag option contains unsupported characters.',
+					changed: false,
+					tags: dhcp_tag_rows(),
+					sections: dhcp_extended_sections()
+				};
+		}
+
+		let section = name;
+		let is_existing = length(section) && uci.get('dhcp', section) == 'tag';
+
+		if (!is_existing) {
+			section = uci.add('dhcp', 'tag');
+			uci.rename('dhcp', section, name);
+			section = name;
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let current_options = uci.get('dhcp', section, 'dhcp_option') || [];
+
+		if (!same_dhcp_list(current_options, option_list)) {
+			changed = true;
+			if (length(option_list))
+				uci.set('dhcp', section, 'dhcp_option', length(option_list) == 1 ? option_list[0] : option_list);
+			else
+				uci.delete('dhcp', section, 'dhcp_option');
+		}
+
+		let current_force = uci.get('dhcp', section, 'force') || '';
+
+		if (current_force != force) {
+			changed = true;
+			dhcp_set_option(section, 'force', force);
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP tags saved and dnsmasq reloaded.' : 'DHCP tags already up to date.',
+		changed,
+		tags: dhcp_tag_rows(),
+		sections: dhcp_extended_sections()
+	};
+}
+
+function save_dhcp_condition_rows(section_type, label_key, rows) {
+	rows ||= [];
+	uci.load('dhcp');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('dhcp', section_type, function(section) {
+		existing[section['.name']] = true;
+	});
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('dhcp', section) == section_type;
+
+		if (!is_existing) {
+			section = uci.add('dhcp', section_type);
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let label = dhcp_clean_value(row?.[label_key] || '');
+		let networkid = dhcp_clean_value(row?.networkid || '');
+		let force = dhcp_optional_zero_one(row?.force);
+
+		if (!length(label) || !valid_dhcp_tag_name(networkid) || !valid_dhcp_tag_value(label))
+			return {
+				saved: false,
+				message: 'DHCP match/class value and tag are required and contain unsupported characters.',
+				changed: false,
+				rows: [],
+				sections: dhcp_extended_sections()
+			};
+
+		let next = {};
+		next[label_key] = label;
+		next.networkid = networkid;
+		next.force = force;
+
+		for (let key, value in next) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				dhcp_set_option(section, key, value);
+			}
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('dhcp', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('dhcp');
+		system('/etc/init.d/dnsmasq reload >/dev/null 2>&1 || /etc/init.d/dnsmasq restart >/dev/null 2>&1');
+	}
+
+	return changed;
+}
+
+function save_dhcp_matches(rows) {
+	let changed = save_dhcp_condition_rows('match', 'match', rows);
+
+	if (type(changed) == 'object')
+		return {
+			saved: false,
+			message: changed.message,
+			changed: false,
+			matches: dhcp_match_rows(),
+			sections: dhcp_extended_sections()
+		};
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP option matches saved and dnsmasq reloaded.' : 'DHCP option matches already up to date.',
+		changed,
+		matches: dhcp_match_rows(),
+		sections: dhcp_extended_sections()
+	};
+}
+
+function save_dhcp_vendorclasses(rows) {
+	let changed = save_dhcp_condition_rows('vendorclass', 'vendorclass', rows);
+
+	if (type(changed) == 'object')
+		return {
+			saved: false,
+			message: changed.message,
+			changed: false,
+			classes: dhcp_vendorclass_rows(),
+			sections: dhcp_extended_sections()
+		};
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP vendor class matches saved and dnsmasq reloaded.' : 'DHCP vendor class matches already up to date.',
+		changed,
+		classes: dhcp_vendorclass_rows(),
+		sections: dhcp_extended_sections()
+	};
+}
+
+function save_dhcp_userclasses(rows) {
+	let changed = save_dhcp_condition_rows('userclass', 'userclass', rows);
+
+	if (type(changed) == 'object')
+		return {
+			saved: false,
+			message: changed.message,
+			changed: false,
+			classes: dhcp_userclass_rows(),
+			sections: dhcp_extended_sections()
+		};
+
+	return {
+		saved: true,
+		message: changed ? 'DHCP user class matches saved and dnsmasq reloaded.' : 'DHCP user class matches already up to date.',
+		changed,
+		classes: dhcp_userclass_rows(),
+		sections: dhcp_extended_sections()
 	};
 }
 
@@ -7936,6 +8255,10 @@ function build_core_settings(page) {
 		dhcpRelays: [],
 		dhcpBoots: [],
 		dhcpBoot6s: [],
+		dhcpTags: [],
+		dhcpMatches: [],
+		dhcpVendorClasses: [],
+		dhcpUserClasses: [],
 		dhcpStatus: {},
 		networkRoutes: [],
 		networkRules: [],
@@ -7946,7 +8269,7 @@ function build_core_settings(page) {
 	};
 
 	if (page == 'dhcp') {
-		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6']);
+		data.dhcp = collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6', 'tag', 'match', 'vendorclass', 'userclass']);
 		data.dhcpLeases = dhcp_leases();
 		data.dhcpHosts = dhcp_static_hosts();
 		data.dhcpDomains = dhcp_domain_records();
@@ -7954,6 +8277,10 @@ function build_core_settings(page) {
 		data.dhcpRelays = dhcp_relay_rows();
 		data.dhcpBoots = dhcp_boot_rows();
 		data.dhcpBoot6s = dhcp_boot6_rows();
+		data.dhcpTags = dhcp_tag_rows();
+		data.dhcpMatches = dhcp_match_rows();
+		data.dhcpVendorClasses = dhcp_vendorclass_rows();
+		data.dhcpUserClasses = dhcp_userclass_rows();
 		data.dhcpStatus = dhcp_status();
 	}
 	else if (page == 'firewall') {
@@ -8255,6 +8582,86 @@ const methods = {
 					changed: false,
 					boots: dhcp_boot6_rows(),
 					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd', 'relay', 'boot', 'boot6'])
+				});
+			}
+		}
+	},
+
+	dhcp_tags_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_tags(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP tag save failed: ' + e,
+					changed: false,
+					tags: dhcp_tag_rows(),
+					sections: dhcp_extended_sections()
+				});
+			}
+		}
+	},
+
+	dhcp_matches_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_matches(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP option match save failed: ' + e,
+					changed: false,
+					matches: dhcp_match_rows(),
+					sections: dhcp_extended_sections()
+				});
+			}
+		}
+	},
+
+	dhcp_vendorclasses_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_vendorclasses(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP vendor class save failed: ' + e,
+					changed: false,
+					classes: dhcp_vendorclass_rows(),
+					sections: dhcp_extended_sections()
+				});
+			}
+		}
+	},
+
+	dhcp_userclasses_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_dhcp_userclasses(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'DHCP user class save failed: ' + e,
+					changed: false,
+					classes: dhcp_userclass_rows(),
+					sections: dhcp_extended_sections()
 				});
 			}
 		}
