@@ -135,6 +135,13 @@ for base in scan_roots:
 		if relative_path == native_page_file:
 			if "nativePageCompatPath(page)" not in text or "return <Navigate replace to={legacyTarget(compatPath)} />" not in text:
 				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
+			page_meta_match = re.search(r"const pageMeta: Record<string, PageMeta> = \{(?P<body>.*?)\n\};\n\nexport function NativePage", text, re.S)
+			if not page_meta_match:
+				failures.append(f"{relative_path}: expected pageMeta guard target")
+			else:
+				for forbidden_page_header_term in ("Modern", "read-only", "LuCI compat", "compat until"):
+					if forbidden_page_header_term in page_meta_match.group("body"):
+						failures.append(f"{relative_path}: page headers must not expose internal mode/migration wording ({forbidden_page_header_term})")
 			for function_name in ("RoutingSummary", "NftablesSummary"):
 				match = re.search(rf"function {function_name}\([^)]*\) \{{(?P<body>.*?)\nfunction ", text, re.S)
 				if not match:

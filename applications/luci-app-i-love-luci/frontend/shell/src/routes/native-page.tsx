@@ -267,11 +267,11 @@ type OutputLine = {
 const pageMeta: Record<string, PageMeta> = {
 	"status-routes": {
 		title: "Routing",
-		description: "Modern read-only view of route tables, rules, and neighbour entries.",
+		description: "Route tables, policy rules, and neighbour entries.",
 	},
 	"firewall-status": {
 		title: "Firewall status",
-		description: "Modern read-only view of active nftables firewall state.",
+		description: "Active nftables chains and rule counters.",
 	},
 	logs: {
 		title: "System logs",
@@ -291,7 +291,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	diagnostics: {
 		title: "Diagnostics",
-		description: "Run ping, traceroute, and DNS lookup without leaving the modern shell.",
+		description: "Run ping, traceroute, and DNS lookup.",
 	},
 	attendedsysupgrade: {
 		title: "Attended sysupgrade",
@@ -299,11 +299,11 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	"attendedsysupgrade-config": {
 		title: "Attended sysupgrade configuration",
-		description: "Native settings editor for the installed LuCI attended sysupgrade configuration form.",
+		description: "Settings for the installed attended sysupgrade workflow.",
 	},
 	packages: {
 		title: "Software",
-		description: "Installed package inventory with guarded plan/apply actions. Full package-manager workflow remains LuCI compat until rollback parity is proven.",
+		description: "Installed package inventory and package operation planning.",
 	},
 	startup: {
 		title: "Startup",
@@ -311,11 +311,11 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	crontab: {
 		title: "Scheduled tasks",
-		description: "Edit root scheduled tasks and reload cron from the modern shell.",
+		description: "Edit root scheduled tasks and reload cron.",
 	},
 	sshkeys: {
 		title: "SSH keys",
-		description: "Edit Dropbear authorized keys without leaving the modern shell.",
+		description: "Edit Dropbear authorized keys.",
 	},
 	password: {
 		title: "Router password",
@@ -331,7 +331,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	flash: {
 		title: "Backup / flash firmware",
-		description: "Storage and flash partition overview. Firmware write actions remain LuCI compat until destructive recovery parity is proven.",
+		description: "Storage, backup, and firmware context.",
 	},
 	reboot: {
 		title: "Reboot",
@@ -339,7 +339,7 @@ const pageMeta: Record<string, PageMeta> = {
 	},
 	services: {
 		title: "Services",
-		description: "Installed service overview with modern status and configuration summaries.",
+		description: "Installed service status and configuration summaries.",
 	},
 };
 
@@ -461,7 +461,7 @@ export function NativeServicePage() {
 			<PageHeader
 				meta={{
 					title: focusMeta ? `${detail?.title ?? pageTitle(service)} ${focusMeta.title}` : (detail?.title ?? pageTitle(service)),
-					description: focusMeta?.description ?? "Modern service status and configuration summary. Advanced editing remains LuCI compat until parity is proven.",
+					description: focusMeta?.description ?? "Service status, actions, and configuration summary.",
 				}}
 			/>
 			{detail?.init ? <ServiceStateCard service={detail} /> : null}
@@ -500,17 +500,17 @@ function serviceFocusMeta(service: string, focus: string) {
 		},
 		setreport: {
 			title: "reporting",
-			description: "banIP policy and reporting context from UCI. Report editing remains in LuCI compat until full parity is complete.",
+			description: "banIP policy and reporting context from UCI.",
 			policyOnly: true,
 		},
 		firewall_log: {
 			title: "firewall log",
-			description: "banIP service activity from the router log. Full firewall log workflow remains in LuCI compat.",
+			description: "banIP service activity from the router log.",
 			logsOnly: true,
 		},
 		processing_log: {
 			title: "processing log",
-			description: "banIP processing activity from the router log. Full processing log workflow remains in LuCI compat.",
+			description: "banIP processing activity from the router log.",
 			logsOnly: true,
 		},
 	};
