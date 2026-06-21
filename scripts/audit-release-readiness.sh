@@ -27,6 +27,7 @@ fi
 run bash -n \
 	"${ROOT_DIR}/scripts/audit-compat-contract.sh" \
 	"${ROOT_DIR}/scripts/audit-router-future-luci-app.sh" \
+	"${ROOT_DIR}/scripts/audit-router-compat-gap-doc.sh" \
 	"${ROOT_DIR}/scripts/audit-router-native-pages.sh" \
 	"${ROOT_DIR}/scripts/audit-router-package-manager-mutation.sh" \
 	"${ROOT_DIR}/scripts/audit-router-route-inventory-doc.sh" \
@@ -38,6 +39,7 @@ run "${ROOT_DIR}/scripts/audit-compat-contract.sh"
 
 if [ "${RUN_ROUTER}" = "1" ]; then
 	run "${ROOT_DIR}/scripts/audit-router-routes.sh"
+	run "${ROOT_DIR}/scripts/audit-router-compat-gap-doc.sh"
 	run "${ROOT_DIR}/scripts/audit-router-route-inventory-doc.sh"
 	run "${ROOT_DIR}/scripts/audit-router-route-mode-guards.sh"
 	run "${ROOT_DIR}/scripts/audit-router-native-pages.sh"
