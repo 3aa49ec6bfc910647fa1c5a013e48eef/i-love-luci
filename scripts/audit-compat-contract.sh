@@ -310,6 +310,22 @@ for base in scan_roots:
 			required_model = "User routing has only three outcomes: supported native route, LuCI compat route, or intentionally hidden route."
 			if required_model not in text:
 				failures.append(f"{relative_path}: current compatibility model must keep the three-outcome route contract")
+			coverage_match = re.search(
+				r"Converted to native React/Vite surfaces:\n(?P<body>.*?)(?=\nInstalled LuCI app renderer policy:)",
+				text,
+				re.S,
+			)
+			if not coverage_match:
+				failures.append(f"{relative_path}: current native coverage section missing or malformed")
+			else:
+				for line_no, coverage_line in enumerate(coverage_match.group("body").splitlines(), 1):
+					if not coverage_line.startswith("- `"):
+						continue
+					for wireless_route in ("/admin/status/realtime/wireless", "/admin/status/channel_analysis", "/admin/network/wireless"):
+						if wireless_route in coverage_line:
+							failures.append(f"{relative_path}: wireless route {wireless_route} must not be documented as converted native coverage without radio-hardware validation")
+			if "Wireless-specific routes are not listed as converted native routes." not in text:
+				failures.append(f"{relative_path}: wireless routes must be documented as adapter evidence only until radio-hardware validation")
 		if relative_path == Path("docs/CONSOLE_TUNNEL.md"):
 			for required_console_doc_term in (
 				'transport: "tunnel"',
