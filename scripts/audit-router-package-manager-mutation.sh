@@ -18,7 +18,7 @@ cleanup() {
 		ubus call luci.iloveluci package_action "{\"action\":\"remove\",\"name\":\"${pkg}\",\"simulate\":false,\"options\":{}}" >/dev/null 2>&1 || true
 		apk del "${pkg}" >/dev/null 2>&1 || true
 	fi
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null || true
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -50,7 +50,22 @@ echo "---ILOVELUCI-MENU-BEFORE---"
 menu_tree_retry
 
 echo "---ILOVELUCI-INSTALL-RPC---"
-ubus -t 120 call luci.iloveluci package_action "{\"action\":\"install\",\"name\":\"${pkg}\",\"simulate\":false,\"options\":{}}" || true
+ubus call luci.iloveluci package_job_start "{\"action\":\"install\",\"name\":\"${pkg}\",\"options\":{}}" > /tmp/i-love-luci-package-install-start.json 2>/dev/null || true
+cat /tmp/i-love-luci-package-install-start.json
+install_job_id="$(jsonfilter -i /tmp/i-love-luci-package-install-start.json -e '@.data.job.id' 2>/dev/null || true)"
+if [ -n "${install_job_id}" ]; then
+	i=0
+	while [ "${i}" -lt 180 ]; do
+		ubus call luci.iloveluci package_job_status "{\"id\":\"${install_job_id}\"}" > /tmp/i-love-luci-package-install-status.json 2>/dev/null || true
+		cat /tmp/i-love-luci-package-install-status.json
+		done_state="$(jsonfilter -i /tmp/i-love-luci-package-install-status.json -e '@.data.done' 2>/dev/null || true)"
+		if [ "${done_state}" = "true" ]; then
+			break
+		fi
+		i=$((i + 1))
+		sleep 1
+	done
+fi
 if apk info -e "${pkg}" >/dev/null 2>&1; then
 	installed=1
 fi
@@ -60,7 +75,22 @@ echo "---ILOVELUCI-MENU-INSTALLED---"
 menu_tree_retry
 
 echo "---ILOVELUCI-REMOVE-RPC---"
-ubus -t 120 call luci.iloveluci package_action "{\"action\":\"remove\",\"name\":\"${pkg}\",\"simulate\":false,\"options\":{}}" || true
+ubus call luci.iloveluci package_job_start "{\"action\":\"remove\",\"name\":\"${pkg}\",\"options\":{}}" > /tmp/i-love-luci-package-remove-start.json 2>/dev/null || true
+cat /tmp/i-love-luci-package-remove-start.json
+remove_job_id="$(jsonfilter -i /tmp/i-love-luci-package-remove-start.json -e '@.data.job.id' 2>/dev/null || true)"
+if [ -n "${remove_job_id}" ]; then
+	i=0
+	while [ "${i}" -lt 180 ]; do
+		ubus call luci.iloveluci package_job_status "{\"id\":\"${remove_job_id}\"}" > /tmp/i-love-luci-package-remove-status.json 2>/dev/null || true
+		cat /tmp/i-love-luci-package-remove-status.json
+		done_state="$(jsonfilter -i /tmp/i-love-luci-package-remove-status.json -e '@.data.done' 2>/dev/null || true)"
+		if [ "${done_state}" = "true" ]; then
+			break
+		fi
+		i=$((i + 1))
+		sleep 1
+	done
+fi
 if ! apk info -e "${pkg}" >/dev/null 2>&1; then
 	installed=0
 fi
@@ -128,6 +158,14 @@ def json_after_marker(marker, predicate=None):
 			return obj
 	return None
 
+def json_objects_between(start_marker, end_marker):
+	start = raw.find(start_marker)
+	if start < 0:
+		return []
+	end = raw.find(end_marker, start + len(start_marker))
+	text = raw[start:end if end >= 0 else len(raw)]
+	return extract_json_objects(text)
+
 def visible_paths(menu):
 	items = ((menu or {}).get("data") or {}).get("items") or []
 	return {
@@ -164,12 +202,22 @@ if router_status != 0:
 if "---ILOVELUCI-PREINSTALLED---" in raw:
 	failures.append("test package was already installed before audit")
 
-install_result = json_after_marker("---ILOVELUCI-INSTALL-RPC---", lambda obj: "data" in obj)
-remove_result = json_after_marker("---ILOVELUCI-REMOVE-RPC---", lambda obj: "data" in obj)
+install_objects = json_objects_between("---ILOVELUCI-INSTALL-RPC---", "---ILOVELUCI-MENU-INSTALLED---")
+remove_objects = json_objects_between("---ILOVELUCI-REMOVE-RPC---", "---ILOVELUCI-MENU-REMOVED---")
+install_start = next((obj for obj in install_objects if (obj.get("data") or {}).get("started") is True), None)
+remove_start = next((obj for obj in remove_objects if (obj.get("data") or {}).get("started") is True), None)
+install_status = next((obj for obj in reversed(install_objects) if isinstance((obj.get("data") or {}).get("result"), dict)), None)
+remove_status = next((obj for obj in reversed(remove_objects) if isinstance((obj.get("data") or {}).get("result"), dict)), None)
+install_result = (install_status.get("data") or {}).get("result") if install_status else None
+remove_result = (remove_status.get("data") or {}).get("result") if remove_status else None
 
-if not install_result or not (install_result.get("data") or {}).get("ok"):
+if not install_start:
+	failures.append("package_job_start install did not start")
+if not remove_start:
+	failures.append("package_job_start remove did not start")
+if not install_result or not install_result.get("ok"):
 	failures.append("package_action install did not report ok")
-if not remove_result or not (remove_result.get("data") or {}).get("ok"):
+if not remove_result or not remove_result.get("ok"):
 	failures.append("package_action remove did not report ok")
 
 before = json_after_marker("---ILOVELUCI-MENU-BEFORE---", lambda obj: isinstance(obj.get("data"), dict) and isinstance(obj["data"].get("items"), list))
@@ -212,8 +260,8 @@ print("I Love LuCI package-manager mutation audit")
 print(f"new_routes={len(new_paths)}")
 if new_paths:
 	print("new_paths=" + ",".join(new_paths))
-print(f"install_ok={bool(install_result and (install_result.get('data') or {}).get('ok'))}")
-print(f"remove_ok={bool(remove_result and (remove_result.get('data') or {}).get('ok'))}")
+print(f"install_ok={bool(install_result and install_result.get('ok'))}")
+print(f"remove_ok={bool(remove_result and remove_result.get('ok'))}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
 print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
 

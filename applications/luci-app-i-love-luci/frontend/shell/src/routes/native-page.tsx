@@ -16,6 +16,7 @@ import {
 	downloadMtdBlock,
 	flashFirmware,
 	getNativePage,
+	getPackageJobStatus,
 	getServiceDetail,
 	runAttendedSysupgradePlan,
 	runCustomCommand,
@@ -44,6 +45,7 @@ import {
 	saveSshKeys,
 	searchPackages,
 	setRouterPassword,
+	startPackageJob,
 	type AdblockFastConfigInput,
 	type AdblockFastFeed,
 	type AttendedSysupgradeConfigInput,
@@ -3215,6 +3217,40 @@ function PackageInventory({ data }: { data: NativePageData }) {
 
 		const key = `${action}:${name}:${simulate ? "plan" : "apply"}`;
 		setActionBusy(key);
+
+		if (!simulate) {
+			const started = await startPackageJob(action, name, options);
+
+			if (!started.started || !started.job) {
+				const result = started.result ?? {
+					ok: false,
+					manager: "unknown",
+					action,
+					name,
+					simulate,
+					command: "",
+					output: "",
+					message: "Package job was not started.",
+				};
+				setActionResult(result);
+				setActionBusy(null);
+				toast.error(result.message);
+				return;
+			}
+
+			setActionResult(started.job.result);
+			const result = await pollPackageJob(started.job.id, setActionResult);
+			setActionBusy(null);
+
+			if (result.ok) {
+				toast.success(result.message);
+			}
+			else {
+				toast.error(result.message);
+			}
+			return;
+		}
+
 		const result = await runPackageAction(action, name, simulate, options);
 		setActionResult(result);
 		setActionBusy(null);
@@ -3367,6 +3403,31 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
 		</div>
 	);
+}
+
+async function pollPackageJob(id: string, onUpdate: (result: PackageActionResult) => void) {
+	let status = await getPackageJobStatus(id);
+	onUpdate(status.result);
+
+	for (let attempt = 0; attempt < 180 && status.running; attempt += 1) {
+		await sleep(1000);
+		status = await getPackageJobStatus(id);
+		onUpdate(status.result);
+	}
+
+	if (status.running) {
+		return {
+			...status.result,
+			ok: false,
+			message: "Package job did not finish before the polling timeout.",
+		};
+	}
+
+	return status.result;
+}
+
+function sleep(ms: number) {
+	return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function ManualPackagePlanner({

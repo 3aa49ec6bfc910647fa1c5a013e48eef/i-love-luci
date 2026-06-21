@@ -373,6 +373,19 @@ export type PackageActionResult = {
 	message: string;
 };
 
+export type PackageJobStatus = {
+	id: string;
+	running: boolean;
+	done: boolean;
+	result: PackageActionResult;
+};
+
+export type PackageJobStartResult = {
+	started: boolean;
+	job: PackageJobStatus | null;
+	result: PackageActionResult | null;
+};
+
 export type PackageActionOptions = {
 	overwrite?: boolean;
 	autoremove?: boolean;
@@ -1725,6 +1738,51 @@ export async function runPackageAction(action: PackageAction, name = "", simulat
 			command: "",
 			output: "",
 			message: "Package action failed.",
+		};
+	}
+}
+
+export async function startPackageJob(action: PackageAction, name = "", options: PackageActionOptions = {}): Promise<PackageJobStartResult> {
+	try {
+		return await callBridge<PackageJobStartResult>("package_job_start", { action, name, options });
+	}
+	catch {
+		return {
+			started: false,
+			job: null,
+			result: {
+				ok: false,
+				manager: "unknown",
+				action,
+				name,
+				simulate: false,
+				command: "",
+				output: "",
+				message: "Package job start failed.",
+			},
+		};
+	}
+}
+
+export async function getPackageJobStatus(id: string): Promise<PackageJobStatus> {
+	try {
+		return await callBridge<PackageJobStatus>("package_job_status", { id });
+	}
+	catch {
+		return {
+			id,
+			running: false,
+			done: true,
+			result: {
+				ok: false,
+				manager: "unknown",
+				action: "install",
+				name: "",
+				simulate: false,
+				command: "",
+				output: "",
+				message: "Package job status failed.",
+			},
 		};
 	}
 }

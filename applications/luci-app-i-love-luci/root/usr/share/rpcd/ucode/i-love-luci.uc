@@ -5955,7 +5955,7 @@ function package_file_stage(filename, data) {
 	};
 }
 
-function package_action(action, name, simulate, options) {
+function package_action_plan(action, name, simulate, options) {
 	action = trim('' + (action || ''));
 	name = trim('' + (name || ''));
 	simulate = !!simulate;
@@ -6088,6 +6088,24 @@ function package_action(action, name, simulate, options) {
 	}
 
 	let command = join(' ', quote_command_args(argv));
+	return {
+		ok: true,
+		manager,
+		action,
+		name,
+		simulate,
+		command,
+		argv
+	};
+}
+
+function package_action(action, name, simulate, options) {
+	let plan = package_action_plan(action, name, simulate, options);
+
+	if (!plan.ok)
+		return plan;
+
+	let command = plan.command;
 	let output_path = '/tmp/i-love-luci-package-action.log';
 	let output_quoted = quote_command_args([output_path])[0];
 	let code = system(`${command} >${output_quoted} 2>&1`);
@@ -6096,15 +6114,150 @@ function package_action(action, name, simulate, options) {
 
 	return {
 		ok: code == 0,
-		manager,
-		action,
-		name,
-		simulate,
+		manager: plan.manager,
+		action: plan.action,
+		name: plan.name,
+		simulate: plan.simulate,
 		command,
 		output,
-		message: code == 0 ? (simulate ? 'Package action simulated.' : 'Package action complete.') : (simulate ? 'Package action simulation failed.' : 'Package action failed.')
+		message: code == 0 ? (plan.simulate ? 'Package action simulated.' : 'Package action complete.') : (plan.simulate ? 'Package action simulation failed.' : 'Package action failed.')
 	};
 }
+
+function package_job_id() {
+	let value = trim(shell_output(`dd if=/dev/urandom bs=8 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"'`));
+	if (!length(value))
+		value = trim(shell_output('date +%s')) + '-' + trim(shell_output('echo $$'));
+	return replace(value, /[^A-Za-z0-9_.-]/g, '');
+}
+
+function valid_package_job_id(id) {
+	id = trim('' + (id || ''));
+	return length(id) > 0 && length(id) <= 80 && replace(id, /[^A-Za-z0-9_.-]/g, '') == id;
+}
+
+function package_job_paths(id) {
+	return {
+		meta: '/tmp/i-love-luci-package-job-' + id + '.json',
+		output: '/tmp/i-love-luci-package-job-' + id + '.log',
+		rc: '/tmp/i-love-luci-package-job-' + id + '.rc'
+	};
+}
+
+let package_job_status;
+
+function package_job_start(action, name, options) {
+	let plan = package_action_plan(action, name, false, options);
+
+	if (!plan.ok)
+		return {
+			started: false,
+			job: null,
+			result: plan
+		};
+
+	if (plan.action == 'upgrade')
+		return {
+			started: false,
+			job: null,
+			result: {
+				ok: false,
+				manager: plan.manager,
+				action: plan.action,
+				name: plan.name,
+				simulate: false,
+				command: plan.command,
+				output: '',
+				message: 'Package upgrade apply stays in LuCI compat until rollback parity is complete.'
+			}
+		};
+
+	let id = package_job_id();
+	let paths = package_job_paths(id);
+	let meta = {
+		id,
+		manager: plan.manager,
+		action: plan.action,
+		name: plan.name,
+		simulate: false,
+		command: plan.command,
+		startedAt: trim(shell_output('date +%s'))
+	};
+	let output_quoted = quote_command_args([paths.output])[0];
+	let rc_quoted = quote_command_args([paths.rc])[0];
+	let command = plan.command;
+
+	writefile(paths.meta, sprintf('%J', meta));
+	system(`(${command} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
+
+	return {
+		started: true,
+		job: package_job_status(id),
+		result: null
+	};
+}
+
+package_job_status = function(id) {
+	if (!valid_package_job_id(id))
+		return {
+			id,
+			running: false,
+			done: true,
+			result: {
+				ok: false,
+				manager: command_exists('apk') ? 'apk' : 'opkg',
+				action: '',
+				name: '',
+				simulate: false,
+				command: '',
+				output: '',
+				message: 'Package job id is invalid.'
+			}
+		};
+
+	let paths = package_job_paths(id);
+	let meta = read_jsonfile(paths.meta, null);
+
+	if (!meta)
+		return {
+			id,
+			running: false,
+			done: true,
+			result: {
+				ok: false,
+				manager: command_exists('apk') ? 'apk' : 'opkg',
+				action: '',
+				name: '',
+				simulate: false,
+				command: '',
+				output: '',
+				message: 'Package job was not found.'
+			}
+		};
+
+	let rc_text = trim(readfile(paths.rc) || '');
+	let done = length(rc_text) > 0;
+	let code = done ? +rc_text : null;
+	let output_quoted = quote_command_args([paths.output])[0];
+	let output = shell_output(`sed -n "1,220p" ${output_quoted} 2>/dev/null`);
+	let ok = done && code == 0;
+
+	return {
+		id,
+		running: !done,
+		done,
+		result: {
+			ok,
+			manager: meta.manager || (command_exists('apk') ? 'apk' : 'opkg'),
+			action: meta.action || '',
+			name: meta.name || '',
+			simulate: false,
+			command: meta.command || '',
+			output,
+			message: done ? (ok ? 'Package action complete.' : 'Package action failed.') : 'Package action running.'
+		}
+	};
+};
 
 function uci_change_rows() {
 	let rows = [];
@@ -10021,6 +10174,44 @@ const methods = {
 					message: 'Package action failed: ' + e
 				});
 			}
+		}
+	},
+
+	package_job_start: {
+		args: {
+			action: '',
+			name: '',
+			options: {}
+		},
+		call: function(request) {
+			try {
+				return respond(package_job_start(request.args.action || '', request.args.name || '', request.args.options || {}));
+			}
+			catch (e) {
+				return respond({
+					started: false,
+					job: null,
+					result: {
+						ok: false,
+						manager: command_exists('apk') ? 'apk' : 'opkg',
+						action: request.args.action || '',
+						name: request.args.name || '',
+						simulate: false,
+						command: '',
+						output: '',
+						message: 'Package job start failed: ' + e
+					}
+				});
+			}
+		}
+	},
+
+	package_job_status: {
+		args: {
+			id: ''
+		},
+		call: function(request) {
+			return respond(package_job_status(request.args.id || ''));
 		}
 	},
 
