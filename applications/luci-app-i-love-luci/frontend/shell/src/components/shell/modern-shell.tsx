@@ -1,13 +1,21 @@
 import { Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Header } from "@/components/shell/header";
 import { Sidebar } from "@/components/shell/sidebar";
 import { getShellConfig } from "@/lib/config";
+import { getSessionInfo } from "@/lib/rpc";
 
 export function ModernShell() {
 	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [packageVersion, setPackageVersion] = useState<string | null>(null);
 	const config = getShellConfig();
+
+	useEffect(() => {
+		void getSessionInfo().then((session) => {
+			setPackageVersion(session.packageVersion || null);
+		});
+	}, []);
 
 	return (
 		<div className="iloveluci-shell">
@@ -28,7 +36,7 @@ export function ModernShell() {
 							<GitHubMark className="size-4" />
 							<span>GitHub</span>
 						</a>
-						<span>I Love LuCI {config.version}</span>
+						<span>{packageVersion ? `I Love LuCI ${packageVersion}` : "I Love LuCI"}</span>
 					</footer>
 				</main>
 			</div>

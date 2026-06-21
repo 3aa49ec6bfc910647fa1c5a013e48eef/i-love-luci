@@ -203,6 +203,18 @@ Enable `LuCI -> Applications -> luci-app-i-love-luci` in `menuconfig` if buildin
 
 Local router credentials belong in `.env`, which is ignored by Git.
 
+For day-to-day development, use the reusable router scripts instead of hand-written SSH/SCP commands:
+
+```sh
+scripts/deploy-router-assets.sh
+scripts/router-run.sh - <<'EOF'
+ubus call luci.iloveluci session_info
+uci changes
+EOF
+```
+
+`scripts/deploy-router-assets.sh --no-build` redeploys the current generated assets, rpcd bridge, and login templates without rebuilding. `scripts/router-copy.sh <local-file> <remote-path>` copies a single file when a targeted router patch is safer.
+
 For 25.12/apk artifacts:
 
 ```sh

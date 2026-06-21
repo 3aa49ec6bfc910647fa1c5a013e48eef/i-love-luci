@@ -31,6 +31,7 @@ export type MenuTree = {
 
 export type SessionInfo = {
 	user: string;
+	packageVersion?: string;
 	features: {
 		mfa: boolean;
 		passkeys: boolean;
@@ -843,6 +844,18 @@ export type FirewallZone = {
 	forward: string;
 	masq: string;
 	mtu_fix: string;
+	subnet: string;
+	family: string;
+	masq6: string;
+	masq_src: string;
+	masq_dest: string;
+	masq_allow_invalid: string;
+	auto_helper: string;
+	helper: string;
+	log: string;
+	log_limit: string;
+	extra_src: string;
+	extra_dest: string;
 };
 
 export type FirewallZonesResult = {
@@ -880,7 +893,29 @@ export type FirewallRuleRow = {
 	dest_port: string;
 	icmp_type: string;
 	family: string;
+	direction: string;
+	device: string;
+	ipset: string;
+	src_mac: string;
+	set_mark: string;
+	set_xmark: string;
+	set_dscp: string;
+	set_helper: string;
+	helper: string;
+	mark: string;
+	dscp: string;
 	limit: string;
+	limit_burst: string;
+	log: string;
+	log_limit: string;
+	extra: string;
+	weekdays: string;
+	monthdays: string;
+	start_time: string;
+	stop_time: string;
+	start_date: string;
+	stop_date: string;
+	utc_time: string;
 	target: string;
 };
 

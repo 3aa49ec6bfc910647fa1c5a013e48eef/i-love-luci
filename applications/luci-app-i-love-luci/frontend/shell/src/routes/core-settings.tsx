@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -56,6 +56,11 @@ import {
 } from "@/lib/rpc";
 
 type CorePage = "network" | "dhcp" | "firewall" | "system";
+
+type PendingStaticHost = {
+	host: DhcpHost;
+	id: number;
+};
 
 const pageMeta: Record<CorePage, { title: string; description: string; configKey: keyof CoreSettings }> = {
 	network: {
@@ -184,6 +189,19 @@ function DhcpSummary({
 	const domainRecords = settings.dhcpDomains ?? [];
 	const pools = settings.dhcpPools ?? [];
 	const dnsmasq = settings.dhcp.find((section) => section.type === "dnsmasq") ?? null;
+	const [pendingStaticHost, setPendingStaticHost] = useState<PendingStaticHost | null>(null);
+
+	function addStaticHostFromLease(lease: DhcpLease) {
+		setPendingStaticHost({
+			host: {
+				section: "",
+				name: lease.hostname === "unknown" ? "" : lease.hostname,
+				ip: lease.ip,
+				mac: lease.mac,
+			},
+			id: Date.now(),
+		});
+	}
 
 	return (
 		<div className="grid gap-5">
@@ -221,7 +239,7 @@ function DhcpSummary({
 				}
 				pools={pools}
 			/>
-			<LeaseTable leases={leases} />
+			<LeaseTable leases={leases} onAddStaticHost={addStaticHostFromLease} />
 			<StaticHostEditor
 				hosts={staticHosts}
 				onSaved={(hosts, sections) =>
@@ -231,6 +249,7 @@ function DhcpSummary({
 						dhcpHosts: hosts,
 					})
 				}
+				pendingHost={pendingStaticHost}
 			/>
 			<DomainRecordEditor
 				onSaved={(domains, sections) =>
@@ -612,7 +631,7 @@ function DhcpPoolEditor({
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={9}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={21}>
 										No DHCP pools configured.
 									</td>
 								</tr>
@@ -676,7 +695,7 @@ function ServiceStatusBlock({ label, state }: { label: string; state?: ServiceSt
 	);
 }
 
-function LeaseTable({ leases }: { leases: DhcpLease[] }) {
+function LeaseTable({ leases, onAddStaticHost }: { leases: DhcpLease[]; onAddStaticHost: (lease: DhcpLease) => void }) {
 	return (
 		<section className="grid gap-3">
 			<div className="flex items-center justify-between gap-3">
@@ -684,7 +703,7 @@ function LeaseTable({ leases }: { leases: DhcpLease[] }) {
 				<span className="text-xs text-muted-foreground">{leases.length} leases</span>
 			</div>
 			<div className="overflow-x-auto rounded-md border bg-card">
-				<table className="w-full min-w-[44rem] text-left text-sm">
+				<table className="w-full min-w-[52rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Host</th>
@@ -692,6 +711,7 @@ function LeaseTable({ leases }: { leases: DhcpLease[] }) {
 							<th className="px-3 py-2 font-medium">MAC</th>
 							<th className="px-3 py-2 font-medium">Expires</th>
 							<th className="hidden px-3 py-2 font-medium md:table-cell">Client ID</th>
+							<th className="px-3 py-2 text-right font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -705,11 +725,16 @@ function LeaseTable({ leases }: { leases: DhcpLease[] }) {
 									<td className="hidden max-w-[18rem] truncate px-3 py-3 font-mono text-xs text-muted-foreground md:table-cell">
 										{lease.clientId || "none"}
 									</td>
+									<td className="px-3 py-3 text-right">
+										<Button onClick={() => onAddStaticHost(lease)} size="sm" type="button" variant="outline">
+											Add static
+										</Button>
+									</td>
 								</tr>
 							))
 						) : (
 							<tr>
-								<td className="px-3 py-6 text-muted-foreground" colSpan={5}>
+								<td className="px-3 py-6 text-muted-foreground" colSpan={6}>
 									No active DHCP leases found.
 								</td>
 							</tr>
@@ -724,14 +749,73 @@ function LeaseTable({ leases }: { leases: DhcpLease[] }) {
 function StaticHostEditor({
 	hosts,
 	onSaved,
+	pendingHost,
 }: {
 	hosts: DhcpHost[];
 	onSaved: (hosts: DhcpHost[], sections: ConfigSection[]) => void;
+	pendingHost: PendingStaticHost | null;
 }) {
 	const [rows, setRows] = useState(() => hosts.map(normalizeDhcpHost));
 	const [savedRows, setSavedRows] = useState(rows);
+	const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
 	const [saving, setSaving] = useState(false);
+	const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
+	const nameInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	useEffect(() => {
+		if (!pendingHost)
+			return;
+
+		const nextHost = normalizeDhcpHost(pendingHost.host);
+		const timeout = window.setTimeout(() => {
+			let targetIndex = 0;
+
+			setRows((current) => {
+				const existingIndex = current.findIndex((row) => {
+					const sameMac = row.mac && nextHost.mac && row.mac.toLowerCase() === nextHost.mac.toLowerCase();
+					const sameIp = row.ip && nextHost.ip && row.ip === nextHost.ip;
+					return sameMac || sameIp;
+				});
+
+				if (existingIndex >= 0) {
+					targetIndex = existingIndex;
+					return current.map((row, index) =>
+						index === existingIndex
+							? {
+									...row,
+									name: row.name || nextHost.name,
+									ip: row.ip || nextHost.ip,
+									mac: row.mac || nextHost.mac,
+								}
+							: row,
+					);
+				}
+
+				targetIndex = current.length;
+				return [...current, nextHost];
+			});
+			setHighlightedIndex(targetIndex);
+		}, 0);
+
+		return () => window.clearTimeout(timeout);
+	}, [pendingHost]);
+
+	useEffect(() => {
+		if (highlightedIndex === null)
+			return;
+
+		const frame = window.requestAnimationFrame(() => {
+			rowRefs.current[highlightedIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+			nameInputRefs.current[highlightedIndex]?.focus({ preventScroll: true });
+		});
+		const timeout = window.setTimeout(() => setHighlightedIndex(null), 3500);
+
+		return () => {
+			window.cancelAnimationFrame(frame);
+			window.clearTimeout(timeout);
+		};
+	}, [highlightedIndex, rows.length]);
 
 	function updateRow(index: number, field: keyof DhcpHost, value: string) {
 		setRows((current) =>
@@ -798,11 +882,22 @@ function StaticHostEditor({
 						<tbody>
 							{rows.length ? (
 								rows.map((host, index) => (
-									<tr className="border-b align-top last:border-0" key={`${host.section || "new"}.${index}`}>
+									<tr
+										className={`border-b align-top transition-colors last:border-0 ${
+											highlightedIndex === index ? "bg-primary/10 ring-2 ring-primary/40" : ""
+										}`}
+										key={`${host.section || "new"}.${index}`}
+										ref={(element) => {
+											rowRefs.current[index] = element;
+										}}
+									>
 										<td className="px-3 py-3">
 											<Input
 												aria-label="Host name"
 												onChange={(event) => updateRow(index, "name", event.target.value)}
+												ref={(element) => {
+													nameInputRefs.current[index] = element;
+												}}
 												value={host.name}
 											/>
 										</td>
@@ -1837,6 +1932,25 @@ function FirewallPolicySelect({ id, onChange, value }: { id: string; onChange: (
 	);
 }
 
+function FirewallRuleTargetSelect({ id, onChange, value }: { id: string; onChange: (value: string) => void; value: string }) {
+	return (
+		<SelectField
+			id={id}
+			onChange={onChange}
+			options={[
+				["ACCEPT", "Accept"],
+				["REJECT", "Reject"],
+				["DROP", "Drop"],
+				["NOTRACK", "Do not track"],
+				["HELPER", "Helper"],
+				["MARK", "Mark"],
+				["DSCP", "DSCP"],
+			]}
+			value={value}
+		/>
+	);
+}
+
 function firewallDefaultsValues(section: ConfigSection): FirewallDefaultsInput {
 	return {
 		input: firewallPolicyText(section.values.input),
@@ -1892,6 +2006,18 @@ function FirewallZoneEditor({
 				forward: "REJECT",
 				masq: "0",
 				mtu_fix: "0",
+				subnet: "",
+				family: "",
+				masq6: "0",
+				masq_src: "",
+				masq_dest: "",
+				masq_allow_invalid: "0",
+				auto_helper: "1",
+				helper: "",
+				log: "",
+				log_limit: "",
+				extra_src: "",
+				extra_dest: "",
 			},
 		]);
 	}
@@ -1932,17 +2058,29 @@ function FirewallZoneEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[78rem] text-left text-sm">
+					<table className="w-full min-w-[172rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Name</th>
 								<th className="px-3 py-2 font-medium">Networks</th>
 								<th className="px-3 py-2 font-medium">Devices</th>
+								<th className="px-3 py-2 font-medium">Subnets</th>
 								<th className="px-3 py-2 font-medium">Input</th>
 								<th className="px-3 py-2 font-medium">Output</th>
 								<th className="px-3 py-2 font-medium">Forward</th>
+								<th className="px-3 py-2 font-medium">Family</th>
 								<th className="px-3 py-2 font-medium">NAT</th>
+								<th className="px-3 py-2 font-medium">NAT6</th>
+								<th className="px-3 py-2 font-medium">NAT source</th>
+								<th className="px-3 py-2 font-medium">NAT destination</th>
 								<th className="px-3 py-2 font-medium">MTU fix</th>
+								<th className="px-3 py-2 font-medium">Allow invalid</th>
+								<th className="px-3 py-2 font-medium">Auto helper</th>
+								<th className="px-3 py-2 font-medium">Helpers</th>
+								<th className="px-3 py-2 font-medium">Log tables</th>
+								<th className="px-3 py-2 font-medium">Log limit</th>
+								<th className="px-3 py-2 font-medium">Extra source</th>
+								<th className="px-3 py-2 font-medium">Extra destination</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
 						</thead>
@@ -1976,6 +2114,15 @@ function FirewallZoneEditor({
 											/>
 										</td>
 										<td className="px-3 py-3">
+											<textarea
+												aria-label="Subnets"
+												className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "subnet", event.target.value)}
+												spellCheck={false}
+												value={zone.subnet}
+											/>
+										</td>
+										<td className="px-3 py-3">
 											<FirewallPolicySelect
 												id={`firewall-zone-input-${index}`}
 												onChange={(value) => updateRow(index, "input", value)}
@@ -1998,6 +2145,18 @@ function FirewallZoneEditor({
 										</td>
 										<td className="px-3 py-3">
 											<SelectField
+												id={`firewall-zone-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["", "Any"],
+													["ipv4", "IPv4"],
+													["ipv6", "IPv6"],
+												]}
+												value={zone.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
 												id={`firewall-zone-masq-${index}`}
 												onChange={(value) => updateRow(index, "masq", value)}
 												options={[
@@ -2009,6 +2168,35 @@ function FirewallZoneEditor({
 										</td>
 										<td className="px-3 py-3">
 											<SelectField
+												id={`firewall-zone-masq6-${index}`}
+												onChange={(value) => updateRow(index, "masq6", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={zone.masq6}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Masquerading source restrictions"
+												className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "masq_src", event.target.value)}
+												spellCheck={false}
+												value={zone.masq_src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Masquerading destination restrictions"
+												className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "masq_dest", event.target.value)}
+												spellCheck={false}
+												value={zone.masq_dest}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
 												id={`firewall-zone-mtu-${index}`}
 												onChange={(value) => updateRow(index, "mtu_fix", value)}
 												options={[
@@ -2016,6 +2204,63 @@ function FirewallZoneEditor({
 													["1", "Yes"],
 												]}
 												value={zone.mtu_fix}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-zone-invalid-${index}`}
+												onChange={(value) => updateRow(index, "masq_allow_invalid", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={zone.masq_allow_invalid}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-zone-auto-helper-${index}`}
+												onChange={(value) => updateRow(index, "auto_helper", value)}
+												options={[
+													["1", "Yes"],
+													["0", "No"],
+												]}
+												value={zone.auto_helper}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Conntrack helpers"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "helper", event.target.value)}
+												spellCheck={false}
+												value={zone.helper}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Log tables"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "log", event.target.value)}
+												spellCheck={false}
+												value={zone.log}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Log limit" onChange={(event) => updateRow(index, "log_limit", event.target.value)} value={zone.log_limit} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Extra source arguments"
+												onChange={(event) => updateRow(index, "extra_src", event.target.value)}
+												value={zone.extra_src}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Extra destination arguments"
+												onChange={(event) => updateRow(index, "extra_dest", event.target.value)}
+												value={zone.extra_dest}
 											/>
 										</td>
 										<td className="px-3 py-3 text-right">
@@ -2065,6 +2310,18 @@ function firewallZoneValues(section: ConfigSection): FirewallZone {
 		forward: firewallPolicyText(section.values.forward),
 		masq: booleanValue(section.values.masq),
 		mtu_fix: booleanValue(section.values.mtu_fix),
+		subnet: rawListValue(section.values.subnet).join("\n"),
+		family: firewallFamilyText(section.values.family),
+		masq6: booleanValue(section.values.masq6),
+		masq_src: rawListValue(section.values.masq_src).join("\n"),
+		masq_dest: rawListValue(section.values.masq_dest).join("\n"),
+		masq_allow_invalid: booleanValue(section.values.masq_allow_invalid),
+		auto_helper: isEnabledValue(section.values.auto_helper) ? "1" : "0",
+		helper: rawListValue(section.values.helper).join("\n"),
+		log: rawListValue(section.values.log).join("\n"),
+		log_limit: rawValue(section.values.log_limit),
+		extra_src: rawValue(section.values.extra_src),
+		extra_dest: rawValue(section.values.extra_dest),
 	});
 }
 
@@ -2079,6 +2336,18 @@ function normalizeFirewallZone(zone: FirewallZone): FirewallZone {
 		forward: firewallPolicyText(zone.forward),
 		masq: zone.masq === "1" ? "1" : "0",
 		mtu_fix: zone.mtu_fix === "1" ? "1" : "0",
+		subnet: zone.subnet ?? "",
+		family: firewallFamilyText(zone.family),
+		masq6: zone.masq6 === "1" ? "1" : "0",
+		masq_src: zone.masq_src ?? "",
+		masq_dest: zone.masq_dest ?? "",
+		masq_allow_invalid: zone.masq_allow_invalid === "1" ? "1" : "0",
+		auto_helper: zone.auto_helper === "0" ? "0" : "1",
+		helper: zone.helper ?? "",
+		log: zone.log ?? "",
+		log_limit: zone.log_limit ?? "",
+		extra_src: zone.extra_src ?? "",
+		extra_dest: zone.extra_dest ?? "",
 	};
 }
 
@@ -2273,7 +2542,29 @@ function FirewallRuleEditor({
 				dest_port: "",
 				icmp_type: "",
 				family: "",
+				direction: "",
+				device: "",
+				ipset: "",
+				src_mac: "",
+				set_mark: "",
+				set_xmark: "",
+				set_dscp: "",
+				set_helper: "",
+				helper: "",
+				mark: "",
+				dscp: "",
 				limit: "",
+				limit_burst: "",
+				log: "0",
+				log_limit: "",
+				extra: "",
+				weekdays: "",
+				monthdays: "",
+				start_time: "",
+				stop_time: "",
+				start_date: "",
+				stop_date: "",
+				utc_time: "0",
 				target: "ACCEPT",
 			},
 		]);
@@ -2315,21 +2606,43 @@ function FirewallRuleEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[112rem] text-left text-sm">
+					<table className="w-full min-w-[260rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Name</th>
 								<th className="px-3 py-2 font-medium">Status</th>
 								<th className="px-3 py-2 font-medium">Source</th>
 								<th className="px-3 py-2 font-medium">Destination</th>
+								<th className="px-3 py-2 font-medium">Direction</th>
+								<th className="px-3 py-2 font-medium">Device</th>
 								<th className="px-3 py-2 font-medium">Protocols</th>
+								<th className="px-3 py-2 font-medium">IP set</th>
 								<th className="px-3 py-2 font-medium">Source IP</th>
+								<th className="px-3 py-2 font-medium">Source MAC</th>
 								<th className="px-3 py-2 font-medium">Destination IP</th>
 								<th className="px-3 py-2 font-medium">Source port</th>
 								<th className="px-3 py-2 font-medium">Destination port</th>
 								<th className="px-3 py-2 font-medium">ICMP types</th>
 								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Set mark</th>
+								<th className="px-3 py-2 font-medium">Set xmark</th>
+								<th className="px-3 py-2 font-medium">Set DSCP</th>
+								<th className="px-3 py-2 font-medium">Set helper</th>
+								<th className="px-3 py-2 font-medium">Match helper</th>
+								<th className="px-3 py-2 font-medium">Match mark</th>
+								<th className="px-3 py-2 font-medium">Match DSCP</th>
 								<th className="px-3 py-2 font-medium">Limit</th>
+								<th className="px-3 py-2 font-medium">Burst</th>
+								<th className="px-3 py-2 font-medium">Log</th>
+								<th className="px-3 py-2 font-medium">Log limit</th>
+								<th className="px-3 py-2 font-medium">Extra</th>
+								<th className="px-3 py-2 font-medium">Week days</th>
+								<th className="px-3 py-2 font-medium">Month days</th>
+								<th className="px-3 py-2 font-medium">Start time</th>
+								<th className="px-3 py-2 font-medium">Stop time</th>
+								<th className="px-3 py-2 font-medium">Start date</th>
+								<th className="px-3 py-2 font-medium">Stop date</th>
+								<th className="px-3 py-2 font-medium">UTC</th>
 								<th className="px-3 py-2 font-medium">Target</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
@@ -2367,6 +2680,21 @@ function FirewallRuleEditor({
 											/>
 										</td>
 										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-rule-direction-${index}`}
+												onChange={(value) => updateRow(index, "direction", value)}
+												options={[
+													["", "Any"],
+													["in", "In"],
+													["out", "Out"],
+												]}
+												value={rule.direction}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Device" onChange={(event) => updateRow(index, "device", event.target.value)} value={rule.device} />
+										</td>
+										<td className="px-3 py-3">
 											<textarea
 												aria-label="Protocols"
 												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
@@ -2376,7 +2704,19 @@ function FirewallRuleEditor({
 											/>
 										</td>
 										<td className="px-3 py-3">
+											<Input aria-label="IP set" onChange={(event) => updateRow(index, "ipset", event.target.value)} value={rule.ipset} />
+										</td>
+										<td className="px-3 py-3">
 											<Input aria-label="Source IP" onChange={(event) => updateRow(index, "src_ip", event.target.value)} value={rule.src_ip} />
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Source MAC"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "src_mac", event.target.value)}
+												spellCheck={false}
+												value={rule.src_mac}
+											/>
 										</td>
 										<td className="px-3 py-3">
 											<Input
@@ -2421,10 +2761,97 @@ function FirewallRuleEditor({
 											/>
 										</td>
 										<td className="px-3 py-3">
+											<Input aria-label="Set mark" onChange={(event) => updateRow(index, "set_mark", event.target.value)} value={rule.set_mark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Set xmark" onChange={(event) => updateRow(index, "set_xmark", event.target.value)} value={rule.set_xmark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Set DSCP" onChange={(event) => updateRow(index, "set_dscp", event.target.value)} value={rule.set_dscp} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Set helper" onChange={(event) => updateRow(index, "set_helper", event.target.value)} value={rule.set_helper} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Match helper" onChange={(event) => updateRow(index, "helper", event.target.value)} value={rule.helper} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Match mark" onChange={(event) => updateRow(index, "mark", event.target.value)} value={rule.mark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Match DSCP" onChange={(event) => updateRow(index, "dscp", event.target.value)} value={rule.dscp} />
+										</td>
+										<td className="px-3 py-3">
 											<Input aria-label="Limit" onChange={(event) => updateRow(index, "limit", event.target.value)} value={rule.limit} />
 										</td>
 										<td className="px-3 py-3">
-											<FirewallPolicySelect
+											<Input
+												aria-label="Limit burst"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "limit_burst", event.target.value)}
+												value={rule.limit_burst}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-rule-log-${index}`}
+												onChange={(value) => updateRow(index, "log", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={rule.log}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Log limit" onChange={(event) => updateRow(index, "log_limit", event.target.value)} value={rule.log_limit} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Extra arguments" onChange={(event) => updateRow(index, "extra", event.target.value)} value={rule.extra} />
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Week days"
+												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "weekdays", event.target.value)}
+												spellCheck={false}
+												value={rule.weekdays}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Month days"
+												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "monthdays", event.target.value)}
+												spellCheck={false}
+												value={rule.monthdays}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Start time" onChange={(event) => updateRow(index, "start_time", event.target.value)} value={rule.start_time} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Stop time" onChange={(event) => updateRow(index, "stop_time", event.target.value)} value={rule.stop_time} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Start date" onChange={(event) => updateRow(index, "start_date", event.target.value)} value={rule.start_date} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Stop date" onChange={(event) => updateRow(index, "stop_date", event.target.value)} value={rule.stop_date} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-rule-utc-${index}`}
+												onChange={(value) => updateRow(index, "utc_time", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={rule.utc_time}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<FirewallRuleTargetSelect
 												id={`firewall-rule-target-${index}`}
 												onChange={(value) => updateRow(index, "target", value)}
 												value={rule.target}
@@ -2445,7 +2872,7 @@ function FirewallRuleEditor({
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={14}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={36}>
 										No traffic rules configured.
 									</td>
 								</tr>
@@ -2480,8 +2907,30 @@ function firewallRuleValues(section: ConfigSection): FirewallRuleRow {
 		dest_port: rawValue(section.values.dest_port),
 		icmp_type: rawListValue(section.values.icmp_type).join("\n"),
 		family: firewallFamilyText(section.values.family),
+		direction: rawValue(section.values.direction),
+		device: rawValue(section.values.device),
+		ipset: rawValue(section.values.ipset),
+		src_mac: rawListValue(section.values.src_mac).join("\n"),
+		set_mark: rawValue(section.values.set_mark),
+		set_xmark: rawValue(section.values.set_xmark),
+		set_dscp: rawValue(section.values.set_dscp),
+		set_helper: rawValue(section.values.set_helper),
+		helper: rawValue(section.values.helper),
+		mark: rawValue(section.values.mark),
+		dscp: rawValue(section.values.dscp),
 		limit: rawValue(section.values.limit),
-		target: firewallPolicyText(section.values.target),
+		limit_burst: rawValue(section.values.limit_burst),
+		log: booleanValue(section.values.log),
+		log_limit: rawValue(section.values.log_limit),
+		extra: rawValue(section.values.extra),
+		weekdays: rawListValue(section.values.weekdays).join("\n"),
+		monthdays: rawListValue(section.values.monthdays).join("\n"),
+		start_time: rawValue(section.values.start_time),
+		stop_time: rawValue(section.values.stop_time),
+		start_date: rawValue(section.values.start_date),
+		stop_date: rawValue(section.values.stop_date),
+		utc_time: booleanValue(section.values.utc_time),
+		target: firewallRuleTargetText(section.values.target),
 	});
 }
 
@@ -2499,14 +2948,41 @@ function normalizeFirewallRule(rule: FirewallRuleRow): FirewallRuleRow {
 		dest_port: rule.dest_port ?? "",
 		icmp_type: rule.icmp_type ?? "",
 		family: firewallFamilyText(rule.family),
+		direction: ["", "in", "out"].includes(rule.direction) ? rule.direction : "",
+		device: rule.device ?? "",
+		ipset: rule.ipset ?? "",
+		src_mac: rule.src_mac ?? "",
+		set_mark: rule.set_mark ?? "",
+		set_xmark: rule.set_xmark ?? "",
+		set_dscp: rule.set_dscp ?? "",
+		set_helper: rule.set_helper ?? "",
+		helper: rule.helper ?? "",
+		mark: rule.mark ?? "",
+		dscp: rule.dscp ?? "",
 		limit: rule.limit ?? "",
-		target: firewallPolicyText(rule.target),
+		limit_burst: rule.limit_burst ?? "",
+		log: rule.log === "1" ? "1" : "0",
+		log_limit: rule.log_limit ?? "",
+		extra: rule.extra ?? "",
+		weekdays: rule.weekdays ?? "",
+		monthdays: rule.monthdays ?? "",
+		start_time: rule.start_time ?? "",
+		stop_time: rule.stop_time ?? "",
+		start_date: rule.start_date ?? "",
+		stop_date: rule.stop_date ?? "",
+		utc_time: rule.utc_time === "1" ? "1" : "0",
+		target: firewallRuleTargetText(rule.target),
 	};
 }
 
 function firewallFamilyText(value: unknown) {
 	const text = rawValue(value);
 	return text === "ipv4" || text === "ipv6" ? text : "";
+}
+
+function firewallRuleTargetText(value: unknown) {
+	const text = rawValue(value).toUpperCase();
+	return ["ACCEPT", "REJECT", "DROP", "NOTRACK", "HELPER", "MARK", "DSCP"].includes(text) ? text : "ACCEPT";
 }
 
 function FirewallRedirectEditor({

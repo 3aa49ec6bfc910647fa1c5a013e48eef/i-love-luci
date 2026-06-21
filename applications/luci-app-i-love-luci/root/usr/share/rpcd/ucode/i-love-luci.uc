@@ -41,9 +41,9 @@ const nativeRoutes = {
 	'/admin/network/dhcp': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/dns': { status: 'partial', nativePath: '/core/dhcp' },
 	'/admin/network/firewall': { status: 'partial', nativePath: '/core/firewall' },
-	'/admin/network/firewall/zones': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/zones': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/forwards': { status: 'supported', nativePath: '/core/firewall' },
-	'/admin/network/firewall/rules': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/rules': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/snats': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/custom': { status: 'partial', nativePath: '/core/firewall' },
@@ -397,6 +397,29 @@ function shell_output(command) {
 	fd.close();
 
 	return output;
+}
+
+function installed_package_version(name) {
+	name = replace('' + (name || ''), /[^A-Za-z0-9_.+-]/g, '');
+
+	if (!length(name))
+		return '';
+
+	let output = trim(shell_output(`if command -v apk >/dev/null 2>&1; then apk list --installed ${name} 2>/dev/null | sed -n '1p'; else opkg list-installed ${name} 2>/dev/null | sed -n '1p'; fi`));
+	let prefix = name + '-';
+	let opkg_prefix = name + ' - ';
+
+	if (substr(output, 0, length(opkg_prefix)) == opkg_prefix)
+		return trim(substr(output, length(opkg_prefix)));
+
+	if (substr(output, 0, length(prefix)) == prefix) {
+		let version = substr(output, length(prefix));
+		let space = index(version, ' ');
+
+		return trim(space >= 0 ? substr(version, 0, space) : version);
+	}
+
+	return '';
 }
 
 function parse_command_args(str) {
@@ -2035,7 +2058,19 @@ function firewall_zone_rows() {
 			output: section.output || '',
 			forward: section.forward || '',
 			masq: section.masq || '',
-			mtu_fix: section.mtu_fix || ''
+			mtu_fix: section.mtu_fix || '',
+			subnet: join('\n', dhcp_normalize_list(section.subnet)),
+			family: section.family || '',
+			masq6: section.masq6 || '',
+			masq_src: join('\n', dhcp_normalize_list(section.masq_src)),
+			masq_dest: join('\n', dhcp_normalize_list(section.masq_dest)),
+			masq_allow_invalid: section.masq_allow_invalid || '',
+			auto_helper: section.auto_helper == '0' ? '0' : '1',
+			helper: join('\n', dhcp_normalize_list(section.helper)),
+			log: join('\n', dhcp_normalize_list(section.log)),
+			log_limit: section.log_limit || '',
+			extra_src: section.extra_src || '',
+			extra_dest: section.extra_dest || ''
 		});
 	});
 
@@ -2075,13 +2110,26 @@ function save_firewall_zones(rows) {
 		let name = dhcp_clean_value(row?.name || '');
 		let networks = split_dhcp_list(row?.network || '');
 		let devices = split_dhcp_list(row?.device || '');
+		let subnets = split_dhcp_list(row?.subnet || '');
+		let masq_src = split_dhcp_list(row?.masq_src || '');
+		let masq_dest = split_dhcp_list(row?.masq_dest || '');
+		let helpers = split_dhcp_list(row?.helper || '');
+		let log_tables = split_dhcp_list(row?.log || '');
+		let family = firewall_family_value(row?.family || '');
 		let next = {
 			name,
 			input: firewall_policy_value(row?.input || ''),
 			output: firewall_policy_value(row?.output || ''),
 			forward: firewall_policy_value(row?.forward || ''),
 			masq: dhcp_zero_one(row?.masq),
-			mtu_fix: dhcp_zero_one(row?.mtu_fix)
+			mtu_fix: dhcp_zero_one(row?.mtu_fix),
+			family,
+			masq6: dhcp_zero_one(row?.masq6),
+			masq_allow_invalid: dhcp_zero_one(row?.masq_allow_invalid),
+			auto_helper: dhcp_zero_one(row?.auto_helper),
+			log_limit: dhcp_clean_value(row?.log_limit || ''),
+			extra_src: dhcp_clean_value(row?.extra_src || ''),
+			extra_dest: dhcp_clean_value(row?.extra_dest || '')
 		};
 
 		if (!valid_firewall_name(name))
@@ -2113,10 +2161,28 @@ function save_firewall_zones(rows) {
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 			};
 
+		if (family == null)
+			return {
+				saved: false,
+				message: 'Firewall zone family must be any, ipv4, ipv6, or blank.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
 		if (!valid_firewall_list_values(networks) || !valid_firewall_list_values(devices))
 			return {
 				saved: false,
 				message: 'Firewall zone networks and devices contain unsupported characters.',
+				changed: false,
+				zones: firewall_zone_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (!valid_firewall_rule_list(subnets) || !valid_firewall_rule_list(masq_src) || !valid_firewall_rule_list(masq_dest) || !valid_firewall_rule_list(helpers) || !valid_firewall_rule_list(log_tables) || !valid_firewall_rule_value(next.log_limit) || !valid_firewall_rule_value(next.extra_src) || !valid_firewall_rule_value(next.extra_dest))
+			return {
+				saved: false,
+				message: 'Firewall zone advanced fields contain unsupported characters.',
 				changed: false,
 				zones: firewall_zone_rows(),
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
@@ -2127,6 +2193,11 @@ function save_firewall_zones(rows) {
 			is_existing,
 			networks,
 			devices,
+			subnets,
+			masq_src,
+			masq_dest,
+			helpers,
+			log_tables,
 			next
 		});
 	}
@@ -2143,17 +2214,25 @@ function save_firewall_zones(rows) {
 
 		let networks = item.networks;
 		let devices = item.devices;
+		let subnets = item.subnets;
+		let masq_src = item.masq_src;
+		let masq_dest = item.masq_dest;
+		let helpers = item.helpers;
+		let log_tables = item.log_tables;
 		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('firewall', section, key) || '';
 
-			if ((key == 'masq' || key == 'mtu_fix') && value == '0' && current == '')
+			if ((key == 'masq' || key == 'mtu_fix' || key == 'masq6' || key == 'masq_allow_invalid') && value == '0' && current == '')
+				continue;
+
+			if (key == 'auto_helper' && value == '1' && current == '')
 				continue;
 
 			if (current != value) {
 				changed = true;
-				if ((key == 'masq' || key == 'mtu_fix') && value == '0')
+				if (((key == 'masq' || key == 'mtu_fix' || key == 'masq6' || key == 'masq_allow_invalid') && value == '0') || (key == 'auto_helper' && value == '1') || value == '')
 					uci.delete('firewall', section, key);
 				else
 					uci.set('firewall', section, key, value);
@@ -2174,6 +2253,46 @@ function save_firewall_zones(rows) {
 				uci.set('firewall', section, 'device', length(devices) == 1 ? devices[0] : devices);
 			else
 				uci.delete('firewall', section, 'device');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'subnet') || [], subnets)) {
+			changed = true;
+			if (length(subnets))
+				uci.set('firewall', section, 'subnet', length(subnets) == 1 ? subnets[0] : subnets);
+			else
+				uci.delete('firewall', section, 'subnet');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'masq_src') || [], masq_src)) {
+			changed = true;
+			if (length(masq_src))
+				uci.set('firewall', section, 'masq_src', length(masq_src) == 1 ? masq_src[0] : masq_src);
+			else
+				uci.delete('firewall', section, 'masq_src');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'masq_dest') || [], masq_dest)) {
+			changed = true;
+			if (length(masq_dest))
+				uci.set('firewall', section, 'masq_dest', length(masq_dest) == 1 ? masq_dest[0] : masq_dest);
+			else
+				uci.delete('firewall', section, 'masq_dest');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'helper') || [], helpers)) {
+			changed = true;
+			if (length(helpers))
+				uci.set('firewall', section, 'helper', length(helpers) == 1 ? helpers[0] : helpers);
+			else
+				uci.delete('firewall', section, 'helper');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'log') || [], log_tables)) {
+			changed = true;
+			if (length(log_tables))
+				uci.set('firewall', section, 'log', length(log_tables) == 1 ? log_tables[0] : log_tables);
+			else
+				uci.delete('firewall', section, 'log');
 		}
 	}
 
@@ -2322,7 +2441,29 @@ function firewall_rule_rows() {
 			dest_port: section.dest_port || '',
 			icmp_type: join('\n', dhcp_normalize_list(section.icmp_type)),
 			family: section.family || '',
+			direction: section.direction || '',
+			device: section.device || '',
+			ipset: section.ipset || '',
+			src_mac: join('\n', dhcp_normalize_list(section.src_mac)),
+			set_mark: section.set_mark || '',
+			set_xmark: section.set_xmark || '',
+			set_dscp: section.set_dscp || '',
+			set_helper: section.set_helper || '',
+			helper: section.helper || '',
+			mark: section.mark || '',
+			dscp: section.dscp || '',
 			limit: section.limit || '',
+			limit_burst: section.limit_burst || '',
+			log: section.log == '1' ? '1' : '0',
+			log_limit: section.log_limit || '',
+			extra: section.extra || '',
+			weekdays: join('\n', dhcp_normalize_list(section.weekdays)),
+			monthdays: join('\n', dhcp_normalize_list(section.monthdays)),
+			start_time: section.start_time || '',
+			stop_time: section.stop_time || '',
+			start_date: section.start_date || '',
+			stop_date: section.stop_date || '',
+			utc_time: section.utc_time == '1' ? '1' : '0',
 			target: section.target || ''
 		});
 	});
@@ -2351,6 +2492,15 @@ function firewall_family_value(value) {
 	return null;
 }
 
+function firewall_rule_target_value(value) {
+	value = uc(value || '');
+
+	if (value == 'ACCEPT' || value == 'REJECT' || value == 'DROP' || value == 'NOTRACK' || value == 'HELPER' || value == 'MARK' || value == 'DSCP')
+		return value;
+
+	return '';
+}
+
 function save_firewall_rules(rows) {
 	rows ||= [];
 	uci.load('firewall');
@@ -2370,8 +2520,12 @@ function save_firewall_rules(rows) {
 		let is_existing = length(section) && uci.get('firewall', section) == 'rule';
 		let proto = split_dhcp_list(row?.proto || '');
 		let icmp_type = split_dhcp_list(row?.icmp_type || '');
+		let src_mac = split_dhcp_list(row?.src_mac || '');
+		let weekdays = split_dhcp_list(row?.weekdays || '');
+		let monthdays = split_dhcp_list(row?.monthdays || '');
 		let family = firewall_family_value(row?.family || '');
-		let target = firewall_policy_value(row?.target || '');
+		let target = firewall_rule_target_value(row?.target || 'ACCEPT');
+		let direction = dhcp_clean_value(row?.direction || '');
 		let next = {
 			name: dhcp_clean_value(row?.name || ''),
 			enabled: dhcp_zero_one(row?.enabled),
@@ -2382,7 +2536,26 @@ function save_firewall_rules(rows) {
 			src_port: dhcp_clean_value(row?.src_port || ''),
 			dest_port: dhcp_clean_value(row?.dest_port || ''),
 			family,
+			direction,
+			device: dhcp_clean_value(row?.device || ''),
+			ipset: dhcp_clean_value(row?.ipset || ''),
+			set_mark: dhcp_clean_value(row?.set_mark || ''),
+			set_xmark: dhcp_clean_value(row?.set_xmark || ''),
+			set_dscp: dhcp_clean_value(row?.set_dscp || ''),
+			set_helper: dhcp_clean_value(row?.set_helper || ''),
+			helper: dhcp_clean_value(row?.helper || ''),
+			mark: dhcp_clean_value(row?.mark || ''),
+			dscp: dhcp_clean_value(row?.dscp || ''),
 			limit: dhcp_clean_value(row?.limit || ''),
+			limit_burst: dhcp_clean_value(row?.limit_burst || ''),
+			log: dhcp_zero_one(row?.log),
+			log_limit: dhcp_clean_value(row?.log_limit || ''),
+			extra: dhcp_clean_value(row?.extra || ''),
+			start_time: dhcp_clean_value(row?.start_time || ''),
+			stop_time: dhcp_clean_value(row?.stop_time || ''),
+			start_date: dhcp_clean_value(row?.start_date || ''),
+			stop_date: dhcp_clean_value(row?.stop_date || ''),
+			utc_time: dhcp_zero_one(row?.utc_time),
 			target
 		};
 
@@ -2398,7 +2571,7 @@ function save_firewall_rules(rows) {
 		if (!length(target))
 			return {
 				saved: false,
-				message: 'Firewall rule target must be ACCEPT, REJECT, or DROP.',
+				message: 'Firewall rule target must be ACCEPT, REJECT, DROP, NOTRACK, HELPER, MARK, or DSCP.',
 				changed: false,
 				rules: firewall_rule_rows(),
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
@@ -2408,6 +2581,15 @@ function save_firewall_rules(rows) {
 			return {
 				saved: false,
 				message: 'Firewall rule family must be any, ipv4, ipv6, or blank.',
+				changed: false,
+				rules: firewall_rule_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (direction != '' && direction != 'in' && direction != 'out')
+			return {
+				saved: false,
+				message: 'Firewall rule direction must be in, out, or blank.',
 				changed: false,
 				rules: firewall_rule_rows(),
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
@@ -2423,7 +2605,7 @@ function save_firewall_rules(rows) {
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				};
 
-			if ((key == 'src_ip' || key == 'dest_ip' || key == 'src_port' || key == 'dest_port' || key == 'limit') && !valid_firewall_rule_value(value))
+			if ((key == 'src_ip' || key == 'dest_ip' || key == 'src_port' || key == 'dest_port' || key == 'device' || key == 'ipset' || key == 'set_mark' || key == 'set_xmark' || key == 'set_dscp' || key == 'set_helper' || key == 'helper' || key == 'mark' || key == 'dscp' || key == 'limit' || key == 'limit_burst' || key == 'log_limit' || key == 'extra' || key == 'start_time' || key == 'stop_time' || key == 'start_date' || key == 'stop_date') && !valid_firewall_rule_value(value))
 				return {
 					saved: false,
 					message: 'Firewall rule match fields contain unsupported characters.',
@@ -2433,10 +2615,10 @@ function save_firewall_rules(rows) {
 				};
 		}
 
-		if (!valid_firewall_rule_list(proto) || !valid_firewall_rule_list(icmp_type))
+		if (!valid_firewall_rule_list(proto) || !valid_firewall_rule_list(icmp_type) || !valid_firewall_rule_list(src_mac) || !valid_firewall_rule_list(weekdays) || !valid_firewall_rule_list(monthdays))
 			return {
 				saved: false,
-				message: 'Firewall rule protocol and ICMP type fields contain unsupported characters.',
+				message: 'Firewall rule list fields contain unsupported characters.',
 				changed: false,
 				rules: firewall_rule_rows(),
 				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
@@ -2447,6 +2629,9 @@ function save_firewall_rules(rows) {
 			is_existing,
 			proto,
 			icmp_type,
+			src_mac,
+			weekdays,
+			monthdays,
 			next
 		});
 	}
@@ -2463,6 +2648,9 @@ function save_firewall_rules(rows) {
 
 		let proto = item.proto;
 		let icmp_type = item.icmp_type;
+		let src_mac = item.src_mac;
+		let weekdays = item.weekdays;
+		let monthdays = item.monthdays;
 		let next = item.next;
 
 		for (let key, value in next) {
@@ -2471,9 +2659,12 @@ function save_firewall_rules(rows) {
 			if (key == 'enabled' && value == '1' && current == '')
 				continue;
 
+			if ((key == 'log' || key == 'utc_time') && value == '0' && current == '')
+				continue;
+
 			if (current != value) {
 				changed = true;
-				if ((key == 'enabled' && value == '1') || value == '')
+				if ((key == 'enabled' && value == '1') || ((key == 'log' || key == 'utc_time') && value == '0') || value == '')
 					uci.delete('firewall', section, key);
 				else
 					uci.set('firewall', section, key, value);
@@ -2494,6 +2685,30 @@ function save_firewall_rules(rows) {
 				uci.set('firewall', section, 'icmp_type', length(icmp_type) == 1 ? icmp_type[0] : icmp_type);
 			else
 				uci.delete('firewall', section, 'icmp_type');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'src_mac') || [], src_mac)) {
+			changed = true;
+			if (length(src_mac))
+				uci.set('firewall', section, 'src_mac', length(src_mac) == 1 ? src_mac[0] : src_mac);
+			else
+				uci.delete('firewall', section, 'src_mac');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'weekdays') || [], weekdays)) {
+			changed = true;
+			if (length(weekdays))
+				uci.set('firewall', section, 'weekdays', length(weekdays) == 1 ? weekdays[0] : weekdays);
+			else
+				uci.delete('firewall', section, 'weekdays');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'monthdays') || [], monthdays)) {
+			changed = true;
+			if (length(monthdays))
+				uci.set('firewall', section, 'monthdays', length(monthdays) == 1 ? monthdays[0] : monthdays);
+			else
+				uci.delete('firewall', section, 'monthdays');
 		}
 	}
 
@@ -6771,6 +6986,7 @@ const methods = {
 		call: function() {
 			return respond({
 				user: 'root',
+				packageVersion: installed_package_version('luci-app-i-love-luci'),
 				features: {
 					mfa: false,
 					passkeys: false,
