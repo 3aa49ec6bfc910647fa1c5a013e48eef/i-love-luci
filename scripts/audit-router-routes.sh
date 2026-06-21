@@ -29,7 +29,7 @@ set timeout 45
 set host $env(OPENWRT_HOST)
 set user $env(OPENWRT_USER)
 set pass $env(OPENWRT_PASSWORD)
-spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host "ubus call luci.iloveluci menu_tree; printf '\n---ILOVELUCI-MENU-FILES---\n'; find /usr/share/luci/menu.d -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort; printf '\n---ILOVELUCI-LUCI-APPS---\n'; apk info -vv 2>/dev/null | grep '^luci-app-' | sort || opkg list-installed 'luci-app-*' 2>/dev/null | sort || true; printf '\n---ILOVELUCI-RELEASE---\n'; cat /etc/openwrt_release 2>/dev/null || true"
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $user@$host "ubus call luci.iloveluci menu_tree; printf '\n---ILOVELUCI-MENU-FILES---\n'; find /usr/share/luci/menu.d -maxdepth 1 -type f -name '*.json' 2>/dev/null | sort; printf '\n---ILOVELUCI-LUCI-APP-MENUS---\n'; for f in /usr/share/luci/menu.d/luci-app-*.json; do test -f \"\$f\" || continue; printf '\n---ILOVELUCI-LUCI-APP-MENU:%s---\n' \"\$f\"; cat \"\$f\"; printf '\n'; done; printf '\n---ILOVELUCI-LUCI-APPS---\n'; apk info -vv 2>/dev/null | grep '^luci-app-' | sort || opkg list-installed 'luci-app-*' 2>/dev/null | sort || true; printf '\n---ILOVELUCI-RELEASE---\n'; cat /etc/openwrt_release 2>/dev/null || true"
 expect {
 	-re "assword:" { send "$pass\r"; exp_continue }
 	eof
@@ -78,6 +78,10 @@ def extract_json_objects(text):
 						break
 
 	return objects
+
+def normalize_path(path):
+	value = "/" + str(path or "").strip("/")
+	return "/" if value == "/" else re.sub(r"/+$", "", value)
 
 menu = None
 for obj in extract_json_objects(raw):
@@ -183,6 +187,52 @@ for item in visible:
 	if item.get("actionType") == "firstchild" and item.get("firstChildPath") and item["firstChildPath"] not in route_paths:
 		failures.append(f"{path}: firstChildPath missing from menu_tree: {item['firstChildPath']}")
 
+menu_marker = raw.rfind("---ILOVELUCI-MENU-FILES---")
+app_menus_marker = raw.rfind("---ILOVELUCI-LUCI-APP-MENUS---")
+apps_marker = raw.rfind("---ILOVELUCI-LUCI-APPS---")
+release_marker = raw.rfind("---ILOVELUCI-RELEASE---")
+
+approved_native_app_exact = {
+	"/admin/system/attendedsysupgrade/configuration",
+	"/admin/system/i-love-luci-theme",
+}
+approved_native_app_prefixes = (
+	"/admin/network/firewall",
+	"/admin/system/commands",
+	"/admin/system/admin/uhttpd",
+	"/admin/services/uhttpd",
+	"/admin/services/upnp",
+)
+
+def is_approved_native_app_path(path):
+	return path in approved_native_app_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes)
+
+app_route_sources = {}
+if app_menus_marker >= 0 and apps_marker > app_menus_marker:
+	app_menu_raw = raw[app_menus_marker + len("---ILOVELUCI-LUCI-APP-MENUS---") : apps_marker]
+	matches = list(re.finditer(r"---ILOVELUCI-LUCI-APP-MENU:([^\n]+)---", app_menu_raw))
+	for index, match in enumerate(matches):
+		menu_path = match.group(1).strip()
+		start = match.end()
+		end = matches[index + 1].start() if index + 1 < len(matches) else len(app_menu_raw)
+		text = app_menu_raw[start:end].strip()
+		package = re.sub(r"\.json$", "", menu_path.rsplit("/", 1)[-1])
+		try:
+			entries = json.loads(text)
+		except json.JSONDecodeError:
+			warnings.append(f"Could not parse LuCI app menu file: {menu_path}")
+			continue
+		if not isinstance(entries, dict):
+			continue
+		for route_path in entries:
+			app_route_sources.setdefault(normalize_path(route_path), package)
+
+unapproved_app_routes = [
+	item for item in visible
+	if item.get("path", "") in app_route_sources
+	and not is_approved_native_app_path(item.get("path", ""))
+]
+
 compat_prefixes = (
 	"/admin/services/",
 	"/admin/system/commands",
@@ -192,25 +242,6 @@ compat_exact = {
 	"/admin/system/attendedsysupgrade",
 	"/admin/system/attendedsysupgrade/overview",
 }
-strict_compat_prefixes = (
-	"/admin/services/adblock-fast",
-	"/admin/services/banip",
-)
-strict_compat_exact = {
-	"/admin/system/package-manager",
-	"/admin/system/attendedsysupgrade",
-	"/admin/system/attendedsysupgrade/overview",
-}
-approved_native_app_exact = {
-	"/admin/system/attendedsysupgrade/configuration",
-}
-approved_native_app_prefixes = (
-	"/admin/network/firewall",
-	"/admin/system/commands",
-	"/admin/services/uhttpd",
-	"/admin/services/upnp",
-)
-
 for item in visible:
 	path = item.get("path", "")
 	if path in compat_exact or any(path.startswith(prefix) for prefix in compat_prefixes):
@@ -219,16 +250,22 @@ for item in visible:
 		if item.get("nativeStatus") == "supported" and not item.get("nativePath"):
 			failures.append(f"{path}: supported app route has no native path")
 
-	if path in strict_compat_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in strict_compat_prefixes):
-		if item.get("configuredMode", "auto") == "auto":
-			if item.get("effectiveMode") != "legacy":
-				failures.append(f"{path}: installed LuCI app route must default to compat unless explicitly approved")
-			if item.get("nativeAutoMode") != "legacy":
-				failures.append(f"{path}: installed LuCI app route must declare autoMode=legacy")
-
 	if path in approved_native_app_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in approved_native_app_prefixes):
 		if item.get("configuredMode", "auto") == "auto" and item.get("effectiveMode") == "modern" and item.get("nativeStatus") != "supported":
 			failures.append(f"{path}: approved native app route is modern but not fully supported")
+
+for item in unapproved_app_routes:
+	path = item.get("path", "")
+	source = app_route_sources[path]
+	if item.get("configuredMode", "auto") == "auto":
+		if item.get("effectiveMode") != "legacy":
+			failures.append(f"{path}: unapproved LuCI app route from {source} must default to compat")
+		if item.get("nativeAutoMode") != "legacy":
+			failures.append(f"{path}: unapproved LuCI app route from {source} must declare autoMode=legacy")
+	if item.get("nativeStatus") == "supported":
+		failures.append(f"{path}: unapproved LuCI app route from {source} must not be marked supported native")
+	if item.get("nativePath"):
+		failures.append(f"{path}: unapproved LuCI app route from {source} must not expose nativePath")
 
 if not routes:
 	failures.append("menu_tree.routes is empty")
@@ -237,12 +274,9 @@ if not tree:
 	failures.append("menu_tree.tree is empty")
 
 menu_files = []
-menu_marker = raw.rfind("---ILOVELUCI-MENU-FILES---")
-apps_marker = raw.rfind("---ILOVELUCI-LUCI-APPS---")
-release_marker = raw.rfind("---ILOVELUCI-RELEASE---")
-
-if menu_marker >= 0 and apps_marker > menu_marker:
-	after = raw[menu_marker + len("---ILOVELUCI-MENU-FILES---") : apps_marker]
+if menu_marker >= 0:
+	end_marker = app_menus_marker if app_menus_marker > menu_marker else apps_marker
+	after = raw[menu_marker + len("---ILOVELUCI-MENU-FILES---") : end_marker if end_marker > menu_marker else len(raw)]
 	menu_files = [line.strip() for line in after.splitlines() if line.strip().startswith("/")]
 
 if not menu_files:
@@ -278,11 +312,7 @@ legacy_app_routes = [
 		or any(item.get("path", "").startswith(prefix) for prefix in compat_prefixes)
 	)
 ]
-strict_compat_routes = [
-	item for item in visible
-	if item.get("path", "") in strict_compat_exact
-	or any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in strict_compat_prefixes)
-]
+strict_compat_routes = unapproved_app_routes
 approved_native_app_routes = [
 	item for item in visible
 	if item.get("path", "") in approved_native_app_exact
@@ -300,6 +330,7 @@ print(
 	f"strict_compat_app_routes={len(strict_compat_routes)} "
 	f"approved_native_app_routes={len(approved_native_app_routes)}"
 )
+print(f"unapproved_luci_app_routes={len(unapproved_app_routes)}")
 print(f"compat_internal_routes={len(compat_internal_routes)}")
 
 if compat_internal_routes:

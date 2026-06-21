@@ -969,11 +969,13 @@ LuCI app adapter robustness checks:
 
 - Adapter selection must be deterministic: supported native route first; otherwise LuCI compat. Generic service/UCI/file adapters can collect migration evidence but must not become user routing until full page parity is accepted.
 - Unknown current and future `luci-app-*` packages must be considered supported through compat unless ACL/menu metadata says otherwise.
+- Non-default/custom LuCI packages, including `luci-app-banip`, `luci-app-adblock-fast`, and any future third-party `luci-app-*`, must not require dedicated native route work for basic support. They are supported by the wrapper through menu/ACL discovery plus LuCI compat.
 - Newly installed LuCI apps must be discovered from live menu/ACL metadata and become usable after cache refresh or service reload, without an I Love LuCI release, manual route entry, or hard-coded package exception.
 - Installing a future LuCI app must not require a code change, rebuild, or manual route mapping for basic navigation and compat rendering.
 - Installing, upgrading, removing, or reinstalling LuCI apps must update navigation/search after menu/cache refresh without stale routes, duplicate routes, or broken compat links.
 - The adapter must preserve LuCI route parameters, query strings, ACL visibility, auth/session handling, and child-route nesting for current and future installed apps.
 - The adapter must not special-case only known apps such as banIP or AdBlock Fast; those apps should validate the generic adapter pattern used for all service-style LuCI apps.
+- Native service summaries for custom packages are migration evidence only. They must not become default user routing unless the whole LuCI app route is explicitly approved and parity-tested.
 - Route discovery must tolerate new menu files, changed route nesting, missing optional ACL files, package uninstall/reinstall, and renamed init scripts.
 - Adapter failures must degrade to LuCI compat instead of showing a broken native screen.
 - Cache refresh or service reload must be enough for newly installed LuCI apps to appear in sidebar and search.
@@ -995,7 +997,7 @@ Required tooling:
   - dead native targets for supported routes
   - routes with in-progress adapter evidence that expose `nativePath`
   - routes with in-progress adapter evidence that incorrectly default to native
-  - LuCI app routes without compat fallback
+  - unapproved `luci-app-*` menu routes that do not default to LuCI compat
 - `scripts/audit-router-route-inventory-doc.sh` compares live `menu_tree` output with [docs/ROUTE_INVENTORY.md](ROUTE_INVENTORY.md) and fails if any visible route is missing, has the wrong renderer, has the wrong target, or describes a compat route as anything other than LuCI compat with internal adapter evidence.
 - `scripts/audit-router-route-mode-guards.sh` calls `route_mode_set(mode=modern)` for every visible `nativeStatus=compat` route and fails if any compat route accepts native mode or leaves pending UCI changes.
 - `scripts/audit-router-future-luci-app.sh` temporarily installs `luci-app-example`, verifies newly discovered routes appear as LuCI compat routes with no native path, removes the package, and fails if routes or package-world changes remain.
@@ -1043,6 +1045,7 @@ Acceptance gate:
 - Compat query-string coverage was added to the local navigation tests and router HTTP smoke. The route builder must preserve query strings and hashes when mapping a LuCI path into the compat frame, and the frame URL must append `iloveluci_frame=1` without dropping an existing query. Router smoke now exercises a live compat route with an existing query parameter and fails if the route redirects to login, dispatches incorrectly, or drops the query marker.
 - Direct LuCI deep-link fallback was added to the React router. Unknown shell hashes that are valid LuCI admin paths such as `#/admin/services/banip` now render the original route through the LuCI compat frame instead of redirecting to the dashboard, with query strings and hashes preserved. Unknown non-LuCI shell routes still fall back to the dashboard. Unit tests cover this router decision; `scripts/audit-compat-contract.sh` now guards the wildcard route and path/search/hash preservation, while HTTP route smoke continues to prove the resulting compat iframe sources load on `172.16.172.1`.
 - Remaining LuCI compat routes on the current router are `/admin/network`, `/admin/network/network`, `/admin/services/adblock-fast`, `/admin/services/banip`, `/admin/services/banip/allowlist`, `/admin/services/banip/blocklist`, `/admin/services/banip/feeds`, `/admin/services/banip/firewall_log`, `/admin/services/banip/overview`, `/admin/services/banip/processing_log`, `/admin/services/banip/setreport`, `/admin/system/attendedsysupgrade`, `/admin/system/attendedsysupgrade/overview`, `/admin/system/flash`, and `/admin/system/package-manager`. They remain compat because they are either third-party LuCI app workflows, destructive/long-running system flows, package mutation flows, or network interface flows with unproven protocol-switch/reconnect/save-apply parity.
+- Route audit now reads live `/usr/share/luci/menu.d/luci-app-*.json` files and treats every visible route from an unapproved LuCI app menu as compat-only by default. This makes banIP, AdBlock Fast, and future custom LuCI apps generic compat-layer cases rather than dedicated native rewrite work.
 - Current conversion pass reviewed those remaining routes and intentionally did not promote read-only banIP log/report subviews, AdBlock Fast summaries, Package Manager previews, Flash helpers, ASU planning, or Network Interfaces. Those native adapters provide migration evidence, but exposing them as default user routes would create partial native replacements for routes where LuCI still owns the full workflow.
 - Compat gap documentation is now part of the release gate. `scripts/audit-router-compat-gap-doc.sh` reads the live route inventory from `172.16.172.1` and fails if any current LuCI compat route is missing from the gap register below, or if the register contains stale compat routes that are no longer live.
 
