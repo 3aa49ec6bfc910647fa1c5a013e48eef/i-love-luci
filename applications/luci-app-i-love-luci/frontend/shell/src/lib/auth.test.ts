@@ -13,6 +13,12 @@ describe("currentHashRoute", () => {
 		);
 	});
 
+	it("keeps direct LuCI admin compat deep links", () => {
+		expect(currentHashRoute({ hash: "#/admin/services/banip?tab=overview" } as Location)).toBe(
+			"/admin/services/banip?tab=overview",
+		);
+	});
+
 	it("falls back to the dashboard when no deep link exists", () => {
 		expect(currentHashRoute({ hash: "" } as Location)).toBe("/");
 	});
@@ -35,5 +41,15 @@ describe("loginRedirectUrl", () => {
 		expect(loginRedirectUrl("/cgi-bin/luci/admin/i-love-luci", "http://router.test", "/native/system")).toBe(
 			"http://router.test/cgi-bin/luci/admin/i-love-luci#/native/system",
 		);
+	});
+
+	it("carries direct LuCI compat routes through login", () => {
+		expect(
+			loginRedirectUrl(
+				"/cgi-bin/luci/admin/i-love-luci",
+				"http://router.test",
+				"/admin/services/banip?tab=overview",
+			),
+		).toBe("http://router.test/cgi-bin/luci/admin/i-love-luci#/admin/services/banip?tab=overview");
 	});
 });
