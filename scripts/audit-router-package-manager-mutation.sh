@@ -6,19 +6,31 @@ REMOTE_SCRIPT="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-package-mutation.XXXXXX")"
 OUTPUT_FILE="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-package-mutation-output.XXXXXX")"
 trap 'rm -f "${REMOTE_SCRIPT}" "${OUTPUT_FILE}"' EXIT
 
+if [ -f "${ROOT_DIR}/.env" ]; then
+	set -a
+	# shellcheck disable=SC1091
+	. "${ROOT_DIR}/.env"
+	set +a
+fi
+
+: "${OPENWRT_USER:=root}"
+: "${OPENWRT_PASSWORD:?OPENWRT_PASSWORD is required}"
+
 cat > "${REMOTE_SCRIPT}" <<'SH'
 #!/bin/sh
 set -eu
 
 pkg="luci-app-example"
 installed=0
+http_user=__ILOVELUCI_HTTP_USER__
+http_password=__ILOVELUCI_HTTP_PASSWORD__
 
 cleanup() {
 	if [ "${installed}" = "1" ]; then
 		ubus call luci.iloveluci package_action "{\"action\":\"remove\",\"name\":\"${pkg}\",\"simulate\":false,\"options\":{}}" >/dev/null 2>&1 || true
 		apk del "${pkg}" >/dev/null 2>&1 || true
 	fi
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json 2>/dev/null || true
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json /tmp/i-love-luci-package-menu-installed.json /tmp/i-love-luci-package-http-* 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -32,6 +44,52 @@ menu_tree_retry() {
 		sleep 1
 	done
 	return 1
+}
+
+http_smoke_installed_routes() {
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "SMOKE_FAIL curl missing"
+		return
+	fi
+
+	cookie="/tmp/i-love-luci-package-http-cookie.txt"
+	body="/tmp/i-love-luci-package-http-body.txt"
+	base="http://127.0.0.1/cgi-bin/luci"
+
+	rm -f "${cookie}" "${body}" 2>/dev/null || true
+
+	curl -fsS -c "${cookie}" -b "${cookie}" \
+		--data-urlencode "luci_username=${http_user}" \
+		--data-urlencode "luci_password=${http_password}" \
+		"${base}/" >/dev/null 2>&1 || {
+			echo "SMOKE_FAIL login failed"
+			return
+		}
+
+	paths="$(jsonfilter -i /tmp/i-love-luci-package-menu-installed.json -e '@.data.items[*].path' 2>/dev/null | grep '^/admin/example' | sort -u || true)"
+	if [ -z "${paths}" ]; then
+		echo "SMOKE_FAIL no example paths"
+		return
+	fi
+
+	for path in ${paths}; do
+		suffix="${path#/admin}"
+		url="${base}/admin${suffix}"
+		frame_url="${url}?iloveluci_frame=1"
+		status="$(curl -sS -L -c "${cookie}" -b "${cookie}" -o "${body}" -w '%{http_code}' "${url}" 2>/dev/null || printf '000')"
+		if [ "${status}" -ge 400 ] 2>/dev/null || grep -Eq 'data-iloveluci-login="true"|Log in |404 Not Found|Unable to dispatch' "${body}" 2>/dev/null; then
+			echo "SMOKE_FAIL ${path} route ${status}"
+			continue
+		fi
+
+		frame_status="$(curl -sS -L -c "${cookie}" -b "${cookie}" -o "${body}" -w '%{http_code}' "${frame_url}" 2>/dev/null || printf '000')"
+		if [ "${frame_status}" -ge 400 ] 2>/dev/null || grep -Eq 'data-iloveluci-login="true"|Log in |404 Not Found|Unable to dispatch' "${body}" 2>/dev/null; then
+			echo "SMOKE_FAIL ${path} frame ${frame_status}"
+			continue
+		fi
+
+		echo "SMOKE_OK ${path} route=${status} frame=${frame_status}"
+	done
 }
 
 echo "---ILOVELUCI-PACKAGE---"
@@ -72,7 +130,10 @@ fi
 rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* 2>/dev/null || true
 
 echo "---ILOVELUCI-MENU-INSTALLED---"
-menu_tree_retry
+menu_tree_retry | tee /tmp/i-love-luci-package-menu-installed.json
+
+echo "---ILOVELUCI-INSTALLED-HTTP-SMOKE---"
+http_smoke_installed_routes
 
 echo "---ILOVELUCI-REMOVE-RPC---"
 ubus call luci.iloveluci package_job_start "{\"action\":\"remove\",\"name\":\"${pkg}\",\"options\":{}}" > /tmp/i-love-luci-package-remove-start.json 2>/dev/null || true
@@ -105,6 +166,17 @@ sha256sum /etc/apk/world 2>/dev/null || true
 echo "---ILOVELUCI-UCI-CHANGES---"
 uci changes | wc -l
 SH
+
+python3 - "${REMOTE_SCRIPT}" "${OPENWRT_USER}" "${OPENWRT_PASSWORD}" <<'PY'
+import shlex
+import sys
+
+path, user, password = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+text = text.replace("__ILOVELUCI_HTTP_USER__", shlex.quote(user))
+text = text.replace("__ILOVELUCI_HTTP_PASSWORD__", shlex.quote(password))
+open(path, "w", encoding="utf-8").write(text)
+PY
 
 router_status=0
 "${ROOT_DIR}/scripts/router-run.sh" "${REMOTE_SCRIPT}" > "${OUTPUT_FILE}" || router_status=$?
@@ -195,6 +267,14 @@ def uci_changes_after(marker):
 			return int(line)
 	return None
 
+def lines_after_until(marker, stop_marker):
+	if marker not in raw:
+		return []
+	start = raw.find(marker) + len(marker)
+	end = raw.find(stop_marker, start)
+	text = raw[start:end if end >= 0 else len(raw)]
+	return [line.strip() for line in text.splitlines() if line.strip()]
+
 failures = []
 
 if router_status != 0:
@@ -245,6 +325,14 @@ leftover = sorted(set(new_paths) & set(removed_paths))
 if leftover:
 	failures.append("native package remove left visible routes: " + ", ".join(leftover))
 
+smoke_lines = lines_after_until("---ILOVELUCI-INSTALLED-HTTP-SMOKE---", "---ILOVELUCI-REMOVE-RPC---")
+smoke_ok = [line for line in smoke_lines if line.startswith("SMOKE_OK ")]
+smoke_fail = [line for line in smoke_lines if line.startswith("SMOKE_FAIL ")]
+if smoke_fail:
+	failures.extend(f"installed route HTTP smoke failed: {line}" for line in smoke_fail)
+if not smoke_ok:
+	failures.append("installed route HTTP smoke did not verify any routes")
+
 world_before = sha_after("---ILOVELUCI-WORLD-BEFORE---")
 world_after = sha_after("---ILOVELUCI-WORLD-AFTER---")
 if world_before and world_after and world_before != world_after:
@@ -262,6 +350,7 @@ if new_paths:
 	print("new_paths=" + ",".join(new_paths))
 print(f"install_ok={bool(install_result and install_result.get('ok'))}")
 print(f"remove_ok={bool(remove_result and remove_result.get('ok'))}")
+print(f"http_smoke_checks={len(smoke_ok)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
 print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
 
