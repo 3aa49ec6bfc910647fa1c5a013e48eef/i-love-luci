@@ -37,6 +37,7 @@ route_ui_files = {
 	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx"),
 }
 native_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/native-page.tsx")
+frontend_src_root = Path("applications/luci-app-i-love-luci/frontend/shell/src")
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
@@ -76,9 +77,9 @@ for base in scan_roots:
 			for term in ("nativeStatus", "effectiveMode", "configuredMode"):
 				if term in text:
 					failures.append(f"{relative_path}: navigation/search UI must not display route mode metadata ({term})")
+		if relative_path.is_relative_to(frontend_src_root) and "<pre" in text:
+			failures.append(f"{relative_path}: frontend source must not render raw <pre> command dumps")
 		if relative_path == native_page_file:
-			if "<pre" in text:
-				failures.append(f"{relative_path}: native pages must not render raw <pre> command dumps")
 			for function_name in ("RoutingSummary", "NftablesSummary"):
 				match = re.search(rf"function {function_name}\([^)]*\) \{{(?P<body>.*?)\nfunction ", text, re.S)
 				if not match:
