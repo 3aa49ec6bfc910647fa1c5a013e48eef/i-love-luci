@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -3393,6 +3393,7 @@ function StaticRouteEditor({
 				section: "",
 				family: "route",
 				interface: "",
+				type: "",
 				target: "",
 				netmask: "",
 				gateway: "",
@@ -3401,6 +3402,7 @@ function StaticRouteEditor({
 				source: "",
 				mtu: "",
 				onlink: "0",
+				disabled: "0",
 			},
 		]);
 	}
@@ -3409,10 +3411,44 @@ function StaticRouteEditor({
 		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
 	}
 
+	function duplicateRow(index: number) {
+		setRows((current) => {
+			const row = current[index];
+
+			if (!row) {
+				return current;
+			}
+
+			const duplicate = {
+				...row,
+				section: "",
+			};
+
+			const next = [...current];
+			next.splice(index + 1, 0, duplicate);
+			return next;
+		});
+	}
+
+	function moveRow(index: number, direction: -1 | 1) {
+		setRows((current) => {
+			const nextIndex = index + direction;
+
+			if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+				return current;
+			}
+
+			const next = [...current];
+			const [row] = next.splice(index, 1);
+			next.splice(nextIndex, 0, row);
+			return next;
+		});
+	}
+
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setSaving(true);
-		const result = await saveNetworkRoutes(rows);
+		const result = await saveNetworkRoutes(rows, rows.length === 0 && savedRows.length > 0);
 		setSaving(false);
 
 		if (!result.saved) {
@@ -3441,11 +3477,12 @@ function StaticRouteEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[84rem] text-left text-sm">
+					<table className="w-full min-w-[100rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Family</th>
 								<th className="px-3 py-2 font-medium">Interface</th>
+								<th className="px-3 py-2 font-medium">Type</th>
 								<th className="px-3 py-2 font-medium">Target</th>
 								<th className="px-3 py-2 font-medium">Netmask</th>
 								<th className="px-3 py-2 font-medium">Gateway</th>
@@ -3454,6 +3491,7 @@ function StaticRouteEditor({
 								<th className="px-3 py-2 font-medium">Source</th>
 								<th className="px-3 py-2 font-medium">MTU</th>
 								<th className="px-3 py-2 font-medium">On-link</th>
+								<th className="px-3 py-2 font-medium">Disabled</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
 						</thead>
@@ -3477,6 +3515,24 @@ function StaticRouteEditor({
 												aria-label="Interface"
 												onChange={(event) => updateRow(index, "interface", event.target.value)}
 												value={route.interface}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`static-route-type-${index}`}
+												onChange={(value) => updateRow(index, "type", value)}
+												options={[
+													["", "unicast"],
+													["local", "local"],
+													["broadcast", "broadcast"],
+													["multicast", "multicast"],
+													["unreachable", "unreachable"],
+													["prohibit", "prohibit"],
+													["blackhole", "blackhole"],
+													["anycast", "anycast"],
+													["throw", "throw"],
+												]}
+												value={route.type}
 											/>
 										</td>
 										<td className="px-3 py-3">
@@ -3542,22 +3598,64 @@ function StaticRouteEditor({
 												value={route.onlink}
 											/>
 										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`static-route-disabled-${index}`}
+												onChange={(value) => updateRow(index, "disabled", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={route.disabled}
+											/>
+										</td>
 										<td className="px-3 py-3 text-right">
-											<Button
-												aria-label="Remove route"
-												onClick={() => removeRow(index)}
-												size="icon"
-												type="button"
-												variant="ghost"
-											>
-												<Trash2 className="size-4" />
-											</Button>
+											<div className="inline-flex gap-1">
+												<Button
+													aria-label="Move route up"
+													disabled={index === 0}
+													onClick={() => moveRow(index, -1)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<ArrowUp className="size-4" />
+												</Button>
+												<Button
+													aria-label="Move route down"
+													disabled={index === rows.length - 1}
+													onClick={() => moveRow(index, 1)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<ArrowDown className="size-4" />
+												</Button>
+												<Button
+													aria-label="Duplicate route"
+													onClick={() => duplicateRow(index)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<Copy className="size-4" />
+												</Button>
+												<Button
+													aria-label="Remove route"
+													onClick={() => removeRow(index)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<Trash2 className="size-4" />
+												</Button>
+											</div>
 										</td>
 									</tr>
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={11}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={13}>
 										No static routes configured.
 									</td>
 								</tr>
@@ -3616,9 +3714,16 @@ function PolicyRuleEditor({
 				priority: "",
 				lookup: "",
 				fwmark: "",
+				ipproto: "",
+				goto: "",
+				sport: "",
+				dport: "",
 				tos: "",
+				uidrange: "",
+				suppress_prefixlength: "",
 				action: "",
 				invert: "0",
+				disabled: "0",
 			},
 		]);
 	}
@@ -3627,10 +3732,44 @@ function PolicyRuleEditor({
 		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
 	}
 
+	function duplicateRow(index: number) {
+		setRows((current) => {
+			const row = current[index];
+
+			if (!row) {
+				return current;
+			}
+
+			const duplicate = {
+				...row,
+				section: "",
+			};
+
+			const next = [...current];
+			next.splice(index + 1, 0, duplicate);
+			return next;
+		});
+	}
+
+	function moveRow(index: number, direction: -1 | 1) {
+		setRows((current) => {
+			const nextIndex = index + direction;
+
+			if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+				return current;
+			}
+
+			const next = [...current];
+			const [row] = next.splice(index, 1);
+			next.splice(nextIndex, 0, row);
+			return next;
+		});
+	}
+
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setSaving(true);
-		const result = await saveNetworkRules(rows);
+		const result = await saveNetworkRules(rows, rows.length === 0 && savedRows.length > 0);
 		setSaving(false);
 
 		if (!result.saved) {
@@ -3659,7 +3798,7 @@ function PolicyRuleEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[82rem] text-left text-sm">
+					<table className="w-full min-w-[126rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Family</th>
@@ -3669,10 +3808,17 @@ function PolicyRuleEditor({
 								<th className="px-3 py-2 font-medium">Destination</th>
 								<th className="px-3 py-2 font-medium">Priority</th>
 								<th className="px-3 py-2 font-medium">Lookup</th>
+								<th className="px-3 py-2 font-medium">Protocol</th>
+								<th className="px-3 py-2 font-medium">Jump</th>
 								<th className="px-3 py-2 font-medium">Mark</th>
+								<th className="px-3 py-2 font-medium">Source port</th>
+								<th className="px-3 py-2 font-medium">Dest port</th>
 								<th className="px-3 py-2 font-medium">TOS</th>
+								<th className="px-3 py-2 font-medium">UID range</th>
+								<th className="px-3 py-2 font-medium">Suppress prefix</th>
 								<th className="px-3 py-2 font-medium">Action</th>
 								<th className="px-3 py-2 font-medium">Invert</th>
+								<th className="px-3 py-2 font-medium">Disabled</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
 						</thead>
@@ -3727,13 +3873,69 @@ function PolicyRuleEditor({
 											/>
 										</td>
 										<td className="px-3 py-3">
+											<Input
+												aria-label="IP protocol"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "ipproto", event.target.value)}
+												value={rule.ipproto}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Jump to rule"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "goto", event.target.value)}
+												value={rule.goto}
+											/>
+										</td>
+										<td className="px-3 py-3">
 											<Input aria-label="Mark" onChange={(event) => updateRow(index, "fwmark", event.target.value)} value={rule.fwmark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Source port"
+												onChange={(event) => updateRow(index, "sport", event.target.value)}
+												value={rule.sport}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Destination port"
+												onChange={(event) => updateRow(index, "dport", event.target.value)}
+												value={rule.dport}
+											/>
 										</td>
 										<td className="px-3 py-3">
 											<Input aria-label="TOS" onChange={(event) => updateRow(index, "tos", event.target.value)} value={rule.tos} />
 										</td>
 										<td className="px-3 py-3">
-											<Input aria-label="Action" onChange={(event) => updateRow(index, "action", event.target.value)} value={rule.action} />
+											<Input
+												aria-label="UID range"
+												onChange={(event) => updateRow(index, "uidrange", event.target.value)}
+												value={rule.uidrange}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Suppress prefix"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "suppress_prefixlength", event.target.value)}
+												value={rule.suppress_prefixlength}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`policy-rule-action-${index}`}
+												onChange={(value) => updateRow(index, "action", value)}
+												options={[
+													["", "unicast"],
+													["unreachable", "unreachable"],
+													["prohibit", "prohibit"],
+													["blackhole", "blackhole"],
+													["throw", "throw"],
+												]}
+												value={rule.action}
+											/>
 										</td>
 										<td className="px-3 py-3">
 											<SelectField
@@ -3746,22 +3948,64 @@ function PolicyRuleEditor({
 												value={rule.invert}
 											/>
 										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`policy-rule-disabled-${index}`}
+												onChange={(value) => updateRow(index, "disabled", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={rule.disabled}
+											/>
+										</td>
 										<td className="px-3 py-3 text-right">
-											<Button
-												aria-label="Remove rule"
-												onClick={() => removeRow(index)}
-												size="icon"
-												type="button"
-												variant="ghost"
-											>
-												<Trash2 className="size-4" />
-											</Button>
+											<div className="inline-flex gap-1">
+												<Button
+													aria-label="Move rule up"
+													disabled={index === 0}
+													onClick={() => moveRow(index, -1)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<ArrowUp className="size-4" />
+												</Button>
+												<Button
+													aria-label="Move rule down"
+													disabled={index === rows.length - 1}
+													onClick={() => moveRow(index, 1)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<ArrowDown className="size-4" />
+												</Button>
+												<Button
+													aria-label="Duplicate rule"
+													onClick={() => duplicateRow(index)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<Copy className="size-4" />
+												</Button>
+												<Button
+													aria-label="Remove rule"
+													onClick={() => removeRow(index)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<Trash2 className="size-4" />
+												</Button>
+											</div>
 										</td>
 									</tr>
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={12}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={19}>
 										No policy rules configured.
 									</td>
 								</tr>
@@ -3992,6 +4236,7 @@ function normalizeStaticRoute(route: StaticRoute): StaticRoute {
 		section: route.section ?? "",
 		family: route.family === "route6" ? "route6" : "route",
 		interface: route.interface ?? "",
+		type: route.type ?? "",
 		target: route.target ?? "",
 		netmask: route.family === "route6" ? "" : (route.netmask ?? ""),
 		gateway: route.gateway ?? "",
@@ -4000,6 +4245,7 @@ function normalizeStaticRoute(route: StaticRoute): StaticRoute {
 		source: route.source ?? "",
 		mtu: route.mtu ?? "",
 		onlink: route.onlink === "1" ? "1" : "0",
+		disabled: route.disabled === "1" ? "1" : "0",
 	};
 }
 
@@ -4014,9 +4260,16 @@ function normalizePolicyRule(rule: PolicyRule): PolicyRule {
 		priority: rule.priority ?? "",
 		lookup: rule.lookup ?? "",
 		fwmark: rule.fwmark ?? "",
+		ipproto: rule.ipproto ?? "",
+		goto: rule.goto ?? "",
+		sport: rule.sport ?? "",
+		dport: rule.dport ?? "",
 		tos: rule.tos ?? "",
+		uidrange: rule.uidrange ?? "",
+		suppress_prefixlength: rule.suppress_prefixlength ?? "",
 		action: rule.action ?? "",
 		invert: rule.invert === "1" ? "1" : "0",
+		disabled: rule.disabled === "1" ? "1" : "0",
 	};
 }
 

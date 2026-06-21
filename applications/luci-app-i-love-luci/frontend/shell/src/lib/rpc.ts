@@ -212,6 +212,7 @@ export type StaticRoute = {
 	section: string;
 	family: string;
 	interface: string;
+	type: string;
 	target: string;
 	netmask: string;
 	gateway: string;
@@ -220,6 +221,7 @@ export type StaticRoute = {
 	source: string;
 	mtu: string;
 	onlink: string;
+	disabled: string;
 };
 
 export type PolicyRule = {
@@ -232,9 +234,16 @@ export type PolicyRule = {
 	priority: string;
 	lookup: string;
 	fwmark: string;
+	ipproto: string;
+	goto: string;
+	sport: string;
+	dport: string;
 	tos: string;
+	uidrange: string;
+	suppress_prefixlength: string;
 	action: string;
 	invert: string;
+	disabled: string;
 };
 
 export type CoreSettings = {
@@ -1293,9 +1302,9 @@ export async function saveDropbearConfigs(rows: DropbearConfigInput[]): Promise<
 	}
 }
 
-export async function saveLedConfig(rows: LedConfigRow[]): Promise<LedConfigResult> {
+export async function saveLedConfig(rows: LedConfigRow[], allowEmpty = false): Promise<LedConfigResult> {
 	try {
-		return await callBridge<LedConfigResult>("led_config_save", { rows });
+		return await callBridge<LedConfigResult>("led_config_save", { rows, allow_empty: allowEmpty });
 	}
 	catch {
 		return {
@@ -1547,9 +1556,9 @@ export async function saveDnsmasqConfig(config: DnsmasqConfigInput): Promise<Dns
 	}
 }
 
-export async function saveNetworkRoutes(rows: StaticRoute[]): Promise<StaticRoutesResult> {
+export async function saveNetworkRoutes(rows: StaticRoute[], allowEmpty = false): Promise<StaticRoutesResult> {
 	try {
-		return await callBridge<StaticRoutesResult>("network_routes_save", { rows });
+		return await callBridge<StaticRoutesResult>("network_routes_save", { rows, allow_empty: allowEmpty });
 	}
 	catch {
 		return {
@@ -1562,9 +1571,9 @@ export async function saveNetworkRoutes(rows: StaticRoute[]): Promise<StaticRout
 	}
 }
 
-export async function saveNetworkRules(rows: PolicyRule[]): Promise<PolicyRulesResult> {
+export async function saveNetworkRules(rows: PolicyRule[], allowEmpty = false): Promise<PolicyRulesResult> {
 	try {
-		return await callBridge<PolicyRulesResult>("network_rules_save", { rows });
+		return await callBridge<PolicyRulesResult>("network_rules_save", { rows, allow_empty: allowEmpty });
 	}
 	catch {
 		return {

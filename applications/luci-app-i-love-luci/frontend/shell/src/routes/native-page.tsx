@@ -3808,7 +3808,7 @@ function LedConfigEditor({ ledNames, sections }: { ledNames: string[]; sections:
 
 	async function save() {
 		setSaving(true);
-		const result = await saveLedConfig(rows);
+		const result = await saveLedConfig(rows, rows.length === 0 && savedRows.length > 0);
 		setSaving(false);
 
 		if (!result.saved) {

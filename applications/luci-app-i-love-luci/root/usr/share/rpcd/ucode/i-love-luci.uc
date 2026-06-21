@@ -35,7 +35,7 @@ const nativeRoutes = {
 	'/admin/status/channel_analysis': { status: 'partial', nativePath: '/native/wireless' },
 	'/admin/network': { status: 'partial', nativePath: '/core/network' },
 	'/admin/network/network': { status: 'partial', nativePath: '/core/network' },
-	'/admin/network/routes': { status: 'partial', nativePath: '/core/network' },
+	'/admin/network/routes': { status: 'supported', nativePath: '/core/network' },
 	'/admin/network/wireless': { status: 'partial', nativePath: '/native/wireless' },
 	'/admin/network/diagnostics': { status: 'supported', nativePath: '/native/diagnostics' },
 	'/admin/network/dhcp': { status: 'partial', nativePath: '/core/dhcp' },
@@ -1192,6 +1192,7 @@ function network_route_rows() {
 				section: section['.name'] || '',
 				family: section_type,
 				interface: section.interface || '',
+				type: section.type || '',
 				target: section.target || '',
 				netmask: section.netmask || '',
 				gateway: section.gateway || '',
@@ -1199,7 +1200,8 @@ function network_route_rows() {
 				table: section.table || '',
 				source: section.source || '',
 				mtu: section.mtu || '',
-				onlink: section.onlink || ''
+				onlink: section.onlink || '',
+				disabled: section.disabled || ''
 			});
 		});
 	}
@@ -1529,19 +1531,35 @@ function save_network_devices(rows) {
 	};
 }
 
-function save_network_routes(rows) {
+function save_network_routes(rows, allow_empty) {
 	rows ||= [];
+	allow_empty = allow_empty == true;
 	uci.load('network');
 
 	let changed = false;
+	let config_changed = false;
 	let keep = {};
 	let existing = {};
+	let existing_count = 0;
+	let existing_order = [];
+	let next_order = [];
 
 	for (let section_type in ['route', 'route6']) {
 		uci.foreach('network', section_type, function(section) {
 			existing[section['.name']] = true;
+			push(existing_order, section['.name']);
+			existing_count++;
 		});
 	}
+
+	if (!length(rows) && existing_count && !allow_empty)
+		return {
+			saved: false,
+			message: 'Refusing to remove all static routes without confirmation.',
+			changed: false,
+			routes: network_route_rows(),
+			sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+		};
 
 	let validated = [];
 
@@ -1551,6 +1569,7 @@ function save_network_routes(rows) {
 		let is_existing = length(section) && uci.get('network', section) == family;
 		let next = {
 			interface: dhcp_clean_value(row?.interface || ''),
+			type: dhcp_clean_value(row?.type || ''),
 			target: dhcp_clean_value(row?.target || ''),
 			netmask: family == 'route' ? dhcp_clean_value(row?.netmask || '') : '',
 			gateway: dhcp_clean_value(row?.gateway || ''),
@@ -1558,7 +1577,8 @@ function save_network_routes(rows) {
 			table: dhcp_clean_value(row?.table || ''),
 			source: dhcp_clean_value(row?.source || ''),
 			mtu: dhcp_clean_value(row?.mtu || ''),
-			onlink: dhcp_zero_one(row?.onlink)
+			onlink: dhcp_zero_one(row?.onlink),
+			disabled: dhcp_zero_one(row?.disabled)
 		};
 
 		if (!valid_network_route_interface(next.interface))
@@ -1580,7 +1600,7 @@ function save_network_routes(rows) {
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
 
-			if ((key == 'target' || key == 'netmask' || key == 'gateway' || key == 'table' || key == 'source') && !valid_network_route_text(value))
+			if ((key == 'type' || key == 'target' || key == 'netmask' || key == 'gateway' || key == 'table' || key == 'source') && !valid_network_route_text(value))
 				return {
 					saved: false,
 					message: 'Static route contains unsupported characters.',
@@ -1604,21 +1624,24 @@ function save_network_routes(rows) {
 		if (!item.is_existing) {
 			section = uci.add('network', item.family);
 			changed = true;
+			config_changed = true;
 		}
 
 		keep[section] = true;
+		push(next_order, section);
 
 		let next = item.next;
 
 		for (let key, value in next) {
 			let current = uci.get('network', section, key) || '';
 
-			if (key == 'onlink' && value == '0' && current == '')
+			if ((key == 'onlink' || key == 'disabled') && value == '0' && current == '')
 				continue;
 
 			if (current != value) {
 				changed = true;
-				if ((key == 'onlink' && value == '0') || value == '')
+				config_changed = true;
+				if (((key == 'onlink' || key == 'disabled') && value == '0') || value == '')
 					uci.delete('network', section, key);
 				else
 					uci.set('network', section, key, value);
@@ -1630,11 +1653,43 @@ function save_network_routes(rows) {
 		if (!keep[section]) {
 			uci.delete('network', section);
 			changed = true;
+			config_changed = true;
 		}
 	}
 
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
 	if (changed) {
-		uci.commit('network');
+		if (config_changed)
+			uci.commit('network');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder network.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit network >/dev/null 2>&1 || true');
+		}
+
 		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
 	}
 
@@ -1669,9 +1724,16 @@ function network_rule_rows() {
 				priority: section.priority || '',
 				lookup: section.lookup || section.table || '',
 				fwmark: section.fwmark || section.mark || '',
+				ipproto: section.ipproto || '',
+				goto: section.goto || '',
+				sport: section.sport || '',
+				dport: section.dport || '',
 				tos: section.tos || '',
+				uidrange: section.uidrange || '',
+				suppress_prefixlength: section.suppress_prefixlength || '',
 				action: section.action || '',
-				invert: section.invert || ''
+				invert: section.invert || '',
+				disabled: section.disabled || ''
 			});
 		});
 	}
@@ -1683,19 +1745,35 @@ function valid_network_rule_name(value) {
 	return value == '' || replace(value, /[^A-Za-z0-9_.:-]/g, '') == value;
 }
 
-function save_network_rules(rows) {
+function save_network_rules(rows, allow_empty) {
 	rows ||= [];
+	allow_empty = allow_empty == true;
 	uci.load('network');
 
 	let changed = false;
+	let config_changed = false;
 	let keep = {};
 	let existing = {};
+	let existing_count = 0;
+	let existing_order = [];
+	let next_order = [];
 
 	for (let section_type in ['rule', 'rule6']) {
 		uci.foreach('network', section_type, function(section) {
 			existing[section['.name']] = true;
+			push(existing_order, section['.name']);
+			existing_count++;
 		});
 	}
+
+	if (!length(rows) && existing_count && !allow_empty)
+		return {
+			saved: false,
+			message: 'Refusing to remove all policy rules without confirmation.',
+			changed: false,
+			rules: network_rule_rows(),
+			sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+		};
 
 	let validated = [];
 
@@ -1711,16 +1789,23 @@ function save_network_rules(rows) {
 			priority: dhcp_clean_value(row?.priority || ''),
 			lookup: dhcp_clean_value(row?.lookup || ''),
 			fwmark: dhcp_clean_value(row?.fwmark || ''),
+			ipproto: dhcp_clean_value(row?.ipproto || ''),
+			goto: dhcp_clean_value(row?.goto || ''),
+			sport: dhcp_clean_value(row?.sport || ''),
+			dport: dhcp_clean_value(row?.dport || ''),
 			tos: dhcp_clean_value(row?.tos || ''),
+			uidrange: dhcp_clean_value(row?.uidrange || ''),
+			suppress_prefixlength: dhcp_clean_value(row?.suppress_prefixlength || ''),
 			action: dhcp_clean_value(row?.action || ''),
-			invert: dhcp_zero_one(row?.invert)
+			invert: dhcp_zero_one(row?.invert),
+			disabled: dhcp_zero_one(row?.disabled)
 		};
 
 		for (let key, value in next) {
-			if (key == 'priority' && value != '' && !dhcp_numeric_value(value))
+			if ((key == 'priority' || key == 'ipproto' || key == 'goto' || key == 'suppress_prefixlength') && value != '' && !dhcp_numeric_value(value))
 				return {
 					saved: false,
-					message: 'Policy rule priority must be numeric.',
+					message: 'Policy rule priority, protocol, jump, and suppress prefix fields must be numeric.',
 					changed: false,
 					rules: network_rule_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
@@ -1735,7 +1820,7 @@ function save_network_rules(rows) {
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
 
-			if ((key == 'src' || key == 'dest' || key == 'fwmark' || key == 'tos') && !valid_network_route_text(value))
+			if ((key == 'src' || key == 'dest' || key == 'fwmark' || key == 'sport' || key == 'dport' || key == 'tos' || key == 'uidrange') && !valid_network_route_text(value))
 				return {
 					saved: false,
 					message: 'Policy rule match fields contain unsupported characters.',
@@ -1759,9 +1844,11 @@ function save_network_rules(rows) {
 		if (!item.is_existing) {
 			section = uci.add('network', item.family);
 			changed = true;
+			config_changed = true;
 		}
 
 		keep[section] = true;
+		push(next_order, section);
 
 		let next = item.next;
 
@@ -1773,12 +1860,20 @@ function save_network_rules(rows) {
 			else if (key == 'fwmark')
 				current ||= uci.get('network', section, 'mark') || '';
 
-			if (key == 'invert' && value == '0' && current == '')
+			if ((key == 'invert' || key == 'disabled') && value == '0' && current == '')
 				continue;
 
 			if (current != value) {
 				changed = true;
-				if ((key == 'invert' && value == '0') || value == '')
+				config_changed = true;
+				if (key == 'fwmark') {
+					uci.delete('network', section, 'fwmark');
+					if (value == '')
+						uci.delete('network', section, 'mark');
+					else
+						uci.set('network', section, 'mark', value);
+				}
+				else if (((key == 'invert' || key == 'disabled') && value == '0') || value == '')
 					uci.delete('network', section, key);
 				else
 					uci.set('network', section, key, value);
@@ -1790,11 +1885,43 @@ function save_network_rules(rows) {
 		if (!keep[section]) {
 			uci.delete('network', section);
 			changed = true;
+			config_changed = true;
 		}
 	}
 
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
 	if (changed) {
-		uci.commit('network');
+		if (config_changed)
+			uci.commit('network');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder network.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit network >/dev/null 2>&1 || true');
+		}
+
 		system('/etc/init.d/network reload >/dev/null 2>&1 || true');
 	}
 
@@ -4381,8 +4508,9 @@ function save_system_settings(config) {
 	};
 }
 
-function save_led_config(rows) {
+function save_led_config(rows, allow_empty) {
 	rows ||= [];
+	allow_empty = allow_empty == true;
 	uci.load('system');
 
 	let changed = false;
@@ -4397,7 +4525,7 @@ function save_led_config(rows) {
 		push(existing_order, section['.name']);
 	});
 
-	if (!length(rows) && length(existing_order))
+	if (!length(rows) && length(existing_order) && !allow_empty)
 		return {
 			saved: false,
 			message: 'Refusing to remove all LED actions without confirmation.',
@@ -6454,11 +6582,12 @@ const methods = {
 
 	network_routes_save: {
 		args: {
-			rows: []
+			rows: [],
+			allow_empty: false
 		},
 		call: function(request) {
 			try {
-				return respond(save_network_routes(request.args.rows || []));
+				return respond(save_network_routes(request.args.rows || [], request.args.allow_empty));
 			}
 			catch (e) {
 				return respond({
@@ -6474,11 +6603,12 @@ const methods = {
 
 	network_rules_save: {
 		args: {
-			rows: []
+			rows: [],
+			allow_empty: false
 		},
 		call: function(request) {
 			try {
-				return respond(save_network_rules(request.args.rows || []));
+				return respond(save_network_rules(request.args.rows || [], request.args.allow_empty));
 			}
 			catch (e) {
 				return respond({
@@ -6800,11 +6930,12 @@ const methods = {
 
 	led_config_save: {
 		args: {
-			rows: []
+			rows: [],
+			allow_empty: false
 		},
 		call: function(request) {
 			try {
-				return respond(save_led_config(request.args.rows || []));
+				return respond(save_led_config(request.args.rows || [], request.args.allow_empty));
 			}
 			catch (e) {
 				return respond({
