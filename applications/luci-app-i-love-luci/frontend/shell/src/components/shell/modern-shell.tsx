@@ -1,20 +1,48 @@
 import { Outlet } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Header } from "@/components/shell/header";
 import { Sidebar } from "@/components/shell/sidebar";
 import { getShellConfig } from "@/lib/config";
+import { getSessionInfo } from "@/lib/rpc";
 
 export function ModernShell() {
 	const [sidebarOpen, setSidebarOpen] = useState(false);
+	const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(() => {
+		if (typeof window === "undefined") {
+			return true;
+		}
+
+		return window.localStorage.getItem("i-love-luci.desktopSidebarOpen") !== "false";
+	});
+	const [packageVersion, setPackageVersion] = useState<string | null>(null);
 	const config = getShellConfig();
+
+	useEffect(() => {
+		void getSessionInfo().then((session) => {
+			setPackageVersion(session.packageVersion || null);
+		});
+	}, []);
+
+	useEffect(() => {
+		window.localStorage.setItem("i-love-luci.desktopSidebarOpen", desktopSidebarOpen ? "true" : "false");
+	}, [desktopSidebarOpen]);
+
+	function toggleSidebar() {
+		if (window.matchMedia("(min-width: 1024px)").matches) {
+			setDesktopSidebarOpen((value) => !value);
+			return;
+		}
+
+		setSidebarOpen(true);
+	}
 
 	return (
 		<div className="iloveluci-shell">
-			<Header onMenuClick={() => setSidebarOpen(true)} />
-			<div className="flex min-h-[calc(100vh-4rem)]">
-				<Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-				<main className="flex min-w-0 flex-1 flex-col px-4 py-5 sm:px-6 lg:px-8">
+			<Header navigationOpen={sidebarOpen || desktopSidebarOpen} onMenuClick={toggleSidebar} />
+			<div className="flex min-h-0 flex-1 overflow-hidden">
+				<Sidebar desktopOpen={desktopSidebarOpen} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+				<main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
 					<div className="min-w-0 flex-1">
 						<Outlet />
 					</div>
@@ -28,7 +56,7 @@ export function ModernShell() {
 							<GitHubMark className="size-4" />
 							<span>GitHub</span>
 						</a>
-						<span>I Love LuCI {config.version}</span>
+						<span>{packageVersion ? `I Love LuCI ${packageVersion}` : "I Love LuCI"}</span>
 					</footer>
 				</main>
 			</div>

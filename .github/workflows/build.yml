@@ -110,7 +110,7 @@ jobs:
           OPENWRT_VERSION: ${{ matrix.openwrt_version }}
           OPENWRT_TARGET: ${{ matrix.openwrt_target }}
           PACKAGE_FORMAT: ${{ matrix.package_format }}
-          PACKAGE_SPECS: luci-app-i-love-luci:applications/luci-app-i-love-luci
+          PACKAGE_SPECS: luci-app-i-love-luci:applications/luci-app-i-love-luci i-love-luci-console:utils/i-love-luci-console
           PACKAGE_RELEASE: ${{ steps.package-channel.outputs.release }}
           JOBS: 1
         run: scripts/build-openwrt-package.sh

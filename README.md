@@ -1,6 +1,41 @@
 # I Love LuCI
 
-I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a compatibility bridge for existing LuCI pages.
+I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a LuCI compat bridge for existing LuCI pages.
+
+## Sysupgrade Compatibility
+
+`sysupgrade` does not guarantee that manually installed package files survive an OpenWrt release upgrade. Configuration can be preserved when users keep settings, but static package files under `/www`, LuCI templates, menu files, and `rpcd` scripts must be present in the upgraded firmware image or reinstalled from the package feed after the upgrade.
+
+The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` is included in OpenWrt configuration backups. This protects settings, not the package binaries.
+
+Recommended upgrade paths:
+
+- Build `luci-app-i-love-luci` into the firmware image.
+- Use Attended Sysupgrade or `owut` so installed packages are carried into the generated image where supported.
+- Keep the I Love LuCI package feed configured, then reinstall `luci-app-i-love-luci` after a manual `sysupgrade`.
+
+Current package shape:
+
+- The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
+- The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
+- The LuCI compat bridge only works when LuCI is installed.
+- The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` is not installed or configured by default; it is an optional trusted-LAN development fallback only. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
+
+Future-proof target:
+
+- Split a standalone `i-love-luci` package from the LuCI-specific compatibility layer.
+- Serve the React app directly through `uhttpd` instead of LuCI dispatcher/templates.
+- Keep `rpcd`/`ubus` as the backend bridge, with first-party auth/session handling.
+- Make LuCI optional: if installed, expose LuCI routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
+- Keep release-specific feeds for 24.10/opkg and 25.12+/apk until the package manager transition has settled.
+
+Relevant OpenWrt docs:
+
+- [Sysupgrade using LuCI and CLI](https://openwrt.org/docs/guide-user/installation/generic.sysupgrade)
+- [OpenWrt Upgrade Tool (`owut`)](https://openwrt.org/docs/guide-user/installation/sysupgrade.owut)
+- [Attended Sysupgrade](https://openwrt.org/docs/guide-user/installation/attended.sysupgrade)
+- [Creating OpenWrt packages](https://openwrt.org/docs/guide-developer/packages)
+- [Using the OpenWrt SDK](https://openwrt.org/docs/guide-developer/toolchain/using_the_sdk)
 
 ## Install Without Building
 
@@ -38,7 +73,7 @@ Then open:
 http://router-address/cgi-bin/luci/admin/i-love-luci
 ```
 
-Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. If you do not want to add the feed, install the matching GitHub Release asset manually with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
+Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. Feed installs pull the `i-love-luci-console` helper through the package dependency. If you do not want to add the feed, install the matching GitHub Release assets manually: install both `i-love-luci-console` and `luci-app-i-love-luci` with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
 
 ## Screenshots
 
@@ -64,13 +99,23 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 
 - Native React dashboard for bandwidth, CPU, and memory telemetry.
 - Dynamic LuCI route discovery from installed menu definitions.
-- Legacy bridge for LuCI apps that have not yet been rebuilt as native screens.
+- LuCI compat bridge for LuCI apps that have not yet been rebuilt as native screens.
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
-- Web console bridge backed by `ttyd`.
-- Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
+- Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session.
+- Route rendering settings so individual LuCI paths can use native, LuCI compat, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
+
+## Route Model
+
+User-facing routes have three outcomes:
+
+- `Native`: the React/Vite screen has enough parity evidence to be the default.
+- `LuCI compat`: the original LuCI route opens inside the I Love LuCI shell, preserving the LuCI app's JavaScript, forms, save/apply behavior, deep links, and package-specific side effects.
+- `Hidden`: the route is intentionally omitted from I Love LuCI navigation/search.
+
+Unknown or newly installed `luci-app-*` routes are discovered from LuCI menu metadata and default to LuCI compat unless a native adapter explicitly supports the full workflow. Current release audits on the test router report 57 visible routes: 42 native routes, 15 LuCI compat routes, and 0 unsupported routes. Remaining compat routes are network interfaces, firmware flash, attended sysupgrade overview, package manager, banIP, and AdBlock Fast workflows where LuCI still owns behavior that is risky, destructive, long-running, or package-specific.
 
 ## Project Layout
 
@@ -88,6 +133,15 @@ applications/luci-app-i-love-luci/
 ```
 
 ## Build Frontend
+
+Check the local development toolchain before building or deploying:
+
+```sh
+scripts/check-dev-tools.sh
+```
+
+Required local tools are Node.js, npm, `python3`, `expect`, `jq`, `make`, `curl`, and `gh`.
+Optional tools improve the loop: `ucode` for local bridge syntax checks, `usign` for local feed signing checks, `shellcheck` for script linting, and `jsonfilter` for matching OpenWrt JSON command behavior. The OpenWrt SDKs are Linux x86_64, so full package builds should run in GitHub Actions or an amd64 Linux/Docker environment when working from macOS.
 
 ```sh
 cd applications/luci-app-i-love-luci/frontend/shell
@@ -152,14 +206,18 @@ Stable package version is `1.0.0-r4`. Development and UAT work is validated thro
 
 ## OpenWrt Source Integration
 
-To build inside an OpenWrt source tree, copy or overlay `applications/luci-app-i-love-luci` into the LuCI feed:
+To build inside an OpenWrt source tree, copy or overlay both packages into the LuCI feed:
 
 ```sh
 mkdir -p feeds/luci/applications/luci-app-i-love-luci
+mkdir -p feeds/luci/utils/i-love-luci-console
 rsync -a applications/luci-app-i-love-luci/ feeds/luci/applications/luci-app-i-love-luci/
+rsync -a utils/i-love-luci-console/ feeds/luci/utils/i-love-luci-console/
 ./scripts/feeds update luci
+./scripts/feeds install i-love-luci-console
 ./scripts/feeds install luci-app-i-love-luci
 make menuconfig
+make package/feeds/luci/i-love-luci-console/compile V=s
 make package/feeds/luci/luci-app-i-love-luci/compile V=s
 ```
 
@@ -169,18 +227,58 @@ Enable `LuCI -> Applications -> luci-app-i-love-luci` in `menuconfig` if buildin
 
 Local router credentials belong in `.env`, which is ignored by Git.
 
-For 25.12/apk artifacts:
+For day-to-day development, use the reusable router scripts instead of hand-written SSH/SCP commands. The scripts read:
+
+- `OPENWRT_HOST`
+- `OPENWRT_USER` defaults to `root`
+- `OPENWRT_PASSWORD`
+
+Live asset deploy, useful while iterating on the frontend or rpcd bridge:
 
 ```sh
-scp -O dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted --force-overwrite /tmp/luci-app-i-love-luci-*.apk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
+scripts/deploy-router-assets.sh
+scripts/router-run.sh - <<'EOF'
+ubus call luci.iloveluci session_info
+uci changes
+EOF
 ```
 
-For 24.10/opkg artifacts:
+`scripts/deploy-router-assets.sh --no-build` redeploys the current generated assets, rpcd bridge, and login templates without rebuilding.
+
+Full package install, useful when validating release artifacts:
 
 ```sh
-scp -O dist/openwrt/24.10.7/rockchip-armv8/luci-app-i-love-luci_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg install /tmp/luci-app-i-love-luci_*.ipk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
+scripts/router-install-package.sh \
+  dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk \
+  dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk
+```
+
+Targeted command and file copy helpers:
+
+```sh
+scripts/router-run.sh ./local-router-check.sh
+scripts/router-copy.sh ./local-file /tmp/local-file
+```
+
+After install, run the full readiness audit:
+
+```sh
+scripts/audit-release-readiness.sh
+```
+
+The readiness audit runs frontend tests/typecheck/lint/build, committed generated-asset validation, shell syntax checks, the compat contract audit, live route inventory validation, compat gap documentation validation, route audit, route-mode guards, native page audit, HTTP route smoke, future LuCI app install/remove audit, and package-manager mutation audit. It verifies that route terminology stays on the supported/compat/unsupported contract, route mode/status chips stay out of navigation and search UI, routing/firewall status pages cannot regress to raw command dumps, visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, the Vite build output committed under `applications/luci-app-i-love-luci/htdocs/luci-static/i-love-luci-app` matches the current frontend source, the route inventory and compat gap register match live router metadata, compat routes reject native-mode overrides, iframe source URLs load with `iloveluci_frame=1`, incomplete LuCI app routes default to compat mode, installed `luci-app-*` routes remain discoverable for current and future app installs, and native async package install/remove restores package state without adding pending UCI changes. The future-app and package-manager mutation audits temporarily install and remove `luci-app-example`, then check that new routes appear through compat and cleanup restores package state. They refuse to start if the router already has pending `uci changes`, because package installs can disturb pending UCI state on a live router.
+
+Targeted audits remain available when iterating on a smaller area:
+
+```sh
+scripts/audit-compat-contract.sh
+scripts/audit-router-routes.sh
+scripts/audit-router-route-inventory-doc.sh
+scripts/audit-router-route-mode-guards.sh
+scripts/audit-router-future-luci-app.sh
+scripts/audit-router-package-manager-mutation.sh
+scripts/audit-router-native-pages.sh
+scripts/smoke-router-http-routes.sh
 ```
 
 ## Secondary uhttpd Testing
@@ -218,7 +316,7 @@ uci commit uhttpd
 OpenWrt 25.12/apk:
 
 ```sh
-apk del luci-app-i-love-luci
+apk del luci-app-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart
@@ -227,7 +325,7 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 OpenWrt 24.10/opkg:
 
 ```sh
-opkg remove luci-app-i-love-luci
+opkg remove luci-app-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart
@@ -249,6 +347,6 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 ## Security Notes
 
 - The React app is never the source of security truth. Privileged work must go through LuCI, `rpcd`, `ubus`, or OpenWrt services.
-- The web console bridge depends on `ttyd`. Treat the generated console credential as sensitive router configuration.
+- The web console tunnel uses `i-love-luci-console`. Terminal I/O stays behind authenticated LuCI RPC calls; direct `ttyd` is optional and should be used only as a trusted-LAN development fallback.
 - Passkey and MFA support require server-side challenge and secret handling before they are production-ready.
 - Do not commit router credentials, package signing keys, or screenshots containing real hostnames, MACs, leases, addresses, or secrets.

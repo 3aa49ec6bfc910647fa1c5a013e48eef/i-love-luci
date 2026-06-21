@@ -1,32 +1,30 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef } from "react";
 import { ShieldCheck } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { storeReturnRouteFromHash } from "@/lib/auth";
+import { getShellConfig } from "@/lib/config";
 
 export function LoginForm() {
-	const navigate = useNavigate();
-	const [needsMfa, setNeedsMfa] = useState(false);
+	const config = getShellConfig();
+	const passwordRef = useRef<HTMLInputElement>(null);
+	const usernameRef = useRef<HTMLInputElement>(null);
+	const defaultUser = config.defaultUser || "root";
+	const loginAction =
+		typeof window === "undefined" ? undefined : `${window.location.pathname}${window.location.search}`;
 
-	function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		setNeedsMfa(true);
-		toast.info("MFA challenge ready", {
-			description: "Enter a verification code to continue.",
-		});
-	}
+	useEffect(() => {
+		storeReturnRouteFromHash();
 
-	function handleMfaSubmit(event: FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		toast.success("Signed in", {
-			description: "Session verified.",
-		});
-		navigate("/");
-	}
+		if (defaultUser) {
+			passwordRef.current?.focus();
+		}
+		else {
+			usernameRef.current?.focus();
+		}
+	}, [defaultUser]);
 
 	return (
 		<Card className="w-full max-w-sm shadow-sm">
@@ -41,46 +39,51 @@ export function LoginForm() {
 					</div>
 				</div>
 
-				{needsMfa ? (
-					<form className="grid gap-4" onSubmit={handleMfaSubmit}>
-						<div className="grid gap-2">
-							<label className="text-sm font-medium" htmlFor="verification-code">
-								Verification code
-							</label>
-							<Input
-								autoComplete="one-time-code"
-								id="verification-code"
-								inputMode="numeric"
-								maxLength={6}
-								placeholder="000000"
-							/>
-						</div>
-						<div className="flex justify-end gap-2">
-							<Button type="button" variant="outline" onClick={() => setNeedsMfa(false)}>
-								Back
-							</Button>
-							<Button type="submit">Verify</Button>
-						</div>
-					</form>
-				) : (
-					<form className="grid gap-4" onSubmit={handlePasswordSubmit}>
-						<div className="grid gap-2">
-							<label className="text-sm font-medium" htmlFor="username">
-								Username
-							</label>
-							<Input autoComplete="username" defaultValue="root" id="username" />
-						</div>
-						<div className="grid gap-2">
-							<label className="text-sm font-medium" htmlFor="password">
-								Password
-							</label>
-							<Input autoComplete="current-password" id="password" type="password" />
-						</div>
-						<div className="flex justify-end">
-							<Button type="submit">Continue</Button>
-						</div>
-					</form>
-				)}
+				{config.loginFailed ? (
+					<div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-foreground">
+						Invalid username or password.
+					</div>
+				) : null}
+
+				<form action={loginAction} autoComplete="on" className="grid gap-4" method="post" onSubmit={storeReturnRouteFromHash}>
+					<div className="grid gap-2">
+						<label className="text-sm font-medium" htmlFor="luci_username">
+							Username
+						</label>
+						<Input
+							ref={usernameRef}
+							aria-label="Username"
+							autoCapitalize="none"
+							autoComplete="username"
+							autoCorrect="off"
+							defaultValue={defaultUser}
+							enterKeyHint="next"
+							id="luci_username"
+							name="luci_username"
+							required
+							spellCheck={false}
+							type="text"
+						/>
+					</div>
+					<div className="grid gap-2">
+						<label className="text-sm font-medium" htmlFor="luci_password">
+							Password
+						</label>
+						<Input
+							ref={passwordRef}
+							aria-label="Password"
+							autoComplete="current-password"
+							enterKeyHint="done"
+							id="luci_password"
+							name="luci_password"
+							required
+							type="password"
+						/>
+					</div>
+					<div className="flex justify-end">
+						<Button type="submit">Log in</Button>
+					</div>
+				</form>
 			</CardContent>
 		</Card>
 	);

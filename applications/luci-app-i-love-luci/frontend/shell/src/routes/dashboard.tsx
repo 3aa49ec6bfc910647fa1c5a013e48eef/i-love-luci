@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, Doughnut, Line } from "react-chartjs-2";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardStatus, type DashboardStatus, type DeviceStatus, type NetworkInterfaceStatus } from "@/lib/rpc";
 
@@ -56,8 +57,35 @@ const emptyStatus: DashboardStatus = {
 	devices: {},
 };
 
-const pollMs = 5000;
 const maxSamples = 24;
+const pollOptions = [1000, 2000, 5000] as const;
+
+function defaultPollIntervalMs() {
+	if (typeof window === "undefined") {
+		return 5000;
+	}
+
+	const host = window.location.hostname.toLowerCase();
+	const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+
+	if (host === "localhost" || host.endsWith(".lan") || host.endsWith(".local")) {
+		return 1000;
+	}
+
+	if (!ipv4) {
+		return 5000;
+	}
+
+	const [, aText, bText] = ipv4;
+	const a = Number(aText);
+	const b = Number(bText);
+
+	if (a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254)) {
+		return 1000;
+	}
+
+	return 5000;
+}
 
 const lineOptions: ChartOptions<"line"> = {
 	responsive: true,
@@ -142,12 +170,13 @@ const barOptions: ChartOptions<"bar"> = {
 	},
 };
 
-export function DashboardPage() {
+export function DashboardPage({ description, title = "Dashboard" }: { description?: string; title?: string }) {
 	const [status, setStatus] = useState<DashboardStatus>(emptyStatus);
 	const [samples, setSamples] = useState<BandwidthSample[]>([]);
 	const [rates, setRates] = useState<DeviceRate[]>([]);
 	const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [pollIntervalMs, setPollIntervalMs] = useState(defaultPollIntervalMs);
 	const previousStatus = useRef<DashboardStatus | null>(null);
 	const previousTime = useRef<number | null>(null);
 
@@ -192,13 +221,13 @@ export function DashboardPage() {
 		}
 
 		void refresh();
-		const timer = window.setInterval(() => void refresh(), pollMs);
+		const timer = window.setInterval(() => void refresh(), pollIntervalMs);
 
 		return () => {
 			cancelled = true;
 			window.clearInterval(timer);
 		};
-	}, []);
+	}, [pollIntervalMs]);
 
 	const memory = memoryUsage(status);
 	const root = storageUsage(status.system.root);
@@ -274,12 +303,26 @@ export function DashboardPage() {
 		<div className="mx-auto grid w-full max-w-7xl min-w-0 gap-5">
 			<div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
 				<div className="min-w-0">
-					<h1 className="text-2xl font-semibold">Dashboard</h1>
+					<h1 className="text-2xl font-semibold">{title}</h1>
 					<p className="break-words text-sm text-muted-foreground">
-						{status.board.hostname ?? "Router"} · {status.board.model ?? "OpenWrt"}
+						{description ?? `${status.board.hostname ?? "Router"} · ${status.board.model ?? "OpenWrt"}`}
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
+					<div className="inline-flex rounded-md border bg-card p-0.5">
+						{pollOptions.map((option) => (
+							<Button
+								aria-pressed={pollIntervalMs === option}
+								key={option}
+								onClick={() => setPollIntervalMs(option)}
+								size="sm"
+								type="button"
+								variant={pollIntervalMs === option ? "secondary" : "ghost"}
+							>
+								{option / 1000}s
+							</Button>
+						))}
+					</div>
 					<Badge>{status.board.release?.version ?? "OpenWrt"}</Badge>
 					<Badge>{updatedAt ? `Updated ${formatTime(updatedAt.getTime())}` : "Updating"}</Badge>
 				</div>
@@ -296,7 +339,7 @@ export function DashboardPage() {
 				<Card>
 					<CardHeader className="flex flex-row items-center justify-between gap-3">
 						<CardTitle>Bandwidth</CardTitle>
-						<span className="text-xs text-muted-foreground">Polls every {pollMs / 1000}s</span>
+						<span className="text-xs text-muted-foreground">Polls every {pollIntervalMs / 1000}s</span>
 					</CardHeader>
 					<CardContent>
 						<div className="h-72">

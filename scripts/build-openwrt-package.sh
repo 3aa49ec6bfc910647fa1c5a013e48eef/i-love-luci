@@ -46,6 +46,21 @@ luci_subdir_for_package() {
 	esac
 }
 
+feed_subdir_for_package_spec() {
+	local package_name="$1"
+	local package_dir="$2"
+
+	case "${package_dir}" in
+		*/applications/*|applications/*) printf '%s\n' "applications" ;;
+		*/themes/*|themes/*) printf '%s\n' "themes" ;;
+		*/modules/*|modules/*) printf '%s\n' "modules" ;;
+		*/protocols/*|protocols/*) printf '%s\n' "protocols" ;;
+		*/libs/*|libs/*) printf '%s\n' "libs" ;;
+		*/utils/*|utils/*) printf '%s\n' "utils" ;;
+		*) luci_subdir_for_package "${package_name}" ;;
+	esac
+}
+
 for package_spec in ${PACKAGE_SPECS}; do
 	package_name="${package_spec%%:*}"
 	package_dir="${package_spec#*:}"
@@ -63,7 +78,7 @@ for package_spec in ${PACKAGE_SPECS}; do
 
 	package_names+=("${package_name}")
 	package_dirs+=("${package_dir}")
-	package_subdirs+=("$(luci_subdir_for_package "${package_name}")")
+	package_subdirs+=("$(feed_subdir_for_package_spec "${package_name}" "${package_spec#*:}")")
 done
 
 for i in "${!package_names[@]}"; do

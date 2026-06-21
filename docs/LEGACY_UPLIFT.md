@@ -122,16 +122,16 @@ To match default Overview fully, add:
 | Route | Title | Legacy action | Core data points | Proposed modern replacement | Priority |
 | --- | --- | --- | --- | --- | --- |
 | `/admin/system/system` | System | view `system/system` | UCI `system`, UCI `luci`, timezones, `luci.getUnixtime`, `luci.setLocaltime`, `rc list/init sysntpd` | Settings page with tabs for identity, time, language/theme, NTP | P1 |
-| `/admin/system/admin` | Administration | firstchild | no page of its own | parent route to password | P1 |
-| `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Native password form with strength/confirmation and success toast | P1 |
-| `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native table/form for SSH listeners and interface binding | P2 |
+| `/admin/system/admin` | Administration | firstchild | no page of its own | Parent route resolves to native router password form | Done |
+| `/admin/system/admin/password` | Router Password | view `system/password` | `luci.setPassword`, validation only | Implemented native password form with strength/confirmation and success/error toast | Done |
+| `/admin/system/admin/dropbear` | SSH Access | form map `dropbear` | UCI `dropbear` | Native main-instance SSH editor implemented; add/remove instance parity remains | Partial |
 | `/admin/system/admin/sshkeys` | SSH-Keys | view `system/sshkeys` | `/etc/dropbear/authorized_keys` read/write | Key list with add/import/delete and fingerprint display | P2 |
-| `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native uHTTPd listener/TLS settings after config schema exists | P3 |
+| `/admin/system/admin/uhttpd` | HTTP(S) Access | form map `uhttpd` | UCI `uhttpd` | Native redirect-to-HTTPS editor implemented; listener/TLS summary remains read-only | Done |
 | `/admin/system/admin/repokeys` | Repo Public Keys | view `system/repokeys` | `/etc/apk/keys/*`, `/etc/opkg/keys/*` read/write | Key manager with package-manager tie-in | P3 |
-| `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Service manager table and rc.local editor | P2 |
+| `/admin/system/startup` | Startup | view `system/startup` | `rc list/init`, `/etc/rc.local` read/write | Implemented native init script actions and `/etc/rc.local` editor | Done |
 | `/admin/system/crontab` | Scheduled Tasks | view `system/crontab` | `/etc/crontabs/root` read/write, cron reload | Cron editor with validation and reload toast | P2 |
 | `/admin/system/mounts` | Mount Points | view `system/mounts` | UCI `fstab`, block devices, mount points, block detect, mount/umount | Storage manager; legacy until block operations are wrapped safely | P3 |
-| `/admin/system/leds` | LED Configuration | view `system/leds` | UCI `system`, `luci.getLEDs`, LED trigger modules | LED trigger table/form | P3 |
+| `/admin/system/leds` | LED Configuration | view `system/leds` | UCI `system`, `luci.getLEDs`, LED trigger modules | Native LED action add/edit/remove implemented; sortable order and plugin-specific trigger forms remain | Partial |
 | `/admin/system/flash` | Backup / Flash Firmware | view `system/flash` | backup download/upload, sysupgrade validate/test/run, `/etc/sysupgrade.conf` | Native upgrade wizard only after extensive safety testing | P4 |
 | `/admin/system/reboot` | Reboot | view `system/reboot` | UCI changes, `system.reboot` or `/sbin/reboot` | Native confirmation dialog showing pending changes | P2 |
 
@@ -140,11 +140,9 @@ To match default Overview fully, add:
 System routes mix low-risk UCI forms and high-risk command flows. Modern migration should start with read/write UCI screens that have obvious rollback through normal LuCI apply:
 
 1. System settings
-2. Router password
-3. Dropbear SSH
-4. Startup/crontab
+2. Dropbear SSH multiple-instance parity
 
-Delay flash, mounts, and uHTTPd until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
+Delay flash and mounts until the modern shell has robust operation progress, reconnect detection, and rollback messaging.
 
 ## Network Section Audit
 
@@ -184,6 +182,19 @@ The live router also has installed app menus such as:
 
 These are not default core screens, but the modern shell must enumerate them and default them to legacy. Native replacements should be considered app-by-app after the default core sections are stable.
 
+## Console Gateway
+
+The header console action must not rely on browser-visible ttyd basic-auth URLs for a hardened release. The shipped production path is now the `i-love-luci-console` helper tunnel:
+
+- `luci-app-i-love-luci` depends on `i-love-luci-console`
+- the helper owns root-only PTY sessions behind `/var/run/i-love-luci-console/control.sock`
+- the React console page sends launch, poll, write, resize, and close requests through authenticated same-origin LuCI RPC
+- the browser never receives terminal credentials and does not connect to a second router port
+- helper sessions are short-lived, bounded by idle timeout and max-session limits, and closed on route unmount/logout/timeout
+- direct `ttyd` is not installed or configured by default; it is only an operator-installed trusted-LAN development fallback
+
+This preserves the no-second-login UX while avoiding credential leakage through URL history, page JavaScript, proxy logs, screenshots, or embedded-credential browser restrictions.
+
 ## Menu Enumeration Design
 
 Add a backend method:
@@ -213,7 +224,7 @@ type LuCIMenuEntry = {
   eligible: boolean;          // dependency check result
   hasChildren: boolean;
   nativeComponent?: string;   // e.g. DashboardPage, DhcpPage
-  nativeStatus: "supported" | "partial" | "unsupported";
+  nativeStatus: "supported" | "compat" | "unsupported";
   configuredMode: ModernRouteMode;
   effectiveMode: "modern" | "legacy" | "hidden";
 };
@@ -249,7 +260,7 @@ config route '/admin/system/flash'
 Modes:
 
 - `auto`: use modern if `nativeStatus` is `supported`; otherwise legacy
-- `modern`: force modern when available, otherwise show disabled warning and fall back to legacy
+- `modern`: force modern only when `nativeStatus` is `supported`; reject this mode for compat-only routes
 - `legacy`: always use iframe bridge
 - `hidden`: hide from modern shell navigation/search, but do not delete LuCI route
 
@@ -262,7 +273,7 @@ requested path -> menu entry -> route config -> native registry -> effective ren
 Behavior:
 
 - If modern is supported and effective mode is modern, route to the native React path.
-- If modern is unsupported, always route to `LegacyFrame`.
+- If modern is unsupported or compat-only, always route to `LegacyFrame`.
 - If a user directly opens `/legacy?path=<migrated-route>`, show a small "Open modern version" affordance unless mode is forced legacy.
 - Do not remove or mutate original LuCI menu files for default routes. The old routes remain fallback and direct-access recovery.
 - Once confidence is high, the modern shell can hide migrated legacy entries from its own search/sidebar by resolving them to native routes.
@@ -277,12 +288,12 @@ Keep a typed registry in the app:
 const nativeRoutes = {
   "/admin/status/overview": {
     component: "DashboardPage",
-    status: "partial",
+    status: "supported",
     dataContract: "dashboard_status",
   },
   "/admin/network/dhcp": {
     component: "DhcpPage",
-    status: "planned",
+    status: "compat",
     dataContract: "dhcp_status",
   },
 } as const;
@@ -292,7 +303,7 @@ The registry should drive:
 
 - route resolution
 - settings toggle UI
-- migration status in admin settings
+- coverage status in admin settings
 - search result labels
 - test coverage requirements
 
@@ -304,7 +315,7 @@ Expected controls:
 
 - filter by section: Status, System, Network, Services, VPN, Other
 - search route/title
-- show route status: Modern, Partial, Legacy
+- show route coverage: Supported native, LuCI compat, Unsupported
 - toggle mode: Auto, Modern, Legacy, Hidden
 - reset route to default
 - export debug JSON for support
@@ -313,7 +324,7 @@ Safety:
 
 - default all unknown routes to `auto`
 - default all unsupported routes to legacy
-- show warning when forcing modern for a partial page
+- reject modern mode for compat-only pages
 - never hide the settings route itself
 - never hide all routes in a section
 
@@ -382,13 +393,14 @@ Keep full interface edit, wireless, and switch in legacy until per-feature test 
 Deliver:
 
 - system identity/time/theme/language/NTP
-- router password
-- SSH access and SSH keys
-- startup services and rc.local
+- router password completed through a native `luci.setPassword` bridge
+- SSH access main-instance editor and SSH keys completed; Dropbear add/remove instance parity remains
+- startup services and rc.local completed through native init actions and editor
+- LED action add/edit/remove completed; sortable order and plugin-specific LED trigger forms remain
 - crontab editor
 - reboot dialog
 
-Keep mount points, repo keys, uHTTPd, and flash in legacy until operation safety is designed.
+Keep mount points, repo keys, and flash in legacy until operation safety is designed.
 
 ### Phase 4: High-Risk Operations
 
@@ -397,7 +409,7 @@ Deliver only after explicit safety work:
 - backup/restore
 - firmware validation/upload/sysupgrade
 - mount/unmount/block detect
-- uHTTPd listener/TLS changes
+- uHTTPd redirect-to-HTTPS completed; listener/TLS changes remain read-only
 - firewall status/config native pages
 
 Required safeguards:
