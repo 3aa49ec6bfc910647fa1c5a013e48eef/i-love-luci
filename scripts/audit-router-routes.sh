@@ -150,11 +150,14 @@ for item in visible:
 	if mode == "modern" and not native_path:
 		failures.append(f"{path}: modern route has no nativePath")
 
-	if item.get("nativeStatus") in {"supported", "partial"}:
+	if item.get("nativeStatus") == "supported":
 		if not native_path:
-			failures.append(f"{path}: native-capable route has no native preview path")
+			failures.append(f"{path}: supported native route has no native path")
 		elif not known_native_path(native_path):
 			failures.append(f"{path}: nativePath does not match a known shell route pattern: {native_path}")
+
+	if item.get("nativeStatus") == "partial" and native_path:
+		failures.append(f"{path}: partial route should not expose a nativePath; it must remain clean LuCI compat")
 
 	if mode == "legacy" and not resolved:
 		failures.append(f"{path}: legacy route has no resolved legacy path")
@@ -205,7 +208,7 @@ for item in visible:
 	if path in compat_exact or any(path.startswith(prefix) for prefix in compat_prefixes):
 		if item.get("configuredMode", "auto") == "auto" and item.get("nativeStatus") != "supported" and item.get("effectiveMode") != "legacy":
 			failures.append(f"{path}: incomplete LuCI app route should default to compat in auto mode")
-		if not item.get("nativePath") and item.get("nativeStatus") in {"supported", "partial"}:
+		if item.get("nativeStatus") == "supported" and not item.get("nativePath"):
 			failures.append(f"{path}: native-capable app route has no native preview path")
 
 	if path in strict_compat_exact or any(path == prefix or path.startswith(prefix + "/") for prefix in strict_compat_prefixes):
@@ -256,7 +259,8 @@ print(
 	f"partial={native_counter.get('partial', 0)} unsupported={native_counter.get('unsupported', 0)}"
 )
 print(f"menu_files={len(menu_files)} luci_apps={len(luci_apps)}")
-print(f"native_preview_routes={sum(1 for item in visible if item.get('nativePath'))}")
+native_path_count = sum(1 for item in visible if item.get("nativePath"))
+print(f"native_paths={native_path_count}")
 
 legacy_app_routes = [
 	item for item in visible
@@ -291,6 +295,9 @@ print(f"partial_default_routes={len(partial_default_routes)}")
 
 if partial_default_routes:
 	print("partial_default_paths=" + ",".join(sorted(item.get("path", "") for item in partial_default_routes)))
+
+if native_path_count != native_counter.get("supported", 0):
+	failures.append("Only supported routes should expose nativePath in menu_tree")
 
 if warnings:
 	print("\nWarnings:")

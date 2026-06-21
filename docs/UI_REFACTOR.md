@@ -617,7 +617,7 @@ Installed LuCI app renderer policy:
 - Strict compat apps on the router: `luci-app-banip`, `luci-app-adblock-fast`, `luci-app-attendedsysupgrade`, and `luci-app-package-manager`.
 - Approved native app exceptions on the router: `luci-app-firewall`, `luci-app-commands`, `luci-app-uhttpd`, and `luci-app-upnp`. These are allowed to default to native because parity evidence and no-op/mutation safety tests are recorded below.
 - Unknown future `luci-app-*` routes must appear through LuCI compat automatically unless a native adapter explicitly supports them.
-- Internal route metadata still uses the value `legacy`, but user-facing UI should describe that path as `LuCI compat`. Partial routes are clean compat routes in normal use: the settings UI does not offer native mode for them, and the bridge rejects native-mode overrides unless the route is fully supported.
+- Internal route metadata still uses the value `legacy`, but user-facing UI should describe that path as `LuCI compat`. Partial routes are clean compat routes in normal use: `menu_tree` does not advertise a native path for them, the settings UI does not offer native mode, and the bridge rejects native-mode overrides unless the route is fully supported.
 
 Validation on `172.16.172.1`:
 
@@ -632,8 +632,9 @@ Validation on `172.16.172.1`:
 - Browser smoke test loaded `#/native/service/uhttpd` and rendered lifecycle action buttons.
 - Browser smoke tests loaded `#/native/repokeys` and `#/native/leds` on the router.
 - Menu policy validation confirms strict compat LuCI app routes such as banIP, AdBlock Fast, attended sysupgrade, and package manager default to LuCI compat in auto mode. It also tracks approved native LuCI app exceptions so routes like firewall, custom commands, uHTTPd, and UPnP cannot default to native unless they are marked supported.
-- Route audit now reports the exact `partial_default_paths` list so partial routes can be verified as LuCI compat defaults rather than silently becoming native routes. The audit also fails if any non-supported route is configured for native mode.
+- Route audit now reports the exact `partial_default_paths` list so partial routes can be verified as LuCI compat defaults rather than silently becoming native routes. The audit also fails if any partial route exposes a `nativePath`, if any non-supported route is configured for native mode, or if the number of exposed native paths differs from the number of supported routes.
 - Clean compat routing was validated on `172.16.172.1`: all 16 partial routes reported as `legacy` effective mode, the settings UI hides native mode for partial routes, and `route_mode_set` rejected `modern` for `/admin/services/banip` with `saved=false` and `uci changes=0`.
+- Clean compat menu metadata was validated on `172.16.172.1`: `menu_tree` now exposes `nativePath` only for the 41 fully supported routes (`native_paths=41`), while all 16 partial routes have no native path and continue to use LuCI compat. Route audit, native page audit, HTTP route smoke, and `uci changes=0` passed after deploy.
 - Native custom command RPC was validated on `172.16.172.1` with a temporary harmless `luci.command` section. The command list surfaced in `service_detail`, `custom_command_run` executed it successfully, and the temporary UCI section was removed after the smoke test.
 - `core_settings` now returns scoped page payloads to keep router `ubus` responses small and wrapper-friendly. DHCP/DNS was validated on `172.16.172.1` with live dnsmasq/odhcpd state and active lease data, while LuCI compat remains the fallback for editing.
 - Browser smoke test loaded `#/core/network` on `172.16.172.1` with the `1.0.0-r4-native12` bundle and rendered 4 live interfaces, LAN/WAN addresses, uptime, and live ethernet device counters.

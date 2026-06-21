@@ -8665,7 +8665,7 @@ function build_menu() {
 			nativeAutoMode: nativeRoute?.autoMode || (nativeStatus == 'partial' ? 'legacy' : 'modern'),
 			configuredMode,
 			effectiveMode: mode,
-			nativePath: nativeRoute?.nativePath || null,
+			nativePath: nativeStatus == 'supported' ? nativeRoute?.nativePath : null,
 			resolvedPath: path
 		};
 
