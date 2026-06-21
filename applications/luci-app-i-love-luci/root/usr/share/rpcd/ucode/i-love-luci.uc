@@ -1060,6 +1060,11 @@ function dhcp_zero_one(value) {
 	return value == '1' || value == 1 || value == true || value == 'on' ? '1' : '0';
 }
 
+function dhcp_optional_zero_one(value) {
+	value = '' + (value || '');
+	return value == '1' || value == '0' ? value : '';
+}
+
 function dhcp_numeric_value(value) {
 	return value == '' || replace(value, /[^0-9]/g, '') == value;
 }
@@ -1208,6 +1213,9 @@ function save_dnsmasq_config(config) {
 
 	let section = dnsmasq_section();
 	let server_list = split_dhcp_list(config.server || '');
+	let interface_list = split_dhcp_list(config.interface || '');
+	let listen_address_list = split_dhcp_list(config.listen_address || '');
+	let notinterface_list = split_dhcp_list(config.notinterface || '');
 	let next = {
 		domainneeded: dhcp_zero_one(config.domainneeded),
 		localise_queries: dhcp_zero_one(config.localise_queries),
@@ -1218,23 +1226,43 @@ function save_dnsmasq_config(config) {
 		localservice: dhcp_zero_one(config.localservice),
 		authoritative: dhcp_zero_one(config.authoritative),
 		sequential_ip: dhcp_zero_one(config.sequential_ip),
+		address_as_local: dhcp_optional_zero_one(config.address_as_local),
+		nonwildcard: dhcp_optional_zero_one(config.nonwildcard),
+		logdhcp: dhcp_optional_zero_one(config.logdhcp),
+		quietdhcp: dhcp_optional_zero_one(config.quietdhcp),
+		enable_tftp: dhcp_optional_zero_one(config.enable_tftp),
 		local: dhcp_clean_value(config.local || ''),
 		domain: dhcp_clean_value(config.domain || ''),
 		cachesize: dhcp_clean_value(config.cachesize || ''),
+		dhcpleasemax: dhcp_clean_value(config.dhcpleasemax || ''),
 		ednspacket_max: dhcp_clean_value(config.ednspacket_max || ''),
 		leasefile: dhcp_clean_value(config.leasefile || ''),
 		resolvfile: dhcp_clean_value(config.resolvfile || ''),
-		serversfile: dhcp_clean_value(config.serversfile || '')
+		serversfile: dhcp_clean_value(config.serversfile || ''),
+		logfacility: dhcp_clean_value(config.logfacility || ''),
+		tftp_root: dhcp_clean_value(config.tftp_root || ''),
+		dhcp_boot: dhcp_clean_value(config.dhcp_boot || '')
 	};
 
-	if (!dhcp_numeric_value(next.cachesize) || !dhcp_numeric_value(next.ednspacket_max))
+	if (!dhcp_numeric_value(next.cachesize) || !dhcp_numeric_value(next.dhcpleasemax) || !dhcp_numeric_value(next.ednspacket_max))
 		return {
 			saved: false,
-			message: 'DNS cache size and EDNS packet size must be numeric.',
+			message: 'DNS cache size, max DHCP leases, and EDNS packet size must be numeric.',
 			changed: false,
 			section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
 			sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 		};
+
+	for (let value in [next.logfacility, next.tftp_root, next.dhcp_boot, ...interface_list, ...listen_address_list, ...notinterface_list]) {
+		if (replace(value, /[^A-Za-z0-9_.:@/+%#-]/g, '') != value)
+			return {
+				saved: false,
+				message: 'DNS listen, logging, or PXE/TFTP settings contain unsupported characters.',
+				changed: false,
+				section: (collect_uci_config('dhcp', ['dnsmasq']) || [])[0] || null,
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+	}
 
 	let changed = false;
 
@@ -1255,6 +1283,24 @@ function save_dnsmasq_config(config) {
 			uci.set('dhcp', section, 'server', server_list);
 		else
 			uci.delete('dhcp', section, 'server');
+	}
+
+	let list_options = {
+		interface: interface_list,
+		listen_address: listen_address_list,
+		notinterface: notinterface_list
+	};
+
+	for (let key, values in list_options) {
+		let current = uci.get('dhcp', section, key) || [];
+
+		if (!same_dhcp_list(current, values)) {
+			changed = true;
+			if (length(values))
+				uci.set('dhcp', section, key, length(values) == 1 ? values[0] : values);
+			else
+				uci.delete('dhcp', section, key);
+		}
 	}
 
 	if (changed) {

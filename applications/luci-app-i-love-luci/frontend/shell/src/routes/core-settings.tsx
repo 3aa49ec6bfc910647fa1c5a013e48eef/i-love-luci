@@ -361,11 +361,25 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 						onChange={(value) => updateField("sequential_ip", value)}
 						value={values.sequential_ip}
 					/>
+					<OptionalBooleanField
+						id="dns-address-as-local"
+						label="Resolve addresses locally"
+						onChange={(value) => updateField("address_as_local", value)}
+						value={values.address_as_local}
+					/>
 					<Field label="Local domain" target="dns-local">
 						<Input id="dns-local" onChange={(event) => updateField("local", event.target.value)} value={values.local} />
 					</Field>
 					<Field label="Search domain" target="dns-domain">
 						<Input id="dns-domain" onChange={(event) => updateField("domain", event.target.value)} value={values.domain} />
+					</Field>
+					<Field label="Max DHCP leases" target="dns-dhcpleasemax">
+						<Input
+							id="dns-dhcpleasemax"
+							inputMode="numeric"
+							onChange={(event) => updateField("dhcpleasemax", event.target.value)}
+							value={values.dhcpleasemax}
+						/>
 					</Field>
 					<Field label="Cache size" target="dns-cachesize">
 						<Input
@@ -396,6 +410,41 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 							value={values.serversfile}
 						/>
 					</Field>
+					<Field label="Log facility" target="dns-logfacility">
+						<Input id="dns-logfacility" onChange={(event) => updateField("logfacility", event.target.value)} value={values.logfacility} />
+					</Field>
+				</div>
+				<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+					<OptionalBooleanField
+						id="dns-nonwildcard"
+						label="Non-wildcard bind"
+						onChange={(value) => updateField("nonwildcard", value)}
+						value={values.nonwildcard}
+					/>
+					<OptionalBooleanField
+						id="dns-logdhcp"
+						label="Extra DHCP logging"
+						onChange={(value) => updateField("logdhcp", value)}
+						value={values.logdhcp}
+					/>
+					<OptionalBooleanField
+						id="dns-quietdhcp"
+						label="Suppress DHCP logging"
+						onChange={(value) => updateField("quietdhcp", value)}
+						value={values.quietdhcp}
+					/>
+					<OptionalBooleanField
+						id="dns-enable-tftp"
+						label="TFTP server"
+						onChange={(value) => updateField("enable_tftp", value)}
+						value={values.enable_tftp}
+					/>
+					<Field label="TFTP root" target="dns-tftp-root">
+						<Input id="dns-tftp-root" onChange={(event) => updateField("tftp_root", event.target.value)} value={values.tftp_root} />
+					</Field>
+					<Field label="Network boot image" target="dns-dhcp-boot">
+						<Input id="dns-dhcp-boot" onChange={(event) => updateField("dhcp_boot", event.target.value)} value={values.dhcp_boot} />
+					</Field>
 				</div>
 				<Field label="Upstream servers" target="dns-servers">
 					<textarea
@@ -406,6 +455,35 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 						value={values.server}
 					/>
 				</Field>
+				<div className="grid gap-4 md:grid-cols-3">
+					<Field label="Listen interfaces" target="dns-interface">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-interface"
+							onChange={(event) => updateField("interface", event.target.value)}
+							spellCheck={false}
+							value={values.interface}
+						/>
+					</Field>
+					<Field label="Listen addresses" target="dns-listen-address">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-listen-address"
+							onChange={(event) => updateField("listen_address", event.target.value)}
+							spellCheck={false}
+							value={values.listen_address}
+						/>
+					</Field>
+					<Field label="Excluded interfaces" target="dns-notinterface">
+						<textarea
+							className="min-h-24 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+							id="dns-notinterface"
+							onChange={(event) => updateField("notinterface", event.target.value)}
+							spellCheck={false}
+							value={values.notinterface}
+						/>
+					</Field>
+				</div>
 				<div className="flex justify-end gap-2">
 					<Button disabled={!dirty || saving} onClick={() => setValues(savedValues)} type="button" variant="outline">
 						Cancel
@@ -416,6 +494,33 @@ function DnsmasqSettingsEditor({ onSaved, section }: { onSaved: (sections: Confi
 				</div>
 			</form>
 		</section>
+	);
+}
+
+function OptionalBooleanField({
+	id,
+	label,
+	onChange,
+	value,
+}: {
+	id: string;
+	label: string;
+	onChange: (value: string) => void;
+	value: string;
+}) {
+	return (
+		<Field label={label} target={id}>
+			<SelectField
+				id={id}
+				onChange={onChange}
+				options={[
+					["", "Default"],
+					["1", "Enabled"],
+					["0", "Disabled"],
+				]}
+				value={value}
+			/>
+		</Field>
 	);
 }
 
@@ -456,19 +561,36 @@ function dnsmasqSettingsValues(section: ConfigSection): DnsmasqConfigInput {
 		localservice: booleanValue(section.values.localservice),
 		authoritative: booleanValue(section.values.authoritative),
 		sequential_ip: booleanValue(section.values.sequential_ip),
+		address_as_local: optionalBooleanValue(section.values.address_as_local),
+		nonwildcard: optionalBooleanValue(section.values.nonwildcard),
+		logdhcp: optionalBooleanValue(section.values.logdhcp),
+		quietdhcp: optionalBooleanValue(section.values.quietdhcp),
+		enable_tftp: optionalBooleanValue(section.values.enable_tftp),
 		local: rawValue(section.values.local),
 		domain: rawValue(section.values.domain),
 		cachesize: rawValue(section.values.cachesize),
+		dhcpleasemax: rawValue(section.values.dhcpleasemax),
 		ednspacket_max: rawValue(section.values.ednspacket_max),
 		leasefile: rawValue(section.values.leasefile),
 		resolvfile: rawValue(section.values.resolvfile),
 		serversfile: rawValue(section.values.serversfile),
+		logfacility: rawValue(section.values.logfacility),
+		tftp_root: rawValue(section.values.tftp_root),
+		dhcp_boot: rawValue(section.values.dhcp_boot),
 		server: rawListValue(section.values.server).join("\n"),
+		interface: rawListValue(section.values.interface).join("\n"),
+		listen_address: rawListValue(section.values.listen_address).join("\n"),
+		notinterface: rawListValue(section.values.notinterface).join("\n"),
 	};
 }
 
 function booleanValue(value: unknown) {
 	return rawValue(value) === "1" ? "1" : "0";
+}
+
+function optionalBooleanValue(value: unknown) {
+	const raw = rawValue(value);
+	return raw === "1" || raw === "0" ? raw : "";
 }
 
 function DhcpPoolEditor({

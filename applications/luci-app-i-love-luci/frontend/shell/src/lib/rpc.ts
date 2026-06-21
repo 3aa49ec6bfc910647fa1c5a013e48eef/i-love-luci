@@ -781,14 +781,26 @@ export type DnsmasqConfigInput = {
 	localservice: string;
 	authoritative: string;
 	sequential_ip: string;
+	address_as_local: string;
+	nonwildcard: string;
+	logdhcp: string;
+	quietdhcp: string;
+	enable_tftp: string;
 	local: string;
 	domain: string;
 	cachesize: string;
+	dhcpleasemax: string;
 	ednspacket_max: string;
 	leasefile: string;
 	resolvfile: string;
 	serversfile: string;
+	logfacility: string;
+	tftp_root: string;
+	dhcp_boot: string;
 	server: string;
+	interface: string;
+	listen_address: string;
+	notinterface: string;
 };
 
 export type DnsmasqConfigResult = {
