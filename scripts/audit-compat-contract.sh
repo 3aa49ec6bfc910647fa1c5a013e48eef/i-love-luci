@@ -211,9 +211,11 @@ for base in scan_roots:
 			for required_package_state_term in ("package_state_snapshot", "stateBefore", "stateAfter", "databaseHash", "luciAppCount"):
 				if required_package_state_term not in text:
 					failures.append(f"{relative_path}: package actions must retain rollback fingerprint term {required_package_state_term}")
-			for required_remote_install_term in ("allow_remote", "remote_package_url", "remote_package_install_command", "uclient-fetch", "valid_package_reference(name, simulate, allow_remote)"):
+			for required_remote_install_term in ("allow_remote", "remote_package_url", "remote_package_install_command", "uclient-fetch", "-T 8", "--max-time 20", "valid_package_reference(name, simulate, allow_remote)"):
 				if required_remote_install_term not in text:
 					failures.append(f"{relative_path}: package actions must support guarded remote URL install term {required_remote_install_term}")
+			if "exit $rc" in text:
+				failures.append(f"{relative_path}: package job commands must not exit before the job wrapper writes rc state")
 		if relative_path == rpc_types_file:
 			status_type = re.search(r"export type ConsoleStatus = \{(?P<body>.*?)\n\};", text, re.S)
 			if not status_type:
@@ -339,6 +341,8 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: package manager promotion evidence must document package state fingerprints")
 			if "guarded package-name/URL/staged-file install apply with typed confirmation" not in text:
 				failures.append(f"{relative_path}: package manager promotion evidence must document guarded URL install apply")
+			if "bounded remote URL fetch jobs that complete with package state fingerprints" not in text:
+				failures.append(f"{relative_path}: package manager promotion evidence must document bounded remote URL job completion")
 			coverage_match = re.search(
 				r"Converted to native React/Vite surfaces:\n(?P<body>.*?)(?=\nInstalled LuCI app renderer policy:)",
 				text,

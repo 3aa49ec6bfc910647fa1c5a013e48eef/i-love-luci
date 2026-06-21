@@ -6261,7 +6261,6 @@ function remote_package_url(name) {
 }
 
 function remote_package_install_command(manager, url, allow_untrusted, overwrite) {
-	let suffix = manager == 'apk' ? 'apk' : 'ipk';
 	let url_quoted = quote_command_args([url])[0];
 	let base_argv = [];
 
@@ -6281,7 +6280,7 @@ function remote_package_install_command(manager, url, allow_untrusted, overwrite
 
 	let install_command = join(' ', quote_command_args(base_argv)) + ' "$tmp"';
 
-	return `tmp=$(mktemp /tmp/i-love-luci-package-url.XXXXXX.${suffix}) && (uclient-fetch -q -O "$tmp" ${url_quoted} || wget -q -O "$tmp" ${url_quoted} || curl -fsSL -o "$tmp" ${url_quoted}) && ${install_command}; rc=$?; rm -f "$tmp"; exit $rc`;
+	return `tmp=$(mktemp /tmp/i-love-luci-package-url.XXXXXX) && (uclient-fetch -q -T 8 -O "$tmp" ${url_quoted} || wget -q -T 8 -O "$tmp" ${url_quoted} || curl -fsSL --connect-timeout 8 --max-time 20 -o "$tmp" ${url_quoted}) && ${install_command}; rc=$?; rm -f "$tmp"; test "$rc" -eq 0`;
 }
 
 function valid_package_reference(name, simulate, allow_remote) {
@@ -6393,6 +6392,8 @@ function package_action_plan(action, name, simulate, options) {
 	let allow_remote = !!options.allowRemote;
 	let i18n = [];
 	let staged_path = staged_package_path(name);
+	let is_staged = length(staged_path) > 0;
+	let is_remote = remote_package_url(name);
 
 	for (let pkg in (options.i18nPackages || [])) {
 		pkg = trim('' + pkg);
@@ -6409,28 +6410,6 @@ function package_action_plan(action, name, simulate, options) {
 		if (action == 'upgrade' && simulate && !length(name)) {
 			argv = manager == 'apk' ? ['apk', 'upgrade', '--simulate'] : ['opkg', '--noaction', 'upgrade'];
 		}
-		else if (!valid_package_reference(name, simulate, allow_remote))
-			return {
-				ok: false,
-				manager,
-				action,
-				name,
-				simulate,
-				command: '',
-				output: '',
-				message: 'Package name contains unsupported characters.'
-			};
-		else if (!simulate && !valid_package_name(name) && !length(staged_path) && !remote_package_url(name))
-			return {
-				ok: false,
-				manager,
-				action,
-				name,
-				simulate,
-				command: '',
-				output: '',
-				message: 'URL package install apply stays in LuCI compat until rollback parity is complete.'
-			};
 		else if (action == 'upgrade' && !simulate)
 			return {
 				ok: false,
@@ -6442,24 +6421,57 @@ function package_action_plan(action, name, simulate, options) {
 				output: '',
 				message: 'Package upgrade apply stays in LuCI compat until rollback parity is complete.'
 			};
-			else if (manager == 'apk') {
-				if (action == 'install') {
-					if (!simulate && remote_package_url(name)) {
-						command = remote_package_install_command(manager, name, allow_untrusted, overwrite);
-					}
-					else {
-						argv = ['apk', 'add'];
-						if (simulate)
-							push(argv, '--simulate');
-						if (!simulate && length(staged_path) && allow_untrusted)
-							push(argv, '--allow-untrusted');
-						if (overwrite)
-							push(argv, '--force-overwrite');
-						for (let pkg in i18n)
-							push(argv, pkg);
-						push(argv, name);
-					}
+		else if (action == 'remove' && !valid_package_name(name))
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'Package removal requires a package name.'
+			};
+		else if (!valid_package_reference(name, simulate, allow_remote))
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'Package name contains unsupported characters.'
+			};
+		else if (!simulate && action == 'install' && !valid_package_name(name) && !is_staged && !is_remote)
+			return {
+				ok: false,
+				manager,
+				action,
+				name,
+				simulate,
+				command: '',
+				output: '',
+				message: 'Package install source must be a package name, staged package file, or allowed URL.'
+			};
+		else if (manager == 'apk') {
+			if (action == 'install') {
+				if (!simulate && is_remote) {
+					command = remote_package_install_command(manager, name, allow_untrusted, overwrite);
 				}
+				else {
+					argv = ['apk', 'add'];
+					if (simulate)
+						push(argv, '--simulate');
+					if (!simulate && is_staged && allow_untrusted)
+						push(argv, '--allow-untrusted');
+					if (overwrite)
+						push(argv, '--force-overwrite');
+					for (let pkg in i18n)
+						push(argv, pkg);
+					push(argv, name);
+				}
+			}
 			else if (action == 'remove') {
 				argv = ['apk', 'del'];
 				if (simulate)
@@ -6469,23 +6481,23 @@ function package_action_plan(action, name, simulate, options) {
 			else
 				argv = ['apk', 'add', '--simulate', '--upgrade', name];
 		}
-			else {
-				if (action == 'install') {
-					if (!simulate && remote_package_url(name)) {
-						command = remote_package_install_command(manager, name, allow_untrusted, overwrite);
-					}
-					else {
-						argv = ['opkg'];
-						if (simulate)
-							push(argv, '--noaction');
-						if (overwrite)
-							push(argv, '--force-overwrite');
-						push(argv, 'install');
-						for (let pkg in i18n)
-							push(argv, pkg);
-						push(argv, name);
-					}
+		else {
+			if (action == 'install') {
+				if (!simulate && is_remote) {
+					command = remote_package_install_command(manager, name, allow_untrusted, overwrite);
 				}
+				else {
+					argv = ['opkg'];
+					if (simulate)
+						push(argv, '--noaction');
+					if (overwrite)
+						push(argv, '--force-overwrite');
+					push(argv, 'install');
+					for (let pkg in i18n)
+						push(argv, pkg);
+					push(argv, name);
+				}
+			}
 			else if (action == 'remove') {
 				argv = ['opkg'];
 				if (simulate)
