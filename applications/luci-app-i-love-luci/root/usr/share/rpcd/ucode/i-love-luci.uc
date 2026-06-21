@@ -5863,8 +5863,160 @@ function package_search(query) {
 	};
 }
 
+function unique_push(list, value) {
+	value = trim('' + (value || ''));
+	if (!length(value))
+		return;
+
+	for (let item in list)
+		if (item == value)
+			return;
+
+	push(list, value);
+}
+
 function valid_package_name(name) {
 	return length(name) > 0 && length(name) <= 120 && replace(name, /[^A-Za-z0-9_.+:-]/g, '') == name;
+}
+
+function package_detail(name) {
+	name = trim('' + (name || ''));
+	let manager = command_exists('apk') ? 'apk' : 'opkg';
+	let detail = {
+		ok: false,
+		manager,
+		name,
+		installed: false,
+		version: '',
+		description: '',
+		webpage: '',
+		installedSize: '',
+		license: '',
+		dependencies: [],
+		provides: [],
+		requiredBy: [],
+		files: [],
+		warnings: [],
+		message: 'Package detail is unavailable.'
+	};
+
+	if (!valid_package_name(name)) {
+		detail.message = 'Package name contains unsupported characters.';
+		return detail;
+	}
+
+	let quoted = quote_command_args([name])[0];
+
+	if (manager == 'apk') {
+		let exact = trim(shell_output(`apk info -e ${quoted} 2>/dev/null | sed -n "1p"`));
+		let output = shell_output(`apk info -a ${quoted} 2>&1 | sed -n "1,420p"`);
+		let current = '';
+
+		detail.installed = length(exact) > 0;
+
+		for (let raw_line in split(output, '\n')) {
+			let line = trim(raw_line);
+
+			if (!length(line)) {
+				current = '';
+				continue;
+			}
+
+			if (substr(line, 0, 8) == 'WARNING:') {
+				unique_push(detail.warnings, line);
+				continue;
+			}
+
+			let header = match(line, /^(.+) (description|webpage|installed size|depends on|provides|is required by|contains|license):$/);
+			if (header) {
+				let pkgver = header[1];
+				let active = false;
+				let suffix = '';
+
+				if (index(pkgver, name + '-') == 0)
+					suffix = substr(pkgver, length(name) + 1);
+
+				if (length(exact) && index(exact, name + '-') == 0)
+					active = pkgver == exact;
+				else if (length(suffix))
+					active = match(suffix, /^[0-9]/) ? true : false;
+
+				current = active ? header[2] : 'skip';
+
+				if (active && length(suffix) && !length(detail.version))
+					detail.version = suffix;
+
+				continue;
+			}
+
+			if (current == 'description' && !length(detail.description))
+				detail.description = line;
+			else if (current == 'webpage' && !length(detail.webpage))
+				detail.webpage = line;
+			else if (current == 'installed size' && !length(detail.installedSize))
+				detail.installedSize = line;
+			else if (current == 'license' && !length(detail.license))
+				detail.license = line;
+			else if (current == 'depends on')
+				unique_push(detail.dependencies, line);
+			else if (current == 'provides')
+				unique_push(detail.provides, line);
+			else if (current == 'is required by')
+				unique_push(detail.requiredBy, line);
+			else if (current == 'contains')
+				unique_push(detail.files, line);
+		}
+	}
+	else {
+		let output = shell_output(`opkg info ${quoted} 2>&1 | sed -n "1,260p"`);
+
+		for (let raw_line in split(output, '\n')) {
+			let line = trim(raw_line);
+
+			if (!length(line))
+				continue;
+
+			if (substr(line, 0, 8) == 'Unknown ' || substr(line, 0, 7) == 'Cannot ') {
+				unique_push(detail.warnings, line);
+				continue;
+			}
+
+			let field = match(line, /^([A-Za-z0-9 -]+):\s*(.*)$/);
+			if (!field)
+				continue;
+
+			let key = field[1];
+			let value = field[2];
+
+			if (key == 'Package')
+				detail.installed = value == name;
+			else if (key == 'Version' && !length(detail.version))
+				detail.version = value;
+			else if (key == 'Description' && !length(detail.description))
+				detail.description = value;
+			else if (key == 'Homepage' && !length(detail.webpage))
+				detail.webpage = value;
+			else if (key == 'Installed-Size' && !length(detail.installedSize))
+				detail.installedSize = value;
+			else if (key == 'License' && !length(detail.license))
+				detail.license = value;
+			else if (key == 'Depends')
+				for (let dependency in split(value, ','))
+					unique_push(detail.dependencies, dependency);
+			else if (key == 'Provides')
+				for (let provided in split(value, ','))
+					unique_push(detail.provides, provided);
+		}
+
+		let files = shell_output(`opkg files ${quoted} 2>/dev/null | sed -n "2,180p"`);
+		for (let line in split(files, '\n'))
+			unique_push(detail.files, line);
+	}
+
+	detail.ok = length(detail.version) > 0 || detail.installed || length(detail.dependencies) > 0 || length(detail.description) > 0;
+	detail.message = detail.ok ? 'Package detail loaded.' : 'Package detail was not found.';
+
+	return detail;
 }
 
 function valid_package_reference(name, simulate) {
@@ -10148,6 +10300,36 @@ const methods = {
 		},
 		call: function(request) {
 			return respond(package_search(request.args.query || ''));
+		}
+	},
+
+	package_detail: {
+		args: {
+			name: ''
+		},
+		call: function(request) {
+			try {
+				return respond(package_detail(request.args.name || ''));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					manager: command_exists('apk') ? 'apk' : 'opkg',
+					name: request.args.name || '',
+					installed: false,
+					version: '',
+					description: '',
+					webpage: '',
+					installedSize: '',
+					license: '',
+					dependencies: [],
+					provides: [],
+					requiredBy: [],
+					files: [],
+					warnings: [],
+					message: 'Package detail failed: ' + e
+				});
+			}
 		}
 	},
 

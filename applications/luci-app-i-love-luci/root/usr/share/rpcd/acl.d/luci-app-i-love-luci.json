@@ -10,6 +10,7 @@
 					"core_settings",
 					"network_interface_action",
 					"native_page",
+					"package_detail",
 					"package_search",
 					"package_job_status",
 					"service_detail",

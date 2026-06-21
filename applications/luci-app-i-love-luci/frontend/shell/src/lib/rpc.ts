@@ -360,6 +360,24 @@ export type PackageSearchResult = {
 	message: string;
 };
 
+export type PackageDetailResult = {
+	ok: boolean;
+	manager: string;
+	name: string;
+	installed: boolean;
+	version: string;
+	description: string;
+	webpage: string;
+	installedSize: string;
+	license: string;
+	dependencies: string[];
+	provides: string[];
+	requiredBy: string[];
+	files: string[];
+	warnings: string[];
+	message: string;
+};
+
 export type PackageAction = "install" | "remove" | "update" | "upgrade";
 
 export type PackageActionResult = {
@@ -1720,6 +1738,31 @@ export async function searchPackages(query: string): Promise<PackageSearchResult
 			lines: [],
 			warnings: [],
 			message: "Package search failed.",
+		};
+	}
+}
+
+export async function getPackageDetail(name: string): Promise<PackageDetailResult> {
+	try {
+		return await callBridge<PackageDetailResult>("package_detail", { name });
+	}
+	catch {
+		return {
+			ok: false,
+			manager: "unknown",
+			name,
+			installed: false,
+			version: "",
+			description: "",
+			webpage: "",
+			installedSize: "",
+			license: "",
+			dependencies: [],
+			provides: [],
+			requiredBy: [],
+			files: [],
+			warnings: [],
+			message: "Package detail failed.",
 		};
 	}
 }

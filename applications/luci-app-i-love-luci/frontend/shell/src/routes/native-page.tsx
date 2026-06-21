@@ -16,6 +16,7 @@ import {
 	downloadMtdBlock,
 	flashFirmware,
 	getNativePage,
+	getPackageDetail,
 	getPackageJobStatus,
 	getServiceDetail,
 	runAttendedSysupgradePlan,
@@ -65,6 +66,7 @@ import {
 	type NativeService,
 	type PackageActionResult,
 	type PackageActionOptions,
+	type PackageDetailResult,
 	type PackageFeedRow,
 	type PackageFileStageResult,
 	type PackageSearchResult,
@@ -3183,6 +3185,8 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const [removeAutoremove, setRemoveAutoremove] = useState(false);
 	const [actionResult, setActionResult] = useState<PackageActionResult | null>(null);
 	const [actionBusy, setActionBusy] = useState<string | null>(null);
+	const [detailResult, setDetailResult] = useState<PackageDetailResult | null>(null);
+	const [detailBusy, setDetailBusy] = useState<string | null>(null);
 	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
 	const upgrades = useMemo(() => parsePackageUpgrades(commandOutput(data.commands, "Available upgrades")), [data.commands]);
 	const filtered = useMemo(() => {
@@ -3263,6 +3267,17 @@ function PackageInventory({ data }: { data: NativePageData }) {
 		}
 	}
 
+	async function showPackageDetail(name: string) {
+		setDetailBusy(name);
+		const result = await getPackageDetail(name);
+		setDetailResult(result);
+		setDetailBusy(null);
+
+		if (!result.ok) {
+			toast.error(result.message);
+		}
+	}
+
 	return (
 		<div className="grid gap-4">
 			<div className="grid gap-3 sm:grid-cols-3">
@@ -3272,6 +3287,7 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			</div>
 			<PackageUpgradeTable actionBusy={actionBusy} entries={upgrades} onRunAction={runAction} />
 			<PackageActionOutput result={actionResult} />
+			<PackageDetailPanel detail={detailResult} />
 			<ManualPackagePlanner busy={actionBusy} onRunAction={runAction} />
 			<Panel title="Package action options">
 				<label className="inline-flex items-center gap-2 text-sm">
@@ -3279,8 +3295,8 @@ function PackageInventory({ data }: { data: NativePageData }) {
 					Automatically remove unused dependencies when removing packages
 				</label>
 			</Panel>
-			<AvailablePackageTable busy={actionBusy} lines={data.packageAvailable ?? []} onRunAction={runAction} />
-			<AvailablePackageSearch busy={actionBusy} onRunAction={runAction} />
+			<AvailablePackageTable busy={actionBusy} detailBusy={detailBusy} lines={data.packageAvailable ?? []} onRunAction={runAction} onShowDetail={showPackageDetail} />
+			<AvailablePackageSearch busy={actionBusy} detailBusy={detailBusy} onRunAction={runAction} onShowDetail={showPackageDetail} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
 			<Panel
 				title={
@@ -3334,6 +3350,15 @@ function PackageInventory({ data }: { data: NativePageData }) {
 										<td className="px-3 py-3">{pkg.description || "none"}</td>
 										<td className="px-3 py-3">
 											<div className="flex flex-wrap gap-1.5">
+												<Button
+													disabled={detailBusy === pkg.name}
+													onClick={() => void showPackageDetail(pkg.name)}
+													size="sm"
+													type="button"
+													variant="ghost"
+												>
+													Details
+												</Button>
 												<Button
 													disabled={actionBusy === `remove:${pkg.name}:plan`}
 													onClick={() => void runAction("remove", pkg.name, true, { autoremove: removeAutoremove })}
@@ -3401,6 +3426,43 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 				title="Package action context"
 			/>
 			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
+		</div>
+	);
+}
+
+function PackageDetailPanel({ detail }: { detail: PackageDetailResult | null }) {
+	if (!detail) {
+		return null;
+	}
+
+	const fileRows = detail.files.slice(0, 80).map((file, index) => [index + 1, <span className="font-mono text-xs">{file}</span>]);
+	const relationRows = [
+		["Dependencies", detail.dependencies.length ? detail.dependencies.join(", ") : "none"],
+		["Provides", detail.provides.length ? detail.provides.join(", ") : "none"],
+		["Required by", detail.requiredBy.length ? detail.requiredBy.join(", ") : "none"],
+		["Warnings", detail.warnings.length ? detail.warnings.join(" ") : "none"],
+	];
+
+	return (
+		<div className="grid gap-3">
+			<SimpleValueTable
+				columns={["Field", "Value"]}
+				empty="No package metadata."
+				rows={[
+					["Package", detail.name],
+					["Manager", detail.manager],
+					["Installed", detail.installed ? "yes" : "no"],
+					["Version", detail.version || "unknown"],
+					["Installed size", detail.installedSize || "unknown"],
+					["License", detail.license || "unknown"],
+					["Web page", detail.webpage || "none"],
+					["Description", detail.description || "none"],
+					["Status", detail.message],
+				]}
+				title="Package detail"
+			/>
+			<SimpleValueTable columns={["Relation", "Packages"]} empty="No package relations." rows={relationRows} title="Package relations" />
+			<SimpleValueTable columns={["#", "Installed file"]} empty="No installed file list." rows={fileRows} title="Package files" />
 		</div>
 	);
 }
@@ -3538,12 +3600,16 @@ function ManualPackagePlanner({
 
 function AvailablePackageTable({
 	busy,
+	detailBusy,
 	lines,
 	onRunAction,
+	onShowDetail,
 }: {
 	busy: string | null;
+	detailBusy: string | null;
 	lines: string[];
 	onRunAction: (action: "install", name: string, simulate: boolean, options?: PackageActionOptions) => void | Promise<void>;
+	onShowDetail: (name: string) => void | Promise<void>;
 }) {
 	const [query, setQuery] = useState("");
 	const [translationMode, setTranslationMode] = useState<"all" | "hide" | "only">("all");
@@ -3613,15 +3679,26 @@ function AvailablePackageTable({
 									<td className="px-3 py-3 font-mono text-xs text-muted-foreground">{pkg.version}</td>
 									<td className="px-3 py-3">{pkg.description || "none"}</td>
 									<td className="px-3 py-3">
-										<Button
-											disabled={busy === `install:${pkg.name}:plan`}
-											onClick={() => void onRunAction("install", pkg.name, true)}
-											size="sm"
-											type="button"
-											variant="outline"
-										>
-											Plan install
-										</Button>
+										<div className="flex flex-wrap gap-1.5">
+											<Button
+												disabled={detailBusy === pkg.name}
+												onClick={() => void onShowDetail(pkg.name)}
+												size="sm"
+												type="button"
+												variant="ghost"
+											>
+												Details
+											</Button>
+											<Button
+												disabled={busy === `install:${pkg.name}:plan`}
+												onClick={() => void onRunAction("install", pkg.name, true)}
+												size="sm"
+												type="button"
+												variant="outline"
+											>
+												Plan install
+											</Button>
+										</div>
 									</td>
 								</tr>
 							))
@@ -3805,10 +3882,14 @@ function normalizePackageFeed(row: PackageFeedRow): PackageFeedRow {
 
 function AvailablePackageSearch({
 	busy,
+	detailBusy,
 	onRunAction,
+	onShowDetail,
 }: {
 	busy: string | null;
+	detailBusy: string | null;
 	onRunAction: (action: "install" | "remove" | "update", name?: string, simulate?: boolean, options?: PackageActionOptions) => void | Promise<void>;
+	onShowDetail: (name: string) => void | Promise<void>;
 }) {
 	const [query, setQuery] = useState("");
 	const [result, setResult] = useState<PackageSearchResult | null>(null);
@@ -3892,6 +3973,15 @@ function AvailablePackageSearch({
 									<td className="px-3 py-3">{pkg.description || "none"}</td>
 									<td className="px-3 py-3">
 										<div className="flex flex-wrap gap-1.5">
+											<Button
+												disabled={detailBusy === pkg.name}
+												onClick={() => void onShowDetail(pkg.name)}
+												size="sm"
+												type="button"
+												variant="ghost"
+											>
+												Details
+											</Button>
 											<Button
 												disabled={busy === `install:${pkg.name}:plan`}
 												onClick={() => void onRunAction("install", pkg.name, true)}

@@ -64,6 +64,8 @@ echo '---ILOVELUCI-NETWORK-INTERFACE-STATUS---'
 ubus call luci.iloveluci network_interface_action '{\"name\":\"lan\",\"action\":\"status\"}'
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
+echo '---ILOVELUCI-PACKAGE-DETAIL---'
+ubus call luci.iloveluci package_detail '{\"name\":\"busybox\"}'
 echo '---ILOVELUCI-PACKAGE-FILE-STAGE---'
 ubus call luci.iloveluci package_file_stage '{\"filename\":\"audit.apk\",\"data\":\"bm90LWEtcGFja2FnZQo=\"}'
 rm -f /tmp/i-love-luci-package-audit.apk
@@ -422,6 +424,20 @@ else:
 		failures.append("package_search did not return package lines")
 	elif not package_data.get("lines"):
 		warnings.append("package_search returned no luci-app results")
+
+package_detail = json_after_marker("---ILOVELUCI-PACKAGE-DETAIL---")
+if not package_detail or not package_detail.get("ok"):
+	failures.append("package_detail did not return ok")
+else:
+	detail_data = package_detail.get("data") or {}
+	if detail_data.get("ok") is not True:
+		failures.append("package_detail did not load busybox")
+	if detail_data.get("name") != "busybox":
+		failures.append("package_detail returned wrong package")
+	if not isinstance(detail_data.get("dependencies"), list):
+		failures.append("package_detail did not return dependency list")
+	if not isinstance(detail_data.get("files"), list):
+		failures.append("package_detail did not return file list")
 
 package_stage = json_after_marker("---ILOVELUCI-PACKAGE-FILE-STAGE---")
 if not package_stage or not package_stage.get("ok"):
