@@ -11,6 +11,7 @@
 					"network_interface_action",
 					"native_page",
 					"package_detail",
+					"package_i18n_suggestions",
 					"package_search",
 					"package_job_status",
 					"service_detail",

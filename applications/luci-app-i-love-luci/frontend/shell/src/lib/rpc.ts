@@ -378,6 +378,17 @@ export type PackageDetailResult = {
 	message: string;
 };
 
+export type PackageI18nSuggestionResult = {
+	ok: boolean;
+	manager: string;
+	name: string;
+	language: string;
+	prefix: string;
+	lines: string[];
+	warnings: string[];
+	message: string;
+};
+
 export type PackageAction = "install" | "remove" | "update" | "upgrade";
 
 export type PackageActionResult = {
@@ -1763,6 +1774,24 @@ export async function getPackageDetail(name: string): Promise<PackageDetailResul
 			files: [],
 			warnings: [],
 			message: "Package detail failed.",
+		};
+	}
+}
+
+export async function getPackageI18nSuggestions(name: string): Promise<PackageI18nSuggestionResult> {
+	try {
+		return await callBridge<PackageI18nSuggestionResult>("package_i18n_suggestions", { name });
+	}
+	catch {
+		return {
+			ok: false,
+			manager: "unknown",
+			name,
+			language: "",
+			prefix: "",
+			lines: [],
+			warnings: [],
+			message: "Translation suggestions failed.",
 		};
 	}
 }

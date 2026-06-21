@@ -6019,6 +6019,74 @@ function package_detail(name) {
 	return detail;
 }
 
+function package_i18n_base(name) {
+	if (index(name, 'luci-app-') == 0)
+		return substr(name, length('luci-app-'));
+
+	if (index(name, 'luci-mod-') == 0)
+		return substr(name, length('luci-mod-'));
+
+	if (name == 'luci-base')
+		return 'base';
+
+	return '';
+}
+
+function package_i18n_suggestions(name) {
+	name = trim('' + (name || ''));
+	let manager = command_exists('apk') ? 'apk' : 'opkg';
+	let language = '';
+
+	uci.load('luci');
+	language = uci.get('luci', 'main', 'lang') || '';
+
+	let result = {
+		ok: false,
+		manager,
+		name,
+		language,
+		prefix: '',
+		lines: [],
+		warnings: [],
+		message: 'No translation package suggestions.'
+	};
+
+	if (!valid_package_name(name)) {
+		result.message = 'Package name contains unsupported characters.';
+		return result;
+	}
+
+	let base = package_i18n_base(name);
+	if (!length(base)) {
+		result.message = 'Translation suggestions apply to LuCI packages.';
+		return result;
+	}
+
+	result.prefix = 'luci-i18n-' + base + '-';
+	let query = result.prefix + '*';
+	let argv = manager == 'apk'
+		? ['apk', 'search', '-v', query]
+		: ['opkg', 'list', query];
+	let output = shell_output(`${join(' ', quote_command_args(argv))} 2>&1 | sed -n "1,120p"`);
+
+	for (let raw_line in split(output, '\n')) {
+		let line = trim(raw_line);
+
+		if (!length(line))
+			continue;
+
+		if (substr(line, 0, 8) == 'WARNING:')
+			unique_push(result.warnings, line);
+		else
+			unique_push(result.lines, line);
+	}
+
+	result.ok = true;
+	result.message = length(result.lines) ? 'Translation suggestions loaded.' : 'No translation packages matched this LuCI package.';
+
+	return result;
+}
+
 function valid_package_reference(name, simulate) {
 	if (valid_package_name(name))
 		return true;
@@ -10328,6 +10396,29 @@ const methods = {
 					files: [],
 					warnings: [],
 					message: 'Package detail failed: ' + e
+				});
+			}
+		}
+	},
+
+	package_i18n_suggestions: {
+		args: {
+			name: ''
+		},
+		call: function(request) {
+			try {
+				return respond(package_i18n_suggestions(request.args.name || ''));
+			}
+			catch (e) {
+				return respond({
+					ok: false,
+					manager: command_exists('apk') ? 'apk' : 'opkg',
+					name: request.args.name || '',
+					language: '',
+					prefix: '',
+					lines: [],
+					warnings: [],
+					message: 'Translation suggestions failed: ' + e
 				});
 			}
 		}

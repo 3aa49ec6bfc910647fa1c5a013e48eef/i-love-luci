@@ -66,6 +66,8 @@ echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-PACKAGE-DETAIL---'
 ubus call luci.iloveluci package_detail '{\"name\":\"busybox\"}'
+echo '---ILOVELUCI-PACKAGE-I18N---'
+ubus call luci.iloveluci package_i18n_suggestions '{\"name\":\"luci-app-banip\"}'
 echo '---ILOVELUCI-PACKAGE-FILE-STAGE---'
 ubus call luci.iloveluci package_file_stage '{\"filename\":\"audit.apk\",\"data\":\"bm90LWEtcGFja2FnZQo=\"}'
 rm -f /tmp/i-love-luci-package-audit.apk
@@ -438,6 +440,18 @@ else:
 		failures.append("package_detail did not return dependency list")
 	if not isinstance(detail_data.get("files"), list):
 		failures.append("package_detail did not return file list")
+
+package_i18n = json_after_marker("---ILOVELUCI-PACKAGE-I18N---")
+if not package_i18n or not package_i18n.get("ok"):
+	failures.append("package_i18n_suggestions did not return ok")
+else:
+	i18n_data = package_i18n.get("data") or {}
+	if i18n_data.get("ok") is not True:
+		failures.append("package_i18n_suggestions did not load luci-app-banip translations")
+	if i18n_data.get("prefix") != "luci-i18n-banip-":
+		failures.append("package_i18n_suggestions returned wrong prefix")
+	if not isinstance(i18n_data.get("lines"), list):
+		failures.append("package_i18n_suggestions did not return lines")
 
 package_stage = json_after_marker("---ILOVELUCI-PACKAGE-FILE-STAGE---")
 if not package_stage or not package_stage.get("ok"):

@@ -17,6 +17,7 @@ import {
 	flashFirmware,
 	getNativePage,
 	getPackageDetail,
+	getPackageI18nSuggestions,
 	getPackageJobStatus,
 	getServiceDetail,
 	runAttendedSysupgradePlan,
@@ -69,6 +70,7 @@ import {
 	type PackageDetailResult,
 	type PackageFeedRow,
 	type PackageFileStageResult,
+	type PackageI18nSuggestionResult,
 	type PackageSearchResult,
 	type RestoreBackupValidationResult,
 	type ServiceFile,
@@ -3503,6 +3505,10 @@ function ManualPackagePlanner({
 	const [overwrite, setOverwrite] = useState(false);
 	const [staging, setStaging] = useState(false);
 	const [stagedFile, setStagedFile] = useState<PackageFileStageResult | null>(null);
+	const [suggestionBusy, setSuggestionBusy] = useState(false);
+	const [suggestions, setSuggestions] = useState<PackageI18nSuggestionResult | null>(null);
+	const [selectedTranslations, setSelectedTranslations] = useState<string[]>([]);
+	const translationRows = useMemo(() => (suggestions?.lines ?? []).map(parsePackageLine), [suggestions?.lines]);
 
 	function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -3513,7 +3519,41 @@ function ManualPackagePlanner({
 			return;
 		}
 
-		void onRunAction("install", value, true, { overwrite });
+		void onRunAction("install", value, true, { overwrite, i18nPackages: selectedTranslations });
+	}
+
+	function updateName(value: string) {
+		setName(value);
+		setSuggestions(null);
+		setSelectedTranslations([]);
+	}
+
+	function toggleTranslation(packageName: string, checked: boolean) {
+		setSelectedTranslations((current) =>
+			checked ? Array.from(new Set([...current, packageName])) : current.filter((entry) => entry !== packageName),
+		);
+	}
+
+	async function loadTranslations() {
+		const value = name.trim();
+
+		if (!value) {
+			toast.error("Package name is required.");
+			return;
+		}
+
+		setSuggestionBusy(true);
+		const result = await getPackageI18nSuggestions(value);
+		setSuggestionBusy(false);
+		setSuggestions(result);
+		setSelectedTranslations([]);
+
+		if (result.ok) {
+			toast.success(result.message);
+		}
+		else {
+			toast.error(result.message);
+		}
 	}
 
 	async function selectFile(file: File | undefined) {
@@ -3541,7 +3581,7 @@ function ManualPackagePlanner({
 			return;
 		}
 
-		setName(result.path);
+		updateName(result.path);
 		toast.success(result.message);
 	}
 
@@ -3558,11 +3598,47 @@ function ManualPackagePlanner({
 		>
 			<form className="grid gap-3" onSubmit={submit}>
 				<div className="flex flex-col gap-2 sm:flex-row">
-					<Input onChange={(event) => setName(event.target.value)} placeholder="Package name, URL, or /tmp/package.apk" value={name} />
+					<Input onChange={(event) => updateName(event.target.value)} placeholder="Package name, URL, or /tmp/package.apk" value={name} />
+					<Button disabled={suggestionBusy} onClick={() => void loadTranslations()} type="button" variant="outline">
+						{suggestionBusy ? "Checking" : "Translations"}
+					</Button>
 					<Button disabled={busy === `install:${name.trim()}:plan`} type="submit" variant="outline">
 						Plan install
 					</Button>
 				</div>
+				{suggestions ? (
+					<div className="grid gap-2 rounded-md border p-3">
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<div>
+								<div className="text-sm font-medium">Translation packages</div>
+								<div className="text-xs text-muted-foreground">
+									{suggestions.message} Router language: {suggestions.language || "unknown"}.
+								</div>
+							</div>
+							{selectedTranslations.length ? <Badge>{selectedTranslations.length} selected</Badge> : null}
+						</div>
+						<div className="grid max-h-56 gap-2 overflow-auto text-sm sm:grid-cols-2">
+							{translationRows.length ? (
+								translationRows.slice(0, 40).map((pkg) => (
+									<label className="flex items-start gap-2 rounded-md border p-2" key={pkg.name}>
+										<input
+											checked={selectedTranslations.includes(pkg.name)}
+											className="mt-0.5 size-4"
+											onChange={(event) => toggleTranslation(pkg.name, event.target.checked)}
+											type="checkbox"
+										/>
+										<span className="min-w-0">
+											<span className="block font-medium">{pkg.name}</span>
+											<span className="block text-xs text-muted-foreground">{pkg.description || pkg.version || "Translation package"}</span>
+										</span>
+									</label>
+								))
+							) : (
+								<div className="text-sm text-muted-foreground">No translation packages found for this package.</div>
+							)}
+						</div>
+					</div>
+				) : null}
 				<div className="grid gap-2 text-sm">
 					<div className="font-medium">Package file</div>
 					<Input accept=".apk,.ipk" disabled={staging} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
