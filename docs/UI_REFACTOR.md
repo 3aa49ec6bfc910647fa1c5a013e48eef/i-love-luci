@@ -1017,6 +1017,7 @@ Required tooling:
   - pending-change bridge shape regressions
 - `scripts/smoke-router-http-routes.sh` logs into LuCI over HTTP using the React/Vite login form contract and reports:
   - login shell missing the React/Vite app bundle
+  - login shell regressing to old LuCI auth copy, reset controls, or mobile zoom-prone viewport
   - authenticated app shell failing to load
   - visible native routes whose shell target fails
   - visible LuCI compat routes that return login, 404, dispatch failure, or HTTP errors

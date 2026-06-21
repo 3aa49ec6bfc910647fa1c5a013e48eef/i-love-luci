@@ -138,6 +138,10 @@ warnings = []
 
 if pre_status != 403 or 'data-iloveluci-login="true"' not in pre_body or "assets/app.js" not in pre_body:
 	failures.append("login page did not render React/Vite login shell before authentication")
+if "Authorization Required" in pre_body or "Please enter your username and password." in pre_body or 'type="reset"' in pre_body:
+	failures.append("login page rendered legacy LuCI auth copy or reset control")
+if 'maximum-scale=1.0' not in pre_body or 'user-scalable=no' not in pre_body:
+	failures.append("login page is missing the mobile viewport zoom guard")
 
 post_data = urllib.parse.urlencode({
 	"luci_username": user,
