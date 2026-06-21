@@ -1,6 +1,6 @@
 # I Love LuCI
 
-I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a compatibility bridge for existing LuCI pages.
+I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a LuCI compat bridge for existing LuCI pages.
 
 ## Sysupgrade Compatibility
 
@@ -18,7 +18,7 @@ Current package shape:
 
 - The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
 - The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
-- The legacy bridge only works when LuCI is installed.
+- The LuCI compat bridge only works when LuCI is installed.
 - The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` is not installed or configured by default; it is an optional trusted-LAN development fallback only. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
 
 Future-proof target:
@@ -26,7 +26,7 @@ Future-proof target:
 - Split a standalone `i-love-luci` package from the LuCI-specific compatibility layer.
 - Serve the React app directly through `uhttpd` instead of LuCI dispatcher/templates.
 - Keep `rpcd`/`ubus` as the backend bridge, with first-party auth/session handling.
-- Make LuCI optional: if installed, expose legacy routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
+- Make LuCI optional: if installed, expose LuCI routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
 - Keep release-specific feeds for 24.10/opkg and 25.12+/apk until the package manager transition has settled.
 
 Relevant OpenWrt docs:
@@ -99,13 +99,23 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 
 - Native React dashboard for bandwidth, CPU, and memory telemetry.
 - Dynamic LuCI route discovery from installed menu definitions.
-- Legacy bridge for LuCI apps that have not yet been rebuilt as native screens.
+- LuCI compat bridge for LuCI apps that have not yet been rebuilt as native screens.
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
 - Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session.
-- Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
+- Route rendering settings so individual LuCI paths can use native, LuCI compat, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
+
+## Route Model
+
+User-facing routes have three outcomes:
+
+- `Native`: the React/Vite screen has enough parity evidence to be the default.
+- `LuCI compat`: the original LuCI route opens inside the I Love LuCI shell, preserving the LuCI app's JavaScript, forms, save/apply behavior, deep links, and package-specific side effects.
+- `Hidden`: the route is intentionally omitted from I Love LuCI navigation/search.
+
+Unknown or newly installed `luci-app-*` routes are discovered from LuCI menu metadata and default to LuCI compat unless a native adapter explicitly supports the full workflow. Current release audits on the test router report 57 visible routes: 42 native routes, 15 LuCI compat routes, and 0 unsupported routes. Remaining compat routes are network interfaces, firmware flash, attended sysupgrade overview, package manager, banIP, and AdBlock Fast workflows where LuCI still owns behavior that is risky, destructive, long-running, or package-specific.
 
 ## Project Layout
 

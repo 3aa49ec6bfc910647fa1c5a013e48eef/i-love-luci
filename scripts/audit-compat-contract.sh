@@ -329,9 +329,19 @@ for base in scan_roots:
 				"dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk",
 				"apk del luci-app-i-love-luci i-love-luci-console",
 				"opkg remove luci-app-i-love-luci i-love-luci-console",
+				"## Route Model",
+				"Unknown or newly installed `luci-app-*` routes",
+				"LuCI compat bridge",
 			):
 				if required_readme_term not in text:
 					failures.append(f"{relative_path}: install/rollback docs missing helper term {required_readme_term}")
+			for forbidden_readme_term in (
+				"Legacy bridge",
+				"legacy bridge",
+				"native, legacy, hidden",
+			):
+				if forbidden_readme_term in text:
+					failures.append(f"{relative_path}: README must use LuCI compat product wording, not {forbidden_readme_term}")
 		if relative_path == modern_shell_file:
 			if "flex min-h-0 flex-1 overflow-hidden" not in text:
 				failures.append(f"{relative_path}: shell body must constrain overflow for independent sidebar/main scrolling")
