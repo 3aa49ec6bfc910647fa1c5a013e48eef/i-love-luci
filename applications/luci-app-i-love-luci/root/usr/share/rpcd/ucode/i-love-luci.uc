@@ -210,6 +210,72 @@ function check_fs_depends(spec) {
 	return true;
 }
 
+function check_uci_depends(spec) {
+	for (let config, sections in spec) {
+		try {
+			uci.load(config);
+		}
+		catch (e) {
+			return false;
+		}
+
+		for (let section, options in sections) {
+			let found = false;
+
+			if (index(section, '@') == 0) {
+				let section_type = substr(section, 1);
+				uci.foreach(config, section_type, function(s) {
+					if (type(options) != 'object') {
+						found = true;
+						return;
+					}
+
+					let matches = true;
+					for (let option, expected in options) {
+						let current = s[option];
+
+						if (expected == true) {
+							if (current == null || current == '') {
+								matches = false;
+								break;
+							}
+						}
+						else if (current != expected) {
+							matches = false;
+							break;
+						}
+					}
+
+					if (matches)
+						found = true;
+				});
+			}
+			else {
+				found = uci.get(config, section) != null;
+
+				if (found && type(options) == 'object') {
+					for (let option, expected in options) {
+						let current = uci.get(config, section, option);
+
+						if (expected == true) {
+							if (current == null || current == '')
+								return false;
+						}
+						else if (current != expected) {
+							return false;
+						}
+					}
+				}
+			}
+
+			if (!found)
+				return false;
+		}
+	}
+
+	return true;
+}
+
 function depends_satisfied(depends) {
 	if (type(depends) != 'object')
 		return true;
@@ -227,6 +293,9 @@ function depends_satisfied(depends) {
 	else if (type(depends.fs) == 'object' && !check_fs_depends(depends.fs)) {
 		return false;
 	}
+
+	if (type(depends.uci) == 'object' && !check_uci_depends(depends.uci))
+		return false;
 
 	return true;
 }
@@ -341,7 +410,10 @@ function effective_mode(configuredMode, nativeStatus, autoMode) {
 	if (autoMode == 'legacy')
 		return 'legacy';
 
-	return has_native ? 'modern' : 'legacy';
+	if (autoMode == 'modern')
+		return has_native ? 'modern' : 'legacy';
+
+	return nativeStatus == 'supported' ? 'modern' : 'legacy';
 }
 
 function clone_section(section) {
@@ -7308,7 +7380,7 @@ function build_menu() {
 			hasChildren: false,
 			legacy: mode != 'modern',
 			nativeStatus,
-			nativeAutoMode: nativeRoute?.autoMode || 'modern',
+			nativeAutoMode: nativeRoute?.autoMode || (nativeStatus == 'partial' ? 'legacy' : 'modern'),
 			configuredMode,
 			effectiveMode: mode,
 			nativePath: nativeRoute?.nativePath || null,

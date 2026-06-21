@@ -162,6 +162,13 @@ for item in visible:
 	if item.get("nativeAutoMode") == "legacy" and item.get("configuredMode", "auto") == "auto" and mode != "legacy":
 		failures.append(f"{path}: autoMode=legacy but effectiveMode={mode}")
 
+	if (
+		item.get("configuredMode", "auto") == "auto"
+		and item.get("nativeStatus") == "partial"
+		and mode != "legacy"
+	):
+		failures.append(f"{path}: partial native route should default to LuCI compat until full-page parity is proven")
+
 	if item.get("actionType") == "firstchild" and item.get("firstChildPath") and item["firstChildPath"] not in route_paths:
 		failures.append(f"{path}: firstChildPath missing from menu_tree: {item['firstChildPath']}")
 

@@ -701,7 +701,7 @@ Validation on `172.16.172.1`:
 
 Remaining legacy or partial gaps:
 
-- Wireless-specific pages are native but partial. The current test router has no active wireless stack and lacks `iw`/`iwinfo`, so radio scanning, channel analysis, and association lists could not be validated.
+- Wireless-specific pages have native preview coverage only. The current test router has no `wireless.@wifi-device` UCI sections and lacks `iw`/`iwinfo`, so LuCI wireless routes are now hidden by the same UCI dependency metadata instead of appearing as broken navigation entries. Radio scanning, channel analysis, and association lists still need validation on a router with radios before any wireless route can be promoted.
 - Network interfaces are native for live status, common existing interface/device editing, static route add/edit/remove, and policy rule add/edit/remove. Interface/device create/delete, advanced protocol-specific forms, reconnect/reload actions, and full save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
 - DHCP/DNS now has native active lease visibility, common dnsmasq settings, DHCP pool add/edit/remove, static host reservation add/edit/remove, and DNS host record add/edit/remove. Less-common dnsmasq options, odhcpd options, RA flag editing beyond current pool modes, and full save/apply parity remain LuCI compat until a broader generic form/pending-change adapter is complete.
 - Firewall is native for defaults editing, zone add/edit/remove, zone forwarding add/edit/remove, traffic rule add/edit/remove for common rule fields, redirect add/edit/remove for common port-forward/NAT fields, whitelisted UCI include section editing, whitelisted custom nftables file editing, and summary views. Arbitrary include scripts, nft syntax validation, advanced zone/rule/redirect options, validation, and full save/apply parity remain LuCI compat until the generic form/pending-change adapter is complete.
@@ -886,6 +886,8 @@ Audit checks:
   - LuCI compat route when `effectiveMode=legacy`
   - hidden only when explicitly configured hidden or hidden by LuCI metadata
 - Every route with `nativeStatus=partial` and incomplete write/action parity defaults to LuCI compat in `auto`.
+- Partial route work must be batched one full LuCI page at a time. A route is promoted only after its LuCI source view, fields, actions, ACL/UCI visibility dependencies, save/apply behavior, mobile rendering, and compat fallback are compared and tested together. Do not promote isolated controls from a page when the rest of that page still depends on LuCI.
+- LuCI menu dependency metadata must be honored before a route is shown. If LuCI would hide a route because a required UCI section, ACL, file, executable, or package capability is absent, I Love LuCI must also hide it instead of routing to a broken native or compat page.
 - Every `luci-app-*` package has all of its menu children represented and defaults to LuCI compat unless a reusable native adapter proves parity.
 - Native route migrations are tested route-by-route, including dashboard/status, network, firewall, system, services, package, console, pending-change, and settings surfaces.
 - Installing a new LuCI app after I Love LuCI is installed requires no manual migration step: the route scanner should pick it up after cache refresh or service reload.
@@ -963,7 +965,7 @@ Acceptance gate:
 - Future app handling must be proven with an install/remove/reinstall smoke test for a LuCI app that was not hard-coded into I Love LuCI.
 - Native migration is not complete until every migrated route has parity evidence and every non-migrated or partial route has a working LuCI compat fallback.
 - Future installed apps are considered supported only when navigation, search, ACL visibility, direct route load, session recovery, and compat rendering all work without an I Love LuCI code change.
-- Latest router audit on `172.16.172.1` passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=38`, `partial=22`, `menu_files=15`, `luci_apps=9`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`.
+- Latest router audit on `172.16.172.1` passed after UCI dependency filtering with `visible_routes=57`, `modern=38`, `legacy=19`, `native_status supported=38`, `partial=19`, `menu_files=15`, `luci_apps=9`, `strict_compat_app_routes=13`, and `approved_native_app_routes=11`. Native page audit passed with `core_pages=4`, `native_pages=18`, and `service_adapters=6`; HTTP route smoke passed with `native_shell_checks=38` and `legacy_route_checks=19`.
 
 Final release/test gate:
 
