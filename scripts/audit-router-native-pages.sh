@@ -51,9 +51,25 @@ done
 echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
 echo '---ILOVELUCI-CONSOLE-LAUNCH---'
-ubus call luci.iloveluci console_launch
-echo '---ILOVELUCI-CONSOLE-LAUNCH-ROTATE---'
-ubus call luci.iloveluci console_launch
+ubus call luci.iloveluci console_launch >/tmp/i-love-luci-console-launch.json 2>/dev/null || true
+cat /tmp/i-love-luci-console-launch.json
+console_session_id=\$(jsonfilter -i /tmp/i-love-luci-console-launch.json -e '@.data.sessionId' 2>/dev/null || true)
+if test -n \$console_session_id; then
+	console_payload=\$(printf '{\"session_id\":\"%s\"}' \$console_session_id)
+	console_write_payload=\$(printf '{\"session_id\":\"%s\",\"input\":\"echo ILOVE-CONSOLE-SMOKE\\n\"}' \$console_session_id)
+	ubus call luci.iloveluci console_poll \"\$console_payload\" >/dev/null 2>/dev/null || true
+	ubus call luci.iloveluci console_write \"\$console_write_payload\" >/dev/null 2>/dev/null || true
+	console_poll_result=''
+	for i in 1 2 3 4 5; do
+		sleep 1
+		console_poll_result=\$(ubus call luci.iloveluci console_poll \"\$console_payload\" 2>/dev/null || true)
+		printf '%s\n' \"\$console_poll_result\" | grep -q 'ILOVE-CONSOLE-SMOKE' && break
+	done
+	echo '---ILOVELUCI-CONSOLE-POLL---'
+	printf '%s\n' \"\$console_poll_result\"
+	ubus call luci.iloveluci console_close \"\$console_payload\" >/dev/null 2>/dev/null || true
+fi
+rm -f /tmp/i-love-luci-console-launch.json 2>/dev/null || true
 echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
 echo '---ILOVELUCI-REBOOT-REJECT---'
@@ -394,48 +410,43 @@ if not console or not console.get("ok"):
 else:
 	console_data = console.get("data") or {}
 	if not console_data.get("available"):
-		warnings.append("console_status reports ttyd unavailable")
-	if console_data.get("enabled") and not console_data.get("url"):
-		failures.append("console_status enabled but missing URL")
-	if console_data.get("enabled") and console_data.get("transport") != "direct":
-		failures.append("console_status must report direct transport until the uHTTPd tunnel helper ships")
-	if console_data.get("enabled") and console_data.get("tunnelAvailable") is not False:
-		failures.append("console_status must not claim tunnel availability before the uHTTPd tunnel helper ships")
-	if console_data.get("enabled") and console_data.get("requiresDirectConnectivity") is not True:
-		failures.append("console_status must disclose direct ttyd connectivity requirement")
+		failures.append("console_status reports console helper unavailable")
+	if console_data.get("enabled") and console_data.get("transport") != "tunnel":
+		failures.append("console_status must report tunnel transport with the installed console helper")
+	if console_data.get("enabled") and console_data.get("tunnelAvailable") is not True:
+		failures.append("console_status must claim tunnel availability with the installed console helper")
+	if console_data.get("enabled") and console_data.get("requiresDirectConnectivity") is not False:
+		failures.append("console_status must not require direct connectivity with the installed console helper")
 	if console_data.get("username") or console_data.get("password"):
-		failures.append("console_status must not expose helper credentials before explicit console launch")
-	if console_data.get("enabled") and console_data.get("path") != "/":
-		failures.append("console_status enabled but did not expose the ttyd root path")
+		failures.append("console_status must not expose terminal credentials")
+	if console_data.get("url"):
+		failures.append("console_status must not expose a direct terminal URL in tunnel mode")
 
 console_launch = json_after_marker("---ILOVELUCI-CONSOLE-LAUNCH---")
 if not console_launch or not console_launch.get("ok"):
 	warnings.append("console_launch did not return ok")
 else:
 	console_launch_data = console_launch.get("data") or {}
-	if console_launch_data.get("enabled") and not console_launch_data.get("url"):
-		failures.append("console_launch enabled but missing URL")
-	if console_launch_data.get("enabled") and console_launch_data.get("transport") != "direct":
-		failures.append("console_launch must report direct transport until the uHTTPd tunnel helper ships")
-	if console_launch_data.get("enabled") and console_launch_data.get("tunnelAvailable") is not False:
-		failures.append("console_launch must not claim tunnel availability before the uHTTPd tunnel helper ships")
-	if console_launch_data.get("enabled") and console_launch_data.get("requiresDirectConnectivity") is not True:
-		failures.append("console_launch must disclose direct ttyd connectivity requirement")
-	if console_launch_data.get("enabled") and not console_launch_data.get("username"):
-		failures.append("console_launch enabled but missing helper username")
-	if console_launch_data.get("enabled") and not console_launch_data.get("password"):
-		failures.append("console_launch enabled but missing helper password")
-	if console_launch_data.get("enabled") and console_launch_data.get("path") != "/":
-		failures.append("console_launch enabled but did not expose the ttyd root path")
-	if console_launch_data.get("enabled") and console_launch_data.get("rotated") is not True:
-		failures.append("console_launch enabled but did not rotate the helper credential")
+	if console_launch_data.get("enabled") and console_launch_data.get("transport") != "tunnel":
+		failures.append("console_launch must report tunnel transport with the installed console helper")
+	if console_launch_data.get("enabled") and console_launch_data.get("tunnelAvailable") is not True:
+		failures.append("console_launch must claim tunnel availability with the installed console helper")
+	if console_launch_data.get("enabled") and console_launch_data.get("requiresDirectConnectivity") is not False:
+		failures.append("console_launch must not require direct connectivity with the installed console helper")
+	if console_launch_data.get("enabled") and not console_launch_data.get("sessionId"):
+		failures.append("console_launch enabled but missing helper session id")
+	if console_launch_data.get("username") or console_launch_data.get("password"):
+		failures.append("console_launch must not expose terminal credentials")
+	if console_launch_data.get("url"):
+		failures.append("console_launch must not expose a direct terminal URL in tunnel mode")
 
-console_launch_rotate = json_after_marker("---ILOVELUCI-CONSOLE-LAUNCH-ROTATE---")
-if console_launch and console_launch.get("ok") and console_launch_rotate and console_launch_rotate.get("ok"):
-	first = console_launch.get("data") or {}
-	second = console_launch_rotate.get("data") or {}
-	if first.get("enabled") and second.get("enabled") and first.get("password") == second.get("password"):
-		failures.append("console_launch helper credential did not change between launches")
+console_poll = json_after_marker("---ILOVELUCI-CONSOLE-POLL---")
+if console_launch and console_launch.get("ok"):
+	launch_data = console_launch.get("data") or {}
+	if launch_data.get("transport") == "tunnel":
+		output = (console_poll or {}).get("data", {}).get("output", "")
+		if "ILOVE-CONSOLE-SMOKE" not in output:
+			failures.append("console tunnel smoke output was not observed")
 
 changes = json_after_marker("---ILOVELUCI-CHANGES---")
 if not changes or not changes.get("ok"):

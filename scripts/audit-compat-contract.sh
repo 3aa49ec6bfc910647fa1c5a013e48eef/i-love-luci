@@ -264,9 +264,10 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: current compatibility model must keep the three-outcome route contract")
 		if relative_path == Path("docs/CONSOLE_TUNNEL.md"):
 			for required_console_doc_term in (
-				'transport: "direct"',
-				"tunnelAvailable: false",
-				"requiresDirectConnectivity: true",
+				'transport: "tunnel"',
+				"tunnelAvailable: true",
+				"requiresDirectConnectivity: false",
+				"i-love-luci-console",
 				"current uHTTPd source loads only hard-coded plugins",
 				"not sufficient for a ttyd tunnel",
 			):

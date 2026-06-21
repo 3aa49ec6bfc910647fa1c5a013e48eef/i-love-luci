@@ -695,8 +695,8 @@ Historical validation notes below may contain older raw audit labels that predat
 - Firewall port-forward editing now covers installed LuCI `firewall/forwards.js` fields. Router validation added and removed a disabled DNAT test forward with negated source IP/MAC and mark matches, source port, destination mapping, protocol list, default NAT reflection behavior, reflection zones, limit/burst, logging, and extra-args handling; `/etc/config/firewall` restored to the same SHA-256 hash and `uci changes` was empty afterward. Route audit passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=32`, `partial=28`, `unsupported=0`; native page audit passed with `core_pages=4`, `native_pages=18`, `service_adapters=6`; HTTP smoke passed with `native_shell_checks=47`, `legacy_route_checks=13`.
 - Historical route audit once used broader preview-path checks. Current policy supersedes this: only supported routes expose `nativePath`; routes with in-progress adapter evidence are clean LuCI compat and expose no native path.
 - Native page audit asserts focused service-adapter data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so future migration evidence cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
-- Native page audit now fails if `console_status` exposes the ttyd helper credential before explicit launch, fails if `console_launch` cannot return the helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again, and fails if consecutive launches reuse the same helper password. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
-- Console no-reprompt design is currently implemented with `ttyd` bound to LAN, a generated helper HTTP basic-auth credential stored in UCI, and `/bin/login -f root` as the ttyd command. The React header reads safe console metadata on load and opens an internal `#/console?launch=1` route after the user clicks the console button. The console route calls `console_launch`, rotates the ttyd helper password, commits `/etc/config/ttyd`, restarts only `ttyd`, and offers a top-level direct-open fallback because Chromium blocks embedded credential subresources. Security constraints: LAN binding, per-launch random helper credential, existing LuCI session required to request the launch credential, explicit user action before credential exposure, and native audit coverage for helper URL fields and credential rotation. This remains direct transport and is not the production tunnel target.
+- Native page audit now fails if `console_status` or `console_launch` exposes terminal credentials or a direct terminal URL while the helper tunnel is active. It also launches a helper PTY session, writes a smoke command over same-origin RPC, observes the output, and closes the session.
+- Console no-reprompt design is now implemented with the `i-love-luci-console` helper package. The helper owns PTY sessions behind a root-only UNIX socket, and the browser exchanges terminal input/output through authenticated same-origin LuCI RPC calls. Router validation on `172.16.172.1` installed and started `i-love-luci-console-1.0.0-r4.apk`, confirmed `transport: "tunnel"`, wrote `echo ILOVE-CONSOLE-SMOKE`, observed output, closed the session, and left `uci changes=0`.
 - Auth resume handling now probes the LuCI ubus session on app mount, browser focus, tab visibility resume, and page-cache restore. Expired sessions redirect to the LuCI login page, preserve the current hash-router deep link in session storage, and restore the route after successful login. Unknown/network probe failures do not force logout. Unit coverage includes direct LuCI compat hashes such as `#/admin/services/banip?tab=overview`, so session recovery preserves wrapper routes as well as native and `/legacy?path=...` routes.
 - Auth probe unit coverage now verifies missing-session expiry, successful `session_info`, login-required expiry, and transient-network `unknown` behavior so session recovery does not regress silently.
 - Native flash backup parity was expanded on `172.16.172.1`: `sysupgrade -l` backup file list renders in the native page and `sysupgrade_config_save` was exercised with current `/etc/sysupgrade.conf`, returning `changed=false` while the file SHA-256 stayed unchanged.
@@ -1128,35 +1128,23 @@ The compat contract audit now scans both LuCI `sysauth.ut` templates and fails i
 
 Current implementation:
 
-- `ttyd` is installed as a package dependency and configured by `90_luci-app-i-love-luci`.
-- The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
-- `console_status` returns safe ttyd availability metadata without the helper credential.
-- `console_status` and `console_launch` disclose `transport: direct`, `tunnelAvailable: false`, and `requiresDirectConnectivity: true` until the uHTTPd tunnel helper ships.
-- The header opens the internal `#/console?launch=1` route after explicit user action. The header does not request, hold, or build URLs with helper credentials.
-- `console_launch` reads and rotates the generated ttyd credential from UCI only inside the console route.
-- The console route must not embed ttyd with a `https://user:pass@host/` URL. Chromium blocks embedded-credential subresource requests, and the credential would still be visible in DOM/network state.
-- Until the proxy gateway below exists, the route only offers a direct top-level ttyd open path after explicit user action. This preserves current router access for trusted LAN testing but does not meet the no-browser-visible-credential target.
-
-Security gap:
-
-- The ttyd helper credential is rotated on every launch but is still present in the direct-open URL. This reduces exposure duration but does not remove browser-visible credential exposure.
-
-Selected future helper:
-
-- Build a small `i-love-luci-console` helper package that owns PTY sessions directly instead of reverse-proxying ttyd.
-- Expose launch, poll, write, resize, and close operations through authenticated same-origin LuCI RPC. This uses current uHTTPd/rpcd behavior and avoids requiring a generic uHTTPd WebSocket proxy.
+- `luci-app-i-love-luci` depends on the `i-love-luci-console` helper package.
+- The helper package owns PTY sessions directly instead of reverse-proxying ttyd.
+- The helper exposes launch, poll, write, resize, and close operations through authenticated same-origin LuCI RPC. This uses current uHTTPd/rpcd behavior and avoids requiring a generic uHTTPd WebSocket proxy.
 - The helper package now exists under `utils/i-love-luci-console`, has a procd service, owns a root-only UNIX control socket, and passed a Linux PTY smoke test for launch, poll, write, and close.
 - `console_launch` creates a short-lived helper session only after explicit user action from the header or console page.
 - Every console RPC validates the LuCI session, I Love LuCI ACL, helper session id, expiry, and idle timeout.
 - The React console route renders a terminal component and tunnels terminal I/O through same-origin RPC. The browser never connects to a second router port and never receives helper terminal credentials.
 - Helper sessions cap concurrent terminals and output buffer size, close on logout/timeout/process exit, and log open/deny events through syslog.
-- `console_status` must only report `transport: "tunnel"`, `tunnelAvailable: true`, and `requiresDirectConnectivity: false` after the helper is installed, enabled, and router-tested.
+- `console_status` reports `transport: "tunnel"`, `tunnelAvailable: true`, and `requiresDirectConnectivity: false` after the helper is installed, enabled, and running.
+- Router validation on `172.16.172.1` installed `i-love-luci-console-1.0.0-r4.apk`, enabled and started the service, launched a same-origin RPC console session, wrote `echo ILOVE-CONSOLE-SMOKE`, observed the command output, closed the session, and left `uci changes=0`.
+- The direct ttyd path remains a trusted-LAN fallback only when the helper is missing or stopped. Release validation expects the tunnel helper path.
 
 Alternative future option:
 
 - A uHTTPd WebSocket reverse-proxy enhancement could still allow ttyd behind a LuCI-session-protected gateway, but current uHTTPd CGI/ucode/ubus handlers do not provide that proxy and current uHTTPd only loads hard-coded plugins. That makes the native PTY helper the practical production path.
 
-Until that helper exists, the current ttyd integration is acceptable for trusted LAN testing but should be treated as a convenience bridge, not a hardened remote console. Public release hardening should use the session-bound PTY helper above; per-launch ttyd credential rotation only reduces exposure duration, it does not remove credential exposure. See [CONSOLE_TUNNEL.md](CONSOLE_TUNNEL.md) for the tunnel design and implementation constraints found on the `172.16.172.1` test router.
+Direct ttyd integration is acceptable only as a development fallback. Public release validation should use the session-bound PTY helper above so browser-visible terminal credentials are not produced. See [CONSOLE_TUNNEL.md](CONSOLE_TUNNEL.md) for the tunnel design and implementation constraints found on the `172.16.172.1` test router.
 
 Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
 

@@ -2,23 +2,7 @@
 
 ## Current State
 
-The shipped console path is direct ttyd access:
-
-```text
-browser -> ttyd on router port 7681 -> /bin/login -f root
-```
-
-I Love LuCI exposes this explicitly through `console_status`:
-
-- `transport: "direct"`
-- `tunnelAvailable: false`
-- `requiresDirectConnectivity: true`
-
-The app must not embed `https://user:pass@host/` ttyd URLs. Chromium blocks embedded-credential subresource requests, and the credentials remain visible in browser state.
-
-## Preferred State
-
-Preferred tunnel path:
+The shipped console path is now the native helper tunnel when `i-love-luci-console` is installed and running:
 
 ```text
 browser -> uHTTPd/LuCI session -> I Love LuCI console helper -> router PTY
@@ -33,9 +17,13 @@ Properties:
 - a short-lived one-time token scopes each console open action
 - terminal input/output is scoped to the authenticated LuCI session that opened it
 
+The app must not embed `https://user:pass@host/` ttyd URLs. Chromium blocks embedded-credential subresource requests, and credentials would remain visible in browser state.
+
+If the helper is absent, the backend can still report the older trusted-LAN ttyd fallback with `transport: "direct"`, but release validation expects the helper tunnel.
+
 ## Selected Production Direction
 
-Build a small `i-love-luci-console` helper package and make `luci-app-i-love-luci` use it when present.
+Use the small `i-love-luci-console` helper package and make `luci-app-i-love-luci` use it when present.
 
 The helper should own PTY sessions directly instead of proxying ttyd. That avoids the uHTTPd WebSocket proxy gap and lets the browser tunnel over the existing LuCI HTTP origin using authenticated RPC calls:
 
@@ -58,6 +46,7 @@ Current implementation:
 - `luci-app-i-love-luci` depends on `i-love-luci-console` and switches `console_status` / `console_launch` to `transport: "tunnel"` when the helper responds.
 - if the helper is not installed or not running, current releases keep reporting `transport: "direct"` and use the old trusted-LAN ttyd fallback.
 - local Linux smoke coverage compiled the helper, started the daemon, opened a PTY session, polled shell output, wrote `id`, polled the command output, and closed the session.
+- router smoke coverage on `172.16.172.1` installed `i-love-luci-console-1.0.0-r4.apk`, enabled and started the procd service, verified `console_status` reports `transport: "tunnel"`, launched a PTY session through same-origin RPC, wrote `echo ILOVE-CONSOLE-SMOKE`, observed the output, closed the session, and left `uci changes=0`.
 
 Implementation guardrails:
 

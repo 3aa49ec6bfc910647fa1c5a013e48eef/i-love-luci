@@ -77,6 +77,7 @@ export function ConsolePage() {
 
 	const fallbackUrl = buildConsoleFallbackUrl(launch, window.location.hostname);
 	const embeddedUrl = buildConsoleEmbeddedUrl(launch, window.location.hostname);
+	const isTunnel = (launch?.transport ?? status?.transport) === "tunnel";
 
 	return (
 		<div className="mx-auto grid h-[calc(100vh-7rem)] min-h-[36rem] w-full max-w-7xl grid-rows-[auto_1fr] gap-4">
@@ -88,11 +89,13 @@ export function ConsolePage() {
 					<div>
 						<h1 className="text-lg font-semibold">Router console</h1>
 						<p className="text-sm text-muted-foreground">
-							Direct ttyd launcher. Same-origin tunnel is planned but is not active in this build.
+							{isTunnel
+								? "Same-origin terminal tunnel through the authenticated I Love LuCI session."
+								: "Trusted-LAN direct console fallback."}
 						</p>
 					</div>
 				</div>
-				{fallbackUrl ? (
+				{fallbackUrl && !launch?.sessionId ? (
 					<Button
 						type="button"
 						variant="outline"
@@ -120,14 +123,14 @@ export function ConsolePage() {
 						{state === "loading" ? <p>Opening console...</p> : null}
 						{state === "ready" && !embeddedUrl ? (
 							<div className="grid max-w-xl gap-3">
-								<p>Console tunnel is not available yet.</p>
-								<p>Open console uses direct ttyd connectivity on port {launch?.port ?? status?.port ?? "7681"}.</p>
+								<p>Console tunnel is ready.</p>
+								<p>Use the terminal input below to send commands through the authenticated session.</p>
 							</div>
 						) : null}
 						{state === "unavailable" ? (
 							<div className="grid gap-2">
 								<p>Console bridge is not available.</p>
-								<p>ttyd status: {status?.available ? "installed" : "missing"} / {status?.enabled ? "enabled" : "disabled"}</p>
+								<p>Helper status: {status?.available ? "installed" : "missing"} / {status?.enabled ? "enabled" : "disabled"}</p>
 							</div>
 						) : null}
 						{state === "error" ? <p>Console launch failed. Refresh and try again.</p> : null}
