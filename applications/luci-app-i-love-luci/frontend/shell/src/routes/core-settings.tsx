@@ -207,6 +207,14 @@ function DhcpSummary({
 				name: lease.hostname === "unknown" ? "" : lease.hostname,
 				ip: lease.ip,
 				mac: lease.mac,
+				leasetime: "",
+				duid: "",
+				hostid: "",
+				tag: "",
+				match_tag: "",
+				instance: "",
+				broadcast: "",
+				dns: lease.hostname && lease.hostname !== "unknown" ? "1" : "",
 			},
 			id: Date.now(),
 		});
@@ -1431,7 +1439,23 @@ function StaticHostEditor({
 	}
 
 	function addRow() {
-		setRows((current) => [...current, { section: "", name: "", ip: "", mac: "" }]);
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				ip: "",
+				mac: "",
+				leasetime: "",
+				duid: "",
+				hostid: "",
+				tag: "",
+				match_tag: "",
+				instance: "",
+				broadcast: "",
+				dns: "",
+			},
+		]);
 	}
 
 	function removeRow(index: number) {
@@ -1470,12 +1494,20 @@ function StaticHostEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[46rem] text-left text-sm">
+					<table className="w-full min-w-[112rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Name</th>
-								<th className="px-3 py-2 font-medium">IP</th>
-								<th className="px-3 py-2 font-medium">MAC</th>
+								<th className="px-3 py-2 font-medium">IPv4</th>
+								<th className="px-3 py-2 font-medium">MACs</th>
+								<th className="px-3 py-2 font-medium">Lease</th>
+								<th className="px-3 py-2 font-medium">DUID/IAID</th>
+								<th className="px-3 py-2 font-medium">IPv6 token</th>
+								<th className="px-3 py-2 font-medium">Set tags</th>
+								<th className="px-3 py-2 font-medium">Match tags</th>
+								<th className="px-3 py-2 font-medium">Instance</th>
+								<th className="px-3 py-2 font-medium">Broadcast</th>
+								<th className="px-3 py-2 font-medium">DNS</th>
 								<th className="px-3 py-2 text-right font-medium">Actions</th>
 							</tr>
 						</thead>
@@ -1503,7 +1535,7 @@ function StaticHostEditor({
 										</td>
 										<td className="px-3 py-3">
 											<Input
-												aria-label="Reserved IP"
+												aria-label="Reserved IPv4 or ignore"
 												inputMode="numeric"
 												onChange={(event) => updateRow(index, "ip", event.target.value)}
 												value={host.ip}
@@ -1511,9 +1543,79 @@ function StaticHostEditor({
 										</td>
 										<td className="px-3 py-3">
 											<Input
-												aria-label="MAC address"
+												aria-label="MAC addresses"
 												onChange={(event) => updateRow(index, "mac", event.target.value)}
 												value={host.mac}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Lease time"
+												onChange={(event) => updateRow(index, "leasetime", event.target.value)}
+												placeholder="12h"
+												value={host.leasetime}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="DUID or IAID values"
+												className="min-h-20 w-56 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "duid", event.target.value)}
+												value={host.duid}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="IPv6 token"
+												onChange={(event) => updateRow(index, "hostid", event.target.value)}
+												value={host.hostid}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Set tags"
+												className="min-h-20 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "tag", event.target.value)}
+												value={host.tag}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Match tags"
+												className="min-h-20 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "match_tag", event.target.value)}
+												value={host.match_tag}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Dnsmasq instance"
+												onChange={(event) => updateRow(index, "instance", event.target.value)}
+												value={host.instance}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`dhcp-host-broadcast-${index}`}
+												onChange={(value) => updateRow(index, "broadcast", value)}
+												options={[
+													["", "Default"],
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={host.broadcast}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`dhcp-host-dns-${index}`}
+												onChange={(value) => updateRow(index, "dns", value)}
+												options={[
+													["", "Default"],
+													["1", "Yes"],
+													["0", "No"],
+												]}
+												value={host.dns}
 											/>
 										</td>
 										<td className="px-3 py-3 text-right">
@@ -1531,7 +1633,7 @@ function StaticHostEditor({
 								))
 							) : (
 								<tr>
-									<td className="px-3 py-6 text-muted-foreground" colSpan={4}>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={12}>
 										No static DHCP hosts configured.
 									</td>
 								</tr>
@@ -1558,6 +1660,14 @@ function normalizeDhcpHost(host: DhcpHost): DhcpHost {
 		name: host.name ?? "",
 		ip: host.ip ?? "",
 		mac: host.mac ?? "",
+		leasetime: host.leasetime ?? "",
+		duid: host.duid ?? "",
+		hostid: host.hostid ?? "",
+		tag: host.tag ?? "",
+		match_tag: host.match_tag ?? "",
+		instance: host.instance ?? "",
+		broadcast: host.broadcast === "1" || host.broadcast === "0" ? host.broadcast : "",
+		dns: host.dns === "1" || host.dns === "0" ? host.dns : "",
 	};
 }
 

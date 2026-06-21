@@ -768,7 +768,15 @@ function dhcp_static_hosts() {
 			section: section['.name'] || '',
 			name: section.name || '',
 			ip: section.ip || '',
-			mac: type(section.mac) == 'array' ? join(', ', section.mac) : (section.mac || '')
+			mac: type(section.mac) == 'array' ? join(', ', section.mac) : (section.mac || ''),
+			leasetime: section.leasetime || '',
+			duid: type(section.duid) == 'array' ? join(', ', section.duid) : (section.duid || ''),
+			hostid: section.hostid || '',
+			tag: type(section.tag) == 'array' ? join(', ', section.tag) : (section.tag || ''),
+			match_tag: type(section.match_tag) == 'array' ? join(', ', section.match_tag) : (section.match_tag || ''),
+			instance: section.instance || '',
+			broadcast: section.broadcast || '',
+			dns: section.dns || ''
 		});
 	});
 
@@ -875,6 +883,23 @@ function valid_mac_list(value) {
 	return length(value) && replace(value, /[^A-Fa-f0-9:,\n -]/g, '') == value;
 }
 
+function dhcp_zero_one(value) {
+	return value == '1' || value == 1 || value == true || value == 'on' ? '1' : '0';
+}
+
+function dhcp_optional_zero_one(value) {
+	value = '' + (value || '');
+	return value == '1' || value == '0' ? value : '';
+}
+
+function dhcp_numeric_value(value) {
+	return value == '' || replace(value, /[^0-9]/g, '') == value;
+}
+
+function valid_dhcp_leasetime(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_-]/g, '') == value;
+}
+
 function save_dhcp_static_hosts(rows) {
 	rows ||= [];
 	uci.load('dhcp');
@@ -903,42 +928,98 @@ function save_dhcp_static_hosts(rows) {
 		let ip = dhcp_clean_value(row?.ip || '');
 		let mac = dhcp_clean_value(row?.mac || '');
 		let mac_list = split_dhcp_list(mac);
+		let leasetime = dhcp_clean_value(row?.leasetime || '');
+		let duid_list = split_dhcp_list(row?.duid || '');
+		let hostid = dhcp_clean_value(row?.hostid || '');
+		let tag_list = split_dhcp_list(row?.tag || '');
+		let match_tag_list = split_dhcp_list(row?.match_tag || '');
+		let instance = dhcp_clean_value(row?.instance || '');
+		let broadcast = dhcp_optional_zero_one(row?.broadcast);
+		let dns = dhcp_optional_zero_one(row?.dns);
 
-		if (!valid_ipv4(ip))
+		if (ip != '' && ip != 'ignore' && !valid_ipv4(ip))
 			return {
 				saved: false,
-				message: 'Static DHCP host IP must be an IPv4 address.',
+				message: 'Static DHCP host IP must be an IPv4 address, ignore, or blank.',
 				changed: false,
 				hosts: dhcp_static_hosts(),
 				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 			};
 
-		if (!valid_mac_list(mac) || !length(mac_list))
+		if ((mac != '' && !valid_mac_list(mac)) || (!length(mac_list) && !length(duid_list) && !length(name)))
 			return {
 				saved: false,
-				message: 'Static DHCP host MAC address is required.',
+				message: 'Static DHCP host requires at least one MAC address, DUID/IAID, or hostname.',
 				changed: false,
 				hosts: dhcp_static_hosts(),
 				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
 			};
 
-		let current_name = uci.get('dhcp', section, 'name') || '';
-		let current_ip = uci.get('dhcp', section, 'ip') || '';
-		let current_mac = uci.get('dhcp', section, 'mac') || [];
+		if (leasetime != '' && !valid_dhcp_leasetime(leasetime))
+			return {
+				saved: false,
+				message: 'Static DHCP host lease time contains unsupported characters.',
+				changed: false,
+				hosts: dhcp_static_hosts(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
 
-		if (current_name != name) {
-			changed = true;
-			dhcp_set_option(section, 'name', name);
+		if (hostid != '' && (length(hostid) > 16 || replace(hostid, /[^A-Fa-f0-9]/g, '') != hostid))
+			return {
+				saved: false,
+				message: 'Static DHCP host IPv6 token must be up to 16 hexadecimal characters.',
+				changed: false,
+				hosts: dhcp_static_hosts(),
+				sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+			};
+
+		for (let value in [name, hostid, instance, ...duid_list, ...tag_list, ...match_tag_list]) {
+			if (replace(value, /[^A-Za-z0-9_.:%!-]/g, '') != value)
+				return {
+					saved: false,
+					message: 'Static DHCP host DUID, tag, instance, or hostname contains unsupported characters.',
+					changed: false,
+					hosts: dhcp_static_hosts(),
+					sections: collect_uci_config('dhcp', ['dnsmasq', 'dhcp', 'odhcpd'])
+				};
 		}
 
-		if (current_ip != ip) {
-			changed = true;
-			uci.set('dhcp', section, 'ip', ip);
+		let scalar_options = {
+			name,
+			ip,
+			leasetime,
+			hostid,
+			instance,
+			broadcast,
+			dns
+		};
+
+		for (let key, value in scalar_options) {
+			let current = uci.get('dhcp', section, key) || '';
+
+			if (current != value) {
+				changed = true;
+				dhcp_set_option(section, key, value);
+			}
 		}
 
-		if (!same_dhcp_list(current_mac, mac_list)) {
-			changed = true;
-			uci.set('dhcp', section, 'mac', length(mac_list) == 1 ? mac_list[0] : mac_list);
+		let list_options = {
+			mac: mac_list,
+			duid: duid_list,
+			tag: tag_list,
+			match_tag: match_tag_list
+		};
+
+		for (let key, values in list_options) {
+			let current = uci.get('dhcp', section, key) || [];
+
+			if (!same_dhcp_list(current, values)) {
+				changed = true;
+				if (length(values))
+					uci.set('dhcp', section, key, length(values) == 1 ? values[0] : values);
+				else
+					uci.delete('dhcp', section, key);
+			}
 		}
 	}
 
@@ -1177,23 +1258,6 @@ function dhcp_pool_rows() {
 
 function valid_dhcp_mode(value) {
 	return value == '' || value == 'server' || value == 'relay' || value == 'hybrid' || value == 'disabled';
-}
-
-function dhcp_zero_one(value) {
-	return value == '1' || value == 1 || value == true || value == 'on' ? '1' : '0';
-}
-
-function dhcp_optional_zero_one(value) {
-	value = '' + (value || '');
-	return value == '1' || value == '0' ? value : '';
-}
-
-function dhcp_numeric_value(value) {
-	return value == '' || replace(value, /[^0-9]/g, '') == value;
-}
-
-function valid_dhcp_leasetime(value) {
-	return length(value) && replace(value, /[^A-Za-z0-9_-]/g, '') == value;
 }
 
 function save_dhcp_pools(rows) {

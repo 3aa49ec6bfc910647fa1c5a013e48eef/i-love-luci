@@ -189,6 +189,14 @@ export type DhcpHost = {
 	name: string;
 	ip: string;
 	mac: string;
+	leasetime: string;
+	duid: string;
+	hostid: string;
+	tag: string;
+	match_tag: string;
+	instance: string;
+	broadcast: string;
+	dns: string;
 };
 
 export type DhcpDomain = {
