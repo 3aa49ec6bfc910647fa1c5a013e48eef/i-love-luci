@@ -141,22 +141,26 @@ if not visible:
 for item in visible:
 	path = item.get("path")
 	mode = item.get("effectiveMode")
+	native_status = item.get("nativeStatus")
 	native_path = item.get("nativePath")
 	resolved = item.get("resolvedPath") or item.get("firstChildPath") or path
 
 	if mode not in {"modern", "legacy"}:
 		failures.append(f"{path}: invalid effectiveMode={mode!r}")
 
+	if native_status not in {"supported", "compat", "unsupported"}:
+		failures.append(f"{path}: invalid nativeStatus={native_status!r}; expected supported, compat, or unsupported")
+
 	if mode == "modern" and not native_path:
 		failures.append(f"{path}: modern route has no nativePath")
 
-	if item.get("nativeStatus") == "supported":
+	if native_status == "supported":
 		if not native_path:
 			failures.append(f"{path}: supported native route has no native path")
 		elif not known_native_path(native_path):
 			failures.append(f"{path}: nativePath does not match a known shell route pattern: {native_path}")
 
-	if item.get("nativeStatus") == "compat" and native_path:
+	if native_status == "compat" and native_path:
 		failures.append(f"{path}: compat route with internal adapter metadata should not expose a nativePath")
 
 	if mode == "legacy" and not resolved:
@@ -167,12 +171,12 @@ for item in visible:
 
 	if (
 		item.get("configuredMode", "auto") == "auto"
-		and item.get("nativeStatus") == "compat"
+		and native_status == "compat"
 		and mode != "legacy"
 	):
 		failures.append(f"{path}: route with internal adapter metadata must remain LuCI compat until full-page parity is proven")
 
-	if item.get("configuredMode") == "modern" and item.get("nativeStatus") != "supported":
+	if item.get("configuredMode") == "modern" and native_status != "supported":
 		failures.append(f"{path}: non-supported route must not be configured for native mode")
 
 	if item.get("actionType") == "firstchild" and item.get("firstChildPath") and item["firstChildPath"] not in route_paths:
