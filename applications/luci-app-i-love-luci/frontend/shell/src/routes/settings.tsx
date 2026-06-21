@@ -6,31 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { getMenuTree, setRouteMode, type MenuItem } from "@/lib/rpc";
-
-const routeModes = ["auto", "modern", "legacy", "hidden"] as const;
-const routeModeLabels: Record<(typeof routeModes)[number], string> = {
-	auto: "Auto",
-	modern: "Native",
-	legacy: "LuCI compat",
-	hidden: "Hidden",
-};
-const coverageLabels: Record<NonNullable<MenuItem["nativeStatus"]>, string> = {
-	supported: "Native",
-	compat: "LuCI compat",
-	unsupported: "LuCI compat only",
-};
-
-function routeModeOptions(route: MenuItem) {
-	return route.nativeStatus === "supported" ? routeModes : routeModes.filter((mode) => mode !== "modern");
-}
-
-function selectedRouteMode(route: MenuItem) {
-	if (route.configuredMode === "modern" && route.nativeStatus !== "supported") {
-		return "auto";
-	}
-
-	return route.configuredMode ?? "auto";
-}
+import { coverageLabels, routeModeLabels, routeModeOptions, selectedRouteMode } from "@/lib/route-modes";
 
 export function SettingsPage() {
 	const [mfaOpen, setMfaOpen] = useState(false);
