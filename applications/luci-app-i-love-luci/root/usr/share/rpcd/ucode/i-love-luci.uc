@@ -2309,7 +2309,7 @@ function network_interface_action(name, action) {
 			ok: false,
 			name,
 			action,
-			message: 'Unsupported network interface action. Native link actions remain LuCI compat until tested.',
+			message: 'Native interface start, restart, and stop actions are disabled on this router because it carries live internet traffic.',
 			state: null
 		};
 
@@ -2325,7 +2325,7 @@ function network_interface_action(name, action) {
 		ok: state != null,
 		name,
 		action,
-		message: state != null ? 'Interface status loaded.' : 'Interface status is unavailable.',
+		message: state != null ? 'Interface status loaded.' : 'Interface is unavailable.',
 		state
 	};
 }

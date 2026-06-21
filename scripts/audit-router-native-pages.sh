@@ -62,6 +62,8 @@ echo '---ILOVELUCI-FIREWALL-INCLUDE-NOOP---'
 ubus call luci.iloveluci firewall_includes_save
 echo '---ILOVELUCI-NETWORK-INTERFACE-STATUS---'
 ubus call luci.iloveluci network_interface_action '{\"name\":\"lan\",\"action\":\"status\"}'
+echo '---ILOVELUCI-NETWORK-INTERFACE-UNSAFE-ACTION---'
+ubus call luci.iloveluci network_interface_action '{\"name\":\"lan\",\"action\":\"restart\"}'
 echo '---ILOVELUCI-PACKAGE-SEARCH---'
 ubus call luci.iloveluci package_search \"{\\\"query\\\":\\\"luci-app\\\"}\"
 echo '---ILOVELUCI-PACKAGE-DETAIL---'
@@ -432,6 +434,16 @@ else:
 		failures.append("network_interface_action status returned wrong interface")
 	if not isinstance(network_status_data.get("state"), dict):
 		failures.append("network_interface_action status did not return state object")
+
+network_unsafe_action = json_after_marker("---ILOVELUCI-NETWORK-INTERFACE-UNSAFE-ACTION---")
+if not network_unsafe_action or not network_unsafe_action.get("ok"):
+	failures.append("network_interface_action unsafe action check did not return ok")
+else:
+	network_unsafe_action_data = network_unsafe_action.get("data") or {}
+	if network_unsafe_action_data.get("ok") is not False:
+		failures.append("network_interface_action unsafe restart should be rejected on the live router")
+	if "disabled on this router" not in (network_unsafe_action_data.get("message") or ""):
+		failures.append("network_interface_action unsafe restart returned unexpected message")
 
 package_search = json_after_marker("---ILOVELUCI-PACKAGE-SEARCH---")
 if not package_search or not package_search.get("ok"):
