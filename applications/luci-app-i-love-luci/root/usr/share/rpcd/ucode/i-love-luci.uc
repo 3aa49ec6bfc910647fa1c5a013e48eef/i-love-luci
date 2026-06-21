@@ -6280,7 +6280,7 @@ function remote_package_install_command(manager, url, allow_untrusted, overwrite
 
 	let install_command = join(' ', quote_command_args(base_argv)) + ' "$tmp"';
 
-	return `tmp=$(mktemp /tmp/i-love-luci-package-url.XXXXXX) && (uclient-fetch -q -T 8 -O "$tmp" ${url_quoted} || wget -q -T 8 -O "$tmp" ${url_quoted} || curl -fsSL --connect-timeout 8 --max-time 20 -o "$tmp" ${url_quoted}) && ${install_command}; rc=$?; rm -f "$tmp"; test "$rc" -eq 0`;
+	return `tmp=$(mktemp /tmp/i-love-luci-package-url.XXXXXX); rc=$?; if [ "$rc" -eq 0 ]; then (uclient-fetch -q -T 8 -O "$tmp" ${url_quoted} || wget -q -T 8 -O "$tmp" ${url_quoted} || curl -fsSL --connect-timeout 8 --max-time 20 -o "$tmp" ${url_quoted}); rc=$?; if [ "$rc" -eq 0 ]; then ${install_command}; rc=$?; else echo 'Package URL download failed.'; fi; fi; rm -f "$tmp"; test "$rc" -eq 0`;
 }
 
 function valid_package_reference(name, simulate, allow_remote) {
@@ -6587,9 +6587,10 @@ function package_action(action, name, simulate, options) {
 
 	let state_before = package_state_snapshot(plan.manager);
 	let command = plan.command;
+	let command_quoted = quote_command_args([command])[0];
 	let output_path = '/tmp/i-love-luci-package-action.log';
 	let output_quoted = quote_command_args([output_path])[0];
-	let code = system(`${command} >${output_quoted} 2>&1`);
+	let code = system(`sh -c ${command_quoted} >${output_quoted} 2>&1`);
 	let output = shell_output(`sed -n "1,220p" ${output_quoted}`);
 	system(`rm -f ${output_quoted} >/dev/null 2>&1 || true`);
 	let state_after = package_state_snapshot(plan.manager);
@@ -6629,6 +6630,14 @@ function package_job_paths(id) {
 }
 
 let package_job_status;
+
+function package_job_output(path) {
+	if (stat(path)?.type != 'file')
+		return '';
+
+	let output_quoted = quote_command_args([path])[0];
+	return shell_output(`sed -n "1,220p" ${output_quoted}`);
+}
 
 function package_job_start(action, name, options) {
 	let plan = package_action_plan(action, name, false, options);
@@ -6671,9 +6680,10 @@ function package_job_start(action, name, options) {
 	let output_quoted = quote_command_args([paths.output])[0];
 	let rc_quoted = quote_command_args([paths.rc])[0];
 	let command = plan.command;
+	let command_quoted = quote_command_args([command])[0];
 
 	writefile(paths.meta, sprintf('%J', meta));
-	system(`(${command} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
+	system(`(sh -c ${command_quoted} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
 
 	return {
 		started: true,
@@ -6723,8 +6733,7 @@ package_job_status = function(id) {
 	let rc_text = trim(readfile(paths.rc) || '');
 	let done = length(rc_text) > 0;
 	let code = done ? +rc_text : null;
-	let output_quoted = quote_command_args([paths.output])[0];
-	let output = shell_output(`sed -n "1,220p" ${output_quoted} 2>/dev/null`);
+	let output = package_job_output(paths.output);
 	let ok = done && code == 0;
 
 	return {

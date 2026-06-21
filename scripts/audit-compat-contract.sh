@@ -211,9 +211,12 @@ for base in scan_roots:
 			for required_package_state_term in ("package_state_snapshot", "stateBefore", "stateAfter", "databaseHash", "luciAppCount"):
 				if required_package_state_term not in text:
 					failures.append(f"{relative_path}: package actions must retain rollback fingerprint term {required_package_state_term}")
-			for required_remote_install_term in ("allow_remote", "remote_package_url", "remote_package_install_command", "uclient-fetch", "-T 8", "--max-time 20", "valid_package_reference(name, simulate, allow_remote)"):
+			for required_remote_install_term in ("allow_remote", "remote_package_url", "remote_package_install_command", "uclient-fetch", "-T 8", "--max-time 20", "Package URL download failed.", "valid_package_reference(name, simulate, allow_remote)"):
 				if required_remote_install_term not in text:
 					failures.append(f"{relative_path}: package actions must support guarded remote URL install term {required_remote_install_term}")
+			for required_package_job_term in ("package_job_output", "sh -c ${command_quoted} >${output_quoted} 2>&1", "echo $? >${rc_quoted}"):
+				if required_package_job_term not in text:
+					failures.append(f"{relative_path}: package jobs must capture full command output/rc term {required_package_job_term}")
 			if "exit $rc" in text:
 				failures.append(f"{relative_path}: package job commands must not exit before the job wrapper writes rc state")
 		if relative_path == rpc_types_file:
