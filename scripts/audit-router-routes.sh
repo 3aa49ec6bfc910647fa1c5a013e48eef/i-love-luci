@@ -156,7 +156,7 @@ for item in visible:
 		elif not known_native_path(native_path):
 			failures.append(f"{path}: nativePath does not match a known shell route pattern: {native_path}")
 
-	if item.get("nativeStatus") == "partial" and native_path:
+	if item.get("nativeStatus") == "compat" and native_path:
 		failures.append(f"{path}: compat route with internal adapter metadata should not expose a nativePath")
 
 	if mode == "legacy" and not resolved:
@@ -167,7 +167,7 @@ for item in visible:
 
 	if (
 		item.get("configuredMode", "auto") == "auto"
-		and item.get("nativeStatus") == "partial"
+		and item.get("nativeStatus") == "compat"
 		and mode != "legacy"
 	):
 		failures.append(f"{path}: route with internal adapter metadata must remain LuCI compat until full-page parity is proven")
@@ -255,8 +255,8 @@ native_counter = Counter(item.get("nativeStatus") for item in visible)
 print("I Love LuCI route audit")
 print(f"visible_routes={len(visible)} modern={counter.get('modern', 0)} legacy={counter.get('legacy', 0)}")
 print(
-	f"native_status supported={native_counter.get('supported', 0)} "
-	f"partial={native_counter.get('partial', 0)} unsupported={native_counter.get('unsupported', 0)}"
+	f"route_status supported={native_counter.get('supported', 0)} "
+	f"compat={native_counter.get('compat', 0)} unsupported={native_counter.get('unsupported', 0)}"
 )
 print(f"menu_files={len(menu_files)} luci_apps={len(luci_apps)}")
 native_path_count = sum(1 for item in visible if item.get("nativePath"))
@@ -282,7 +282,7 @@ approved_native_app_routes = [
 compat_internal_routes = [
 	item for item in visible
 	if item.get("configuredMode", "auto") == "auto"
-	and item.get("nativeStatus") == "partial"
+	and item.get("nativeStatus") == "compat"
 	and item.get("effectiveMode") == "legacy"
 ]
 

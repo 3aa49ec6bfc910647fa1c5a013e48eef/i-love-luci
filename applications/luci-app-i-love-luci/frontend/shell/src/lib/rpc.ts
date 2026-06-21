@@ -13,7 +13,7 @@ export type MenuItem = {
 	firstChildPath?: string | null;
 	resolvedPath?: string;
 	nativePath?: string | null;
-	nativeStatus?: "supported" | "partial" | "unsupported";
+	nativeStatus?: "supported" | "compat" | "unsupported";
 	nativeAutoMode?: "modern" | "legacy";
 	effectiveMode?: "modern" | "legacy" | "hidden";
 	configuredMode?: "auto" | "modern" | "legacy" | "hidden";

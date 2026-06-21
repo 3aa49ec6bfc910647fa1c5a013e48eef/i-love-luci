@@ -16,7 +16,7 @@ const routeModeLabels: Record<(typeof routeModes)[number], string> = {
 };
 const coverageLabels: Record<NonNullable<MenuItem["nativeStatus"]>, string> = {
 	supported: "Native",
-	partial: "LuCI compat",
+	compat: "LuCI compat",
 	unsupported: "LuCI compat only",
 };
 

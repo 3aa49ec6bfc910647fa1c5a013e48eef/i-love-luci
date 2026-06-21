@@ -59,7 +59,7 @@ describe("itemTarget", () => {
 		).toBe("/realtime");
 	});
 
-	it("keeps partial routes in LuCI compatibility even if stale metadata includes a native path", () => {
+	it("keeps compat routes in LuCI compatibility even if stale metadata includes a native path", () => {
 		expect(
 			itemTarget({
 				title: "Edit Allowlist",
@@ -67,7 +67,7 @@ describe("itemTarget", () => {
 				nativePath: "/native/service/banip/allowlist",
 				effectiveMode: "modern",
 				configuredMode: "modern",
-				nativeStatus: "partial",
+				nativeStatus: "compat",
 				legacy: false,
 			}),
 		).toBe("/legacy?path=%2Fadmin%2Fservices%2Fbanip%2Fallowlist");
