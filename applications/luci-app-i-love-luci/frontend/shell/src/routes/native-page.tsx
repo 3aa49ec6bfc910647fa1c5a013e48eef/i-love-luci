@@ -3152,20 +3152,33 @@ function ConfigTable({ sections }: { sections: ConfigSection[] }) {
 
 function PackageInventory({ data }: { data: NativePageData }) {
 	const [query, setQuery] = useState("");
+	const [installedTranslationMode, setInstalledTranslationMode] = useState<"all" | "hide" | "only">("all");
 	const [actionResult, setActionResult] = useState<PackageActionResult | null>(null);
 	const [actionBusy, setActionBusy] = useState<string | null>(null);
 	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
 	const upgrades = useMemo(() => parsePackageUpgrades(commandOutput(data.commands, "Available upgrades")), [data.commands]);
 	const filtered = useMemo(() => {
 		const needle = query.trim().toLowerCase();
-		return packages.filter(
-			(pkg) =>
+
+		return packages.filter((pkg) => {
+			const isTranslation = pkg.name.startsWith("luci-i18n-");
+
+			if (installedTranslationMode === "hide" && isTranslation) {
+				return false;
+			}
+
+			if (installedTranslationMode === "only" && !isTranslation) {
+				return false;
+			}
+
+			return (
 				!needle ||
 				pkg.name.toLowerCase().includes(needle) ||
 				pkg.version.toLowerCase().includes(needle) ||
-				pkg.description.toLowerCase().includes(needle),
-		);
-	}, [packages, query]);
+				pkg.description.toLowerCase().includes(needle)
+			);
+		});
+	}, [packages, query, installedTranslationMode]);
 	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
 	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
@@ -3210,14 +3223,25 @@ function PackageInventory({ data }: { data: NativePageData }) {
 								Update index
 							</Button>
 						</div>
-						<div className="relative w-full sm:w-72">
-							<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-							<Input
-								className="pl-9"
-								placeholder="Filter packages"
-								value={query}
-								onChange={(event) => setQuery(event.target.value)}
-							/>
+						<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+							<select
+								className="h-10 rounded-md border bg-card px-3 text-sm outline-none focus-visible:border-ring"
+								onChange={(event) => setInstalledTranslationMode(event.target.value as "all" | "hide" | "only")}
+								value={installedTranslationMode}
+							>
+								<option value="all">All packages</option>
+								<option value="hide">Hide translations</option>
+								<option value="only">Only translations</option>
+							</select>
+							<div className="relative w-full sm:w-72">
+								<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									className="pl-9"
+									placeholder="Filter packages"
+									value={query}
+									onChange={(event) => setQuery(event.target.value)}
+								/>
+							</div>
 						</div>
 					</div>
 				}
