@@ -45,7 +45,7 @@ const nativeRoutes = {
 	'/admin/network/firewall/forwards': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/rules': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/network/firewall/snats': { status: 'partial', nativePath: '/core/firewall' },
-	'/admin/network/firewall/ipsets': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/custom': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/system': { status: 'partial', nativePath: '/core/system' },
 	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
@@ -2712,6 +2712,289 @@ function save_firewall_redirects(rows) {
 		message: changed ? 'Firewall redirects saved and firewall reloaded.' : 'Firewall redirects already up to date.',
 		changed,
 		redirects: firewall_redirect_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+	};
+}
+
+function firewall_ipset_rows() {
+	let ipsets = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return ipsets;
+	}
+
+	uci.foreach('firewall', 'ipset', function(section) {
+		push(ipsets, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			comment: section.comment || '',
+			family: section.family || '',
+			match: join('\n', dhcp_normalize_list(section.match)),
+			entry: join('\n', dhcp_normalize_list(section.entry)),
+			maxelem: section.maxelem || '',
+			external: section.external || '',
+			storage: section.storage || '',
+			iprange: section.iprange || '',
+			portrange: section.portrange || '',
+			netmask: section.netmask || '',
+			hashsize: section.hashsize || '',
+			loadfile: section.loadfile || '',
+			timeout: section.timeout || '',
+			counters: section.counters || '',
+			enabled: section.enabled == '0' ? '0' : '1'
+		});
+	});
+
+	return ipsets;
+}
+
+function valid_firewall_ipset_name(value) {
+	return length(value) && replace(value, /[^A-Za-z0-9_./-]/g, '') == value && match(value, /^[A-Za-z_.]/);
+}
+
+function firewall_ipset_family(value) {
+	value = dhcp_clean_value(value || 'ipv4');
+
+	if (value == 'any' || value == 'ipv4' || value == 'ipv6')
+		return value;
+
+	return null;
+}
+
+function firewall_ipset_storage(value) {
+	value = dhcp_clean_value(value || '');
+
+	if (value == '' || value == 'bitmap' || value == 'hash' || value == 'list')
+		return value;
+
+	return null;
+}
+
+function save_firewall_ipsets(rows, allow_empty) {
+	rows ||= [];
+	allow_empty = allow_empty == true;
+	uci.load('firewall');
+
+	let changed = false;
+	let config_changed = false;
+	let keep = {};
+	let existing = {};
+	let existing_count = 0;
+	let existing_order = [];
+	let next_order = [];
+	let names = {};
+
+	uci.foreach('firewall', 'ipset', function(section) {
+		existing[section['.name']] = true;
+		push(existing_order, section['.name']);
+		existing_count++;
+	});
+
+	if (!length(rows) && existing_count && !allow_empty)
+		return {
+			saved: false,
+			message: 'Refusing to remove all firewall IP sets without confirmation.',
+			changed: false,
+			ipsets: firewall_ipset_rows(),
+			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		};
+
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'ipset';
+		let match_values = split_dhcp_list(row?.match || '');
+		let entry_values = split_dhcp_list(row?.entry || '');
+		let family = firewall_ipset_family(row?.family || 'ipv4');
+		let storage = firewall_ipset_storage(row?.storage || '');
+		let name = dhcp_clean_value(row?.name || '');
+		let next = {
+			name,
+			comment: dhcp_clean_value(row?.comment || ''),
+			family,
+			maxelem: dhcp_clean_value(row?.maxelem || ''),
+			external: dhcp_clean_value(row?.external || ''),
+			storage,
+			iprange: dhcp_clean_value(row?.iprange || ''),
+			portrange: dhcp_clean_value(row?.portrange || ''),
+			netmask: dhcp_clean_value(row?.netmask || ''),
+			hashsize: dhcp_clean_value(row?.hashsize || ''),
+			loadfile: dhcp_clean_value(row?.loadfile || ''),
+			timeout: dhcp_clean_value(row?.timeout || ''),
+			counters: dhcp_zero_one(row?.counters),
+			enabled: dhcp_zero_one(row?.enabled)
+		};
+
+		if (!valid_firewall_ipset_name(name))
+			return {
+				saved: false,
+				message: 'Firewall IP set name is required and may contain letters, numbers, dots, dashes, underscores, and slashes.',
+				changed: false,
+				ipsets: firewall_ipset_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (names[name])
+			return {
+				saved: false,
+				message: 'Firewall IP set names must be unique.',
+				changed: false,
+				ipsets: firewall_ipset_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		names[name] = true;
+
+		if (family == null || storage == null)
+			return {
+				saved: false,
+				message: 'Firewall IP set family or storage value is invalid.',
+				changed: false,
+				ipsets: firewall_ipset_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		if (!valid_firewall_rule_list(match_values) || !valid_firewall_rule_list(entry_values))
+			return {
+				saved: false,
+				message: 'Firewall IP set match or entry values contain unsupported characters.',
+				changed: false,
+				ipsets: firewall_ipset_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			};
+
+		for (let key, value in next) {
+			if ((key == 'maxelem' || key == 'hashsize' || key == 'timeout') && value != '' && !dhcp_numeric_value(value))
+				return {
+					saved: false,
+					message: 'Firewall IP set numeric fields must be numbers.',
+					changed: false,
+					ipsets: firewall_ipset_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+
+			if ((key == 'external' || key == 'iprange' || key == 'portrange' || key == 'netmask' || key == 'loadfile') && !valid_firewall_rule_value(value))
+				return {
+					saved: false,
+					message: 'Firewall IP set fields contain unsupported characters.',
+					changed: false,
+					ipsets: firewall_ipset_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				};
+		}
+
+		push(validated, {
+			section,
+			is_existing,
+			match_values,
+			entry_values,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'ipset');
+			changed = true;
+			config_changed = true;
+		}
+
+		keep[section] = true;
+		push(next_order, section);
+
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if ((key == 'enabled' || key == 'counters') && value == '1' && current == '' && key == 'enabled')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				config_changed = true;
+
+				if ((key == 'enabled' && value == '1') || (key == 'counters' && value == '0') || value == '')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'match') || [], item.match_values)) {
+			changed = true;
+			config_changed = true;
+			if (length(item.match_values))
+				uci.set('firewall', section, 'match', length(item.match_values) == 1 ? item.match_values[0] : item.match_values);
+			else
+				uci.delete('firewall', section, 'match');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'entry') || [], item.entry_values)) {
+			changed = true;
+			config_changed = true;
+			if (length(item.entry_values))
+				uci.set('firewall', section, 'entry', length(item.entry_values) == 1 ? item.entry_values[0] : item.entry_values);
+			else
+				uci.delete('firewall', section, 'entry');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+			config_changed = true;
+		}
+	}
+
+	let current_order = [];
+	for (let section in existing_order)
+		if (keep[section])
+			push(current_order, section);
+
+	let order_changed = length(current_order) != length(next_order);
+	if (!order_changed) {
+		for (let i = 0; i < length(next_order); i++) {
+			if (current_order[i] != next_order[i]) {
+				order_changed = true;
+				break;
+			}
+		}
+	}
+
+	if (order_changed)
+		changed = true;
+
+	if (changed) {
+		if (config_changed)
+			uci.commit('firewall');
+
+		if (order_changed) {
+			for (let i = 0; i < length(next_order); i++) {
+				let section = next_order[i];
+
+				if (replace(section, /[^A-Za-z0-9_.-]/g, '') == section)
+					system('uci reorder firewall.' + section + '=' + i + ' >/dev/null 2>&1 || true');
+			}
+
+			system('uci commit firewall >/dev/null 2>&1 || true');
+		}
+
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall IP sets saved and firewall reloaded.' : 'Firewall IP sets already up to date.',
+		changed,
+		ipsets: firewall_ipset_rows(),
 		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 	};
 }
@@ -6716,6 +6999,27 @@ const methods = {
 					message: 'Firewall includes save failed: ' + e,
 					changed: false,
 					includes: firewall_include_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_ipsets_save: {
+		args: {
+			rows: [],
+			allow_empty: false
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_ipsets(request.args.rows || [], request.args.allow_empty));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall IP sets save failed: ' + e,
+					changed: false,
+					ipsets: firewall_ipset_rows(),
 					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
 				});
 			}

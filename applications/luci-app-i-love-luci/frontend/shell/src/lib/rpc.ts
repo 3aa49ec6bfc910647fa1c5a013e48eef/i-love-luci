@@ -914,6 +914,34 @@ export type FirewallRedirectsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallIpSet = {
+	section: string;
+	name: string;
+	comment: string;
+	family: string;
+	match: string;
+	entry: string;
+	maxelem: string;
+	external: string;
+	storage: string;
+	iprange: string;
+	portrange: string;
+	netmask: string;
+	hashsize: string;
+	loadfile: string;
+	timeout: string;
+	counters: string;
+	enabled: string;
+};
+
+export type FirewallIpSetsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	ipsets: FirewallIpSet[];
+	sections: ConfigSection[];
+};
+
 export type FirewallInclude = {
 	section: string;
 	path: string;
@@ -1686,6 +1714,21 @@ export async function saveFirewallRedirects(rows: FirewallRedirect[]): Promise<F
 			message: "Firewall redirects save failed.",
 			changed: false,
 			redirects: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallIpSets(rows: FirewallIpSet[], allowEmpty = false): Promise<FirewallIpSetsResult> {
+	try {
+		return await callBridge<FirewallIpSetsResult>("firewall_ipsets_save", { rows, allow_empty: allowEmpty });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall IP sets save failed.",
+			changed: false,
+			ipsets: [],
 			sections: [],
 		};
 	}

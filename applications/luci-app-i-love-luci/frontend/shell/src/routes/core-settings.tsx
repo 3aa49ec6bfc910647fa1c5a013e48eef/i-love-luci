@@ -13,6 +13,7 @@ import {
 	saveFirewallFile,
 	saveFirewallForwardings,
 	saveFirewallIncludes,
+	saveFirewallIpSets,
 	saveFirewallRedirects,
 	saveFirewallRules,
 	saveFirewallZones,
@@ -38,6 +39,7 @@ import {
 	type FirewallDefaultsInput,
 	type FirewallForwarding,
 	type FirewallInclude,
+	type FirewallIpSet,
 	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
@@ -1000,6 +1002,347 @@ function normalizeDhcpDomain(record: DhcpDomain): DhcpDomain {
 	};
 }
 
+function FirewallIpSetEditor({
+	ipsets,
+	onSaved,
+}: {
+	ipsets: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => ipsets.map(firewallIpSetValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallIpSet, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				comment: "",
+				family: "ipv4",
+				match: "src_ip",
+				entry: "",
+				maxelem: "",
+				external: "",
+				storage: "",
+				iprange: "",
+				portrange: "",
+				netmask: "",
+				hashsize: "",
+				loadfile: "",
+				timeout: "",
+				counters: "0",
+				enabled: "1",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	function duplicateRow(index: number) {
+		setRows((current) => {
+			const row = current[index];
+
+			if (!row) {
+				return current;
+			}
+
+			const next = [...current];
+			next.splice(index + 1, 0, { ...row, section: "", name: `${row.name || "ipset"}_copy` });
+			return next;
+		});
+	}
+
+	function moveRow(index: number, direction: -1 | 1) {
+		setRows((current) => {
+			const nextIndex = index + direction;
+
+			if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+				return current;
+			}
+
+			const next = [...current];
+			const [row] = next.splice(index, 1);
+			next.splice(nextIndex, 0, row);
+			return next;
+		});
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallIpSets(rows, rows.length === 0 && savedRows.length > 0);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.ipsets.map(normalizeFirewallIpSet);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">IP sets</h2>
+					<p className="text-sm text-muted-foreground">Manage firewall4 IP set definitions used by firewall rules.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add IP set
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[142rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Match</th>
+								<th className="px-3 py-2 font-medium">Entries</th>
+								<th className="px-3 py-2 font-medium">Comment</th>
+								<th className="px-3 py-2 font-medium">External</th>
+								<th className="px-3 py-2 font-medium">Storage</th>
+								<th className="px-3 py-2 font-medium">IP range</th>
+								<th className="px-3 py-2 font-medium">Port range</th>
+								<th className="px-3 py-2 font-medium">Netmask</th>
+								<th className="px-3 py-2 font-medium">Max entries</th>
+								<th className="px-3 py-2 font-medium">Hash size</th>
+								<th className="px-3 py-2 font-medium">Load file</th>
+								<th className="px-3 py-2 font-medium">Timeout</th>
+								<th className="px-3 py-2 font-medium">Counters</th>
+								<th className="px-3 py-2 font-medium">Enabled</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((ipset, index) => (
+									<tr className="border-b align-top last:border-0" key={`${ipset.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input aria-label="IP set name" onChange={(event) => updateRow(index, "name", event.target.value)} value={ipset.name} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-ipset-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["any", "IPv4 and IPv6"],
+													["ipv4", "IPv4"],
+													["ipv6", "IPv6"],
+												]}
+												value={ipset.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Packet field match"
+												className="h-24 min-w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "match", event.target.value)}
+												value={ipset.match}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="IP set entries"
+												className="h-24 min-w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "entry", event.target.value)}
+												value={ipset.entry}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Comment" onChange={(event) => updateRow(index, "comment", event.target.value)} value={ipset.comment} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="External set" onChange={(event) => updateRow(index, "external", event.target.value)} value={ipset.external} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-ipset-storage-${index}`}
+												onChange={(value) => updateRow(index, "storage", value)}
+												options={[
+													["", "auto"],
+													["bitmap", "bitmap"],
+													["hash", "hash"],
+													["list", "list"],
+												]}
+												value={ipset.storage}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="IP range" onChange={(event) => updateRow(index, "iprange", event.target.value)} value={ipset.iprange} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Port range" onChange={(event) => updateRow(index, "portrange", event.target.value)} value={ipset.portrange} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Netmask" onChange={(event) => updateRow(index, "netmask", event.target.value)} value={ipset.netmask} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Max entries"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "maxelem", event.target.value)}
+												value={ipset.maxelem}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Hash size"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "hashsize", event.target.value)}
+												value={ipset.hashsize}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Load file" onChange={(event) => updateRow(index, "loadfile", event.target.value)} value={ipset.loadfile} />
+										</td>
+										<td className="px-3 py-3">
+											<Input
+												aria-label="Timeout"
+												inputMode="numeric"
+												onChange={(event) => updateRow(index, "timeout", event.target.value)}
+												value={ipset.timeout}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-ipset-counters-${index}`}
+												onChange={(value) => updateRow(index, "counters", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={ipset.counters}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-ipset-enabled-${index}`}
+												onChange={(value) => updateRow(index, "enabled", value)}
+												options={[
+													["1", "Yes"],
+													["0", "No"],
+												]}
+												value={ipset.enabled}
+											/>
+										</td>
+										<td className="px-3 py-3 text-right">
+											<div className="inline-flex gap-1">
+												<Button aria-label="Move IP set up" disabled={index === 0} onClick={() => moveRow(index, -1)} size="icon" type="button" variant="ghost">
+													<ArrowUp className="size-4" />
+												</Button>
+												<Button
+													aria-label="Move IP set down"
+													disabled={index === rows.length - 1}
+													onClick={() => moveRow(index, 1)}
+													size="icon"
+													type="button"
+													variant="ghost"
+												>
+													<ArrowDown className="size-4" />
+												</Button>
+												<Button aria-label="Duplicate IP set" onClick={() => duplicateRow(index)} size="icon" type="button" variant="ghost">
+													<Copy className="size-4" />
+												</Button>
+												<Button aria-label="Remove IP set" onClick={() => removeRow(index)} size="icon" type="button" variant="ghost">
+													<Trash2 className="size-4" />
+												</Button>
+											</div>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={17}>
+										No firewall IP sets configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function firewallIpSetValues(section: ConfigSection): FirewallIpSet {
+	return normalizeFirewallIpSet({
+		section: section.name,
+		name: rawValue(section.values.name),
+		comment: rawValue(section.values.comment),
+		family: rawValue(section.values.family),
+		match: rawListValue(section.values.match).join("\n"),
+		entry: rawListValue(section.values.entry).join("\n"),
+		maxelem: rawValue(section.values.maxelem),
+		external: rawValue(section.values.external),
+		storage: rawValue(section.values.storage),
+		iprange: rawValue(section.values.iprange),
+		portrange: rawValue(section.values.portrange),
+		netmask: rawValue(section.values.netmask),
+		hashsize: rawValue(section.values.hashsize),
+		loadfile: rawValue(section.values.loadfile),
+		timeout: rawValue(section.values.timeout),
+		counters: booleanValue(section.values.counters),
+		enabled: rawValue(section.values.enabled) === "0" ? "0" : "1",
+	});
+}
+
+function normalizeFirewallIpSet(ipset: FirewallIpSet): FirewallIpSet {
+	return {
+		section: ipset.section ?? "",
+		name: ipset.name ?? "",
+		comment: ipset.comment ?? "",
+		family: ["any", "ipv4", "ipv6"].includes(ipset.family) ? ipset.family : "ipv4",
+		match: ipset.match ?? "",
+		entry: ipset.entry ?? "",
+		maxelem: ipset.maxelem ?? "",
+		external: ipset.external ?? "",
+		storage: ["", "bitmap", "hash", "list"].includes(ipset.storage) ? ipset.storage : "",
+		iprange: ipset.iprange ?? "",
+		portrange: ipset.portrange ?? "",
+		netmask: ipset.netmask ?? "",
+		hashsize: ipset.hashsize ?? "",
+		loadfile: ipset.loadfile ?? "",
+		timeout: ipset.timeout ?? "",
+		counters: ipset.counters === "1" ? "1" : "0",
+		enabled: ipset.enabled === "0" ? "0" : "1",
+	};
+}
+
 function FirewallSummary({
 	onSettingsChange,
 	settings,
@@ -1012,6 +1355,7 @@ function FirewallSummary({
 	const forwardings = settings.firewall.filter((section) => section.type === "forwarding");
 	const rules = settings.firewall.filter((section) => section.type === "rule");
 	const redirects = settings.firewall.filter((section) => section.type === "redirect");
+	const ipsets = settings.firewall.filter((section) => section.type === "ipset");
 	const includes = settings.firewall.filter((section) => section.type === "include");
 	const firstDefaults = defaults[0] ?? null;
 
@@ -1083,6 +1427,16 @@ function FirewallSummary({
 					})
 				}
 				redirects={redirects}
+			/>
+
+			<FirewallIpSetEditor
+				ipsets={ipsets}
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
 			/>
 
 			<FirewallIncludeEditor
