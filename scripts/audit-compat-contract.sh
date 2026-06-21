@@ -44,6 +44,7 @@ legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/l
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
+console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
 sysauth_template_files = {
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/sysauth.ut"),
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
@@ -156,11 +157,18 @@ for base in scan_roots:
 			if "export type ConsoleLaunch" not in text or "console_launch" not in text:
 				failures.append(f"{relative_path}: ConsoleLaunch type and RPC call are required")
 		if relative_path == header_file:
-			if "getConsoleLaunch" not in text:
-				failures.append(f"{relative_path}: header console action must use explicit console_launch RPC")
+			if "getConsoleLaunch" in text:
+				failures.append(f"{relative_path}: header must not request or handle helper console credentials")
+			if "#/console?launch=1" not in text:
+				failures.append(f"{relative_path}: header console action must open the internal console route")
 			effect_match = re.search(r"useEffect\(\(\) => \{(?P<body>.*?)\n\t\}, \[\]\);", text, re.S)
 			if effect_match and "getConsoleLaunch" in effect_match.group("body"):
 				failures.append(f"{relative_path}: console_launch must not run on page load")
+		if relative_path == console_page_file:
+			if "getConsoleLaunch" not in text:
+				failures.append(f"{relative_path}: console route must use explicit console_launch RPC")
+			if "url.username" not in text or "url.password" not in text:
+				failures.append(f"{relative_path}: console route must isolate helper credential URL construction away from the header")
 		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
 			if "| LuCI compat |" not in text:
 				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")

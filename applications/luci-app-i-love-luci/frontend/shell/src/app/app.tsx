@@ -4,6 +4,7 @@ import { AuthRoute } from "@/components/auth/auth-route";
 import { LoginPage } from "@/routes/login";
 import { ModernShell } from "@/components/shell/modern-shell";
 import { CoreSettingsPage } from "@/routes/core-settings";
+import { ConsolePage } from "@/routes/console";
 import { DashboardPage } from "@/routes/dashboard";
 import { LegacyFallbackPage, LegacyPage } from "@/routes/legacy";
 import { NativePage, NativeServicePage } from "@/routes/native-page";
@@ -43,6 +44,7 @@ export function App() {
 							/>
 						}
 					/>
+					<Route path="console" element={<ConsolePage />} />
 					<Route path="core/:page" element={<CoreSettingsPage />} />
 					<Route path="native/:page" element={<NativePage />} />
 					<Route path="native/service/:service" element={<NativeServicePage />} />

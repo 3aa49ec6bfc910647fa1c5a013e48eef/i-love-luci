@@ -8,13 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import {
-	getConsoleLaunch,
 	getConsoleStatus,
 	getPendingChangeList,
 	getPendingChanges,
 	getSessionInfo,
 	revertPendingChanges,
-	type ConsoleLaunch,
 	type ConsoleStatus,
 	type PendingChange,
 	type SessionInfo,
@@ -50,15 +48,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 			return;
 		}
 
-		const launch = await getConsoleLaunch();
-		const url = buildConsoleUrl(launch);
-
-		if (launch.available && launch.enabled && url) {
-			window.open(url, "_blank", "noopener,noreferrer");
-			return;
-		}
-
-		setConsoleOpen(true);
+		window.open(`${window.location.pathname}${window.location.search}#/console?launch=1`, "_blank", "noopener,noreferrer");
 	}
 
 	async function openPending() {
@@ -153,8 +143,8 @@ export function Header({ onMenuClick }: HeaderProps) {
 				{consoleStatus?.available && consoleStatus.enabled ? (
 					<div className="grid gap-4 text-sm">
 						<p className="text-muted-foreground">
-							Console service is available on port {consoleStatus.port}. It opens in a separate tab so ttyd can own
-							its terminal websocket session.
+							Console service is available on port {consoleStatus.port}. It opens through an I Love LuCI console
+							route so helper credentials are not placed in the browser address bar.
 						</p>
 						<div className="flex justify-end">
 							<Button variant="outline" onClick={() => void openConsole()}>
@@ -219,19 +209,4 @@ export function Header({ onMenuClick }: HeaderProps) {
 			</Dialog>
 		</header>
 	);
-}
-
-function buildConsoleUrl(status: ConsoleLaunch | null) {
-	if (!status?.url) {
-		return null;
-	}
-
-	const url = new URL(status.url.replace("{{host}}", window.location.hostname));
-
-	if (status.username && status.password) {
-		url.username = status.username;
-		url.password = status.password;
-	}
-
-	return url.toString();
 }
