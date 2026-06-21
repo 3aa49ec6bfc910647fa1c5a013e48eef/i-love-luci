@@ -13,6 +13,7 @@
 					"package_detail",
 					"package_i18n_suggestions",
 					"package_search",
+					"attendedsysupgrade_job_status",
 					"package_job_status",
 					"service_detail",
 					"changes_list",
@@ -30,6 +31,7 @@
 				"luci.iloveluci": [
 					"adblock_fast_config_save",
 					"attendedsysupgrade_config_save",
+					"attendedsysupgrade_job_start",
 					"attendedsysupgrade_plan",
 					"banip_config_save",
 					"banip_file_save",

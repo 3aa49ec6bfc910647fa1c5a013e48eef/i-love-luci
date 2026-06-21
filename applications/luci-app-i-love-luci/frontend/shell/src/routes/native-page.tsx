@@ -15,6 +15,7 @@ import {
 	deleteUpnpdActiveRule,
 	downloadMtdBlock,
 	flashFirmware,
+	getAttendedSysupgradeJobStatus,
 	getNativePage,
 	getPackageDetail,
 	getPackageI18nSuggestions,
@@ -47,6 +48,7 @@ import {
 	saveSshKeys,
 	searchPackages,
 	setRouterPassword,
+	startAttendedSysupgradeJob,
 	startPackageJob,
 	type AdblockFastConfigInput,
 	type AdblockFastFeed,
@@ -5237,7 +5239,24 @@ function AttendedSysupgradePlanPanel() {
 
 	async function run(action: AttendedSysupgradePlanAction) {
 		setRunning(action);
-		const next = await runAttendedSysupgradePlan(action);
+		const started = await startAttendedSysupgradeJob(action);
+
+		if (!started.started || !started.job) {
+			const fallback = started.result ?? (await runAttendedSysupgradePlan(action));
+			setRunning(null);
+			setResult(fallback);
+
+			if (fallback.ok) {
+				toast.success(fallback.message);
+			}
+			else {
+				toast.warning(fallback.message);
+			}
+			return;
+		}
+
+		setResult(started.job.result);
+		const next = await pollAttendedSysupgradeJob(started.job.id, setResult);
 		setRunning(null);
 		setResult(next);
 
@@ -5269,6 +5288,27 @@ function AttendedSysupgradePlanPanel() {
 			</div>
 		</Panel>
 	);
+}
+
+async function pollAttendedSysupgradeJob(id: string, onUpdate: (result: AttendedSysupgradePlanResult) => void) {
+	let status = await getAttendedSysupgradeJobStatus(id);
+	onUpdate(status.result);
+
+	for (let attempt = 0; attempt < 240 && status.running; attempt += 1) {
+		await sleep(1000);
+		status = await getAttendedSysupgradeJobStatus(id);
+		onUpdate(status.result);
+	}
+
+	if (status.running) {
+		return {
+			...status.result,
+			ok: false,
+			message: "Attended sysupgrade job did not finish before the polling timeout.",
+		};
+	}
+
+	return status.result;
 }
 
 function AttendedSysupgradePlanOutput({ result }: { result: AttendedSysupgradePlanResult }) {

@@ -25,7 +25,7 @@ fi
 export OPENWRT_HOST OPENWRT_USER OPENWRT_PASSWORD
 
 expect <<'EOF' > "${TMP_OUTPUT}"
-set timeout 90
+set timeout 180
 set host $env(OPENWRT_HOST)
 set user $env(OPENWRT_USER)
 set pass $env(OPENWRT_PASSWORD)
@@ -75,6 +75,22 @@ for action in check list blob; do
 	printf '%s\n' \"---ILOVELUCI-ASU-PLAN:\$action---\"
 	ubus call luci.iloveluci attendedsysupgrade_plan \"{\\\"action\\\":\\\"\$action\\\"}\"
 done
+echo '---ILOVELUCI-ASU-JOB-START---'
+rm -f /tmp/i-love-luci-asu-job-* 2>/dev/null || true
+ubus call luci.iloveluci attendedsysupgrade_job_start '{\"action\":\"blob\"}' >/tmp/i-love-luci-asu-job-start.json 2>/dev/null || true
+cat /tmp/i-love-luci-asu-job-start.json
+asu_job_id=\$(jsonfilter -i /tmp/i-love-luci-asu-job-start.json -e '@.data.job.id' 2>/dev/null || true)
+if test -n \"\$asu_job_id\"; then
+	for i in \$(seq 1 45); do
+		ubus call luci.iloveluci attendedsysupgrade_job_status \"{\\\"id\\\":\\\"\$asu_job_id\\\"}\" >/tmp/i-love-luci-asu-job-status.json 2>/dev/null || true
+		asu_done=\$(jsonfilter -i /tmp/i-love-luci-asu-job-status.json -e '@.data.done' 2>/dev/null || true)
+		test \"\$asu_done\" = \"true\" && break
+		sleep 1
+	done
+fi
+echo '---ILOVELUCI-ASU-JOB-STATUS---'
+cat /tmp/i-love-luci-asu-job-status.json 2>/dev/null || true
+rm -f /tmp/i-love-luci-asu-job-start.json /tmp/i-love-luci-asu-job-status.json /tmp/i-love-luci-asu-job-* 2>/dev/null || true
 echo '---ILOVELUCI-ASU-CONFIG-NOOP---'
 server_section=\$(uci show attendedsysupgrade 2>/dev/null | grep '=server$' | cut -d. -f2 | cut -d= -f1 | head -n 1)
 client_section=\$(uci show attendedsysupgrade 2>/dev/null | grep '=client$' | cut -d. -f2 | cut -d= -f1 | head -n 1)
@@ -480,6 +496,33 @@ for action in ("check", "list", "blob"):
 		failures.append(f"attendedsysupgrade_plan {action} did not return lines")
 	if not asu_data.get("message"):
 		failures.append(f"attendedsysupgrade_plan {action} did not return message")
+
+asu_job_start = json_after_marker("---ILOVELUCI-ASU-JOB-START---")
+if not asu_job_start or not asu_job_start.get("ok"):
+	failures.append("attendedsysupgrade_job_start did not return ok")
+else:
+	asu_job_start_data = asu_job_start.get("data") or {}
+	if asu_job_start_data.get("started") is not True:
+		failures.append("attendedsysupgrade_job_start did not start")
+	if not ((asu_job_start_data.get("job") or {}).get("id")):
+		failures.append("attendedsysupgrade_job_start did not return job id")
+
+asu_job_status = json_after_marker("---ILOVELUCI-ASU-JOB-STATUS---")
+if not asu_job_status or not asu_job_status.get("ok"):
+	failures.append("attendedsysupgrade_job_status did not return ok")
+else:
+	asu_job_data = asu_job_status.get("data") or {}
+	asu_job_result = asu_job_data.get("result") or {}
+	if asu_job_data.get("done") is not True:
+		failures.append("attendedsysupgrade_job_status did not finish blob job")
+	if asu_job_result.get("action") != "blob":
+		failures.append("attendedsysupgrade_job_status returned wrong action")
+	if asu_job_result.get("command") != "owut blob":
+		failures.append("attendedsysupgrade_job_status returned wrong command")
+	if not isinstance(asu_job_result.get("lines"), list):
+		failures.append("attendedsysupgrade_job_status did not return lines")
+	if not asu_job_result.get("message"):
+		failures.append("attendedsysupgrade_job_status did not return message")
 
 asu_config_save = json_after_marker("---ILOVELUCI-ASU-CONFIG-NOOP---")
 if not asu_config_save or not asu_config_save.get("ok"):

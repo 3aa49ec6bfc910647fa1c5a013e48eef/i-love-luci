@@ -5819,6 +5819,132 @@ function attendedsysupgrade_plan(action) {
 	};
 }
 
+function attendedsysupgrade_job_id() {
+	let value = trim(shell_output(`dd if=/dev/urandom bs=8 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"'`));
+	if (!length(value))
+		value = trim(shell_output('date +%s')) + '-' + trim(shell_output('echo $$'));
+	return replace(value, /[^A-Za-z0-9_.-]/g, '');
+}
+
+function valid_attendedsysupgrade_job_id(id) {
+	id = trim('' + (id || ''));
+	return length(id) > 0 && length(id) <= 80 && replace(id, /[^A-Za-z0-9_.-]/g, '') == id;
+}
+
+function attendedsysupgrade_job_paths(id) {
+	return {
+		meta: '/tmp/i-love-luci-asu-job-' + id + '.json',
+		output: '/tmp/i-love-luci-asu-job-' + id + '.log',
+		rc: '/tmp/i-love-luci-asu-job-' + id + '.rc'
+	};
+}
+
+function attendedsysupgrade_live_plan(action, output, code, done) {
+	action = trim('' + (action || 'check'));
+	output = '' + (output || '');
+	let ok = done && code == 0;
+	let lines = split_lines(output);
+	let warnings = [];
+
+	for (let line in lines) {
+		line = trim(line);
+		if (substr(line, 0, 8) != 'WARNING:')
+			continue;
+
+		let seen = false;
+		for (let warning in warnings)
+			if (warning == line)
+				seen = true;
+		if (!seen)
+			push(warnings, line);
+	}
+
+	return {
+		ok,
+		helper: command_exists('owut') ? 'owut' : (command_exists('auc') ? 'auc' : 'none'),
+		action,
+		command: command_exists('owut') ? 'owut ' + action : '',
+		output,
+		lines,
+		warnings,
+		message: done ? (ok ? 'Attended sysupgrade planning complete.' : 'Attended sysupgrade planning failed.') : 'Attended sysupgrade planning running.'
+	};
+}
+
+let attendedsysupgrade_job_status;
+
+function attendedsysupgrade_job_start(action) {
+	action = trim('' + (action || 'check'));
+	let allowed = {
+		check: true,
+		list: true,
+		blob: true
+	};
+
+	if (!allowed[action] || !command_exists('owut'))
+		return {
+			started: false,
+			job: null,
+			result: attendedsysupgrade_plan(action)
+		};
+
+	let id = attendedsysupgrade_job_id();
+	let paths = attendedsysupgrade_job_paths(id);
+	let command = 'owut ' + action;
+	let meta = {
+		id,
+		action,
+		helper: 'owut',
+		command,
+		startedAt: trim(shell_output('date +%s'))
+	};
+	let output_quoted = quote_command_args([paths.output])[0];
+	let rc_quoted = quote_command_args([paths.rc])[0];
+
+	writefile(paths.meta, sprintf('%J', meta));
+	system(`(${command} >${output_quoted} 2>&1; echo $? >${rc_quoted}) >/dev/null 2>&1 &`);
+
+	return {
+		started: true,
+		job: attendedsysupgrade_job_status(id),
+		result: null
+	};
+}
+
+attendedsysupgrade_job_status = function(id) {
+	if (!valid_attendedsysupgrade_job_id(id))
+		return {
+			id,
+			running: false,
+			done: true,
+			result: attendedsysupgrade_live_plan('check', 'Attended sysupgrade job id is invalid.', 1, true)
+		};
+
+	let paths = attendedsysupgrade_job_paths(id);
+	let meta = read_jsonfile(paths.meta, null);
+
+	if (!meta)
+		return {
+			id,
+			running: false,
+			done: true,
+			result: attendedsysupgrade_live_plan('check', 'Attended sysupgrade job was not found.', 1, true)
+		};
+
+	let rc_text = trim(readfile(paths.rc) || '');
+	let done = length(rc_text) > 0;
+	let code = done ? +rc_text : null;
+	let output_quoted = quote_command_args([paths.output])[0];
+	let output = shell_output(`sed -n "1,260p" ${output_quoted} 2>/dev/null`);
+
+	return {
+		id,
+		running: !done,
+		done,
+		result: attendedsysupgrade_live_plan(meta.action || 'check', output, code, done)
+	};
+};
+
 function package_search(query) {
 	query = trim('' + (query || ''));
 
@@ -10569,6 +10695,42 @@ const methods = {
 					message: 'Attended sysupgrade planning failed: ' + e
 				});
 			}
+		}
+	},
+
+	attendedsysupgrade_job_start: {
+		args: {
+			action: ''
+		},
+		call: function(request) {
+			try {
+				return respond(attendedsysupgrade_job_start(request.args.action || 'check'));
+			}
+			catch (e) {
+				return respond({
+					started: false,
+					job: null,
+					result: {
+						ok: false,
+						helper: command_exists('owut') ? 'owut' : (command_exists('auc') ? 'auc' : 'none'),
+						action: request.args.action || 'check',
+						command: '',
+						output: '',
+						lines: [],
+						warnings: [],
+						message: 'Attended sysupgrade job start failed: ' + e
+					}
+				});
+			}
+		}
+	},
+
+	attendedsysupgrade_job_status: {
+		args: {
+			id: ''
+		},
+		call: function(request) {
+			return respond(attendedsysupgrade_job_status(request.args.id || ''));
 		}
 	},
 

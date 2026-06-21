@@ -477,6 +477,19 @@ export type AttendedSysupgradePlanResult = {
 	message: string;
 };
 
+export type AttendedSysupgradeJobStatus = {
+	id: string;
+	running: boolean;
+	done: boolean;
+	result: AttendedSysupgradePlanResult;
+};
+
+export type AttendedSysupgradeJobStartResult = {
+	started: boolean;
+	job: AttendedSysupgradeJobStatus | null;
+	result: AttendedSysupgradePlanResult | null;
+};
+
 export type ServiceState = {
 	name: string;
 	enabled: boolean;
@@ -1918,6 +1931,51 @@ export async function runAttendedSysupgradePlan(action: AttendedSysupgradePlanAc
 			lines: [],
 			warnings: [],
 			message: "Attended sysupgrade planning failed.",
+		};
+	}
+}
+
+export async function startAttendedSysupgradeJob(action: AttendedSysupgradePlanAction): Promise<AttendedSysupgradeJobStartResult> {
+	try {
+		return await callBridge<AttendedSysupgradeJobStartResult>("attendedsysupgrade_job_start", { action });
+	}
+	catch {
+		return {
+			started: false,
+			job: null,
+			result: {
+				ok: false,
+				helper: "unknown",
+				action,
+				command: "",
+				output: "",
+				lines: [],
+				warnings: [],
+				message: "Attended sysupgrade job start failed.",
+			},
+		};
+	}
+}
+
+export async function getAttendedSysupgradeJobStatus(id: string): Promise<AttendedSysupgradeJobStatus> {
+	try {
+		return await callBridge<AttendedSysupgradeJobStatus>("attendedsysupgrade_job_status", { id });
+	}
+	catch {
+		return {
+			id,
+			running: false,
+			done: true,
+			result: {
+				ok: false,
+				helper: "unknown",
+				action: "check",
+				command: "",
+				output: "",
+				lines: [],
+				warnings: [],
+				message: "Attended sysupgrade job status failed.",
+			},
 		};
 	}
 }
