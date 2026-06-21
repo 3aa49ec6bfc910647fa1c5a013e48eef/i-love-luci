@@ -243,10 +243,17 @@ scripts/router-run.sh ./local-router-check.sh
 scripts/router-copy.sh ./local-file /tmp/local-file
 ```
 
-After install, run the route compatibility audit:
+After install, run the full readiness audit:
 
 ```sh
-scripts/generate-route-inventory-doc.sh
+scripts/audit-release-readiness.sh
+```
+
+The readiness audit runs frontend tests/typecheck/lint/build, shell syntax checks, the compat contract audit, live route inventory validation, route audit, route-mode guards, native page audit, HTTP route smoke, future LuCI app install/remove audit, and package-manager mutation audit. It verifies that route terminology stays on the supported/compat/unsupported contract, route mode/status chips stay out of navigation and search UI, routing/firewall status pages cannot regress to raw command dumps, visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, the route inventory matches live router metadata, compat routes reject native-mode overrides, iframe source URLs load with `iloveluci_frame=1`, incomplete LuCI app routes default to compat mode, installed `luci-app-*` routes remain discoverable for current and future app installs, and native async package install/remove returns the router to a clean state. The future-app and package-manager mutation audits temporarily install and remove `luci-app-example`, then check that new routes appear through compat and cleanup restores package state.
+
+Targeted audits remain available when iterating on a smaller area:
+
+```sh
 scripts/audit-compat-contract.sh
 scripts/audit-router-routes.sh
 scripts/audit-router-route-inventory-doc.sh
@@ -256,8 +263,6 @@ scripts/audit-router-package-manager-mutation.sh
 scripts/audit-router-native-pages.sh
 scripts/smoke-router-http-routes.sh
 ```
-
-The generator refreshes [the route inventory](docs/ROUTE_INVENTORY.md) from live router metadata before validation. The audits verify that route terminology stays on the supported/compat/unsupported contract, route mode/status chips stay out of navigation and search UI, routing/firewall status pages cannot regress to raw command dumps, visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, the route inventory matches live router metadata, compat routes reject native-mode overrides, iframe source URLs load with `iloveluci_frame=1`, incomplete LuCI app routes default to compat mode, installed `luci-app-*` routes remain discoverable for current and future app installs, and native async package install/remove returns the router to a clean state. The future-app and package-manager mutation audits temporarily install and remove `luci-app-example`, then check that new routes appear through compat and cleanup restores package state.
 
 ## Secondary uhttpd Testing
 

@@ -1055,7 +1055,7 @@ Final release/test gate:
 - Merge validated work through PR into `main`.
 - Publish package/feed artifacts from GitHub.
 - Install the GitHub-published package on `172.16.172.1`, not a local file copy.
-- Run the full route audit against the installed release package.
+- Run `scripts/audit-release-readiness.sh` against the installed release package.
 - Confirm all LuCI apps have working compat routes unless a native route has documented parity and test evidence.
 - Confirm all routes migrated to native I Love LuCI screens are present in the route inventory and covered by browser smoke tests.
 - Install a fresh LuCI app from the OpenWrt feed, refresh menu/cache state, confirm it appears in sidebar/search, opens through compat, then uninstall it and confirm routes disappear cleanly.
