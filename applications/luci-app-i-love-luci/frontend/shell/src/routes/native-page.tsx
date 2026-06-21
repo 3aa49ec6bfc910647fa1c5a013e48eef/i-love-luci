@@ -3733,7 +3733,17 @@ function PackageUpgradeTable({
 	onRunAction: (action: "upgrade", name: string, simulate: boolean) => void | Promise<void>;
 }) {
 	return (
-		<Panel title="Available upgrades" flush>
+		<Panel
+			title={
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<span>Available upgrades</span>
+					<Button disabled={!entries.length || actionBusy === "upgrade::plan"} onClick={() => void onRunAction("upgrade", "", true)} size="sm" type="button" variant="outline">
+						Plan all
+					</Button>
+				</div>
+			}
+			flush
+		>
 			<div className="overflow-x-auto">
 				<table className="w-full min-w-[42rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">

@@ -5732,7 +5732,10 @@ function package_action(action, name, simulate) {
 		simulate = false;
 	}
 	else if (action == 'install' || action == 'remove' || action == 'upgrade') {
-		if (!valid_package_name(name))
+		if (action == 'upgrade' && simulate && !length(name)) {
+			argv = manager == 'apk' ? ['apk', 'upgrade', '--simulate'] : ['opkg', '--noaction', 'upgrade'];
+		}
+		else if (!valid_package_name(name))
 			return {
 				ok: false,
 				manager,
@@ -5743,8 +5746,7 @@ function package_action(action, name, simulate) {
 				output: '',
 				message: 'Package name contains unsupported characters.'
 			};
-
-		if (action == 'upgrade' && !simulate)
+		else if (action == 'upgrade' && !simulate)
 			return {
 				ok: false,
 				manager,
@@ -5755,8 +5757,7 @@ function package_action(action, name, simulate) {
 				output: '',
 				message: 'Package upgrade apply stays in LuCI compat until rollback parity is complete.'
 			};
-
-		if (manager == 'apk') {
+		else if (manager == 'apk') {
 			if (action == 'install')
 				argv = simulate ? ['apk', 'add', '--simulate', name] : ['apk', 'add', name];
 			else if (action == 'remove')
