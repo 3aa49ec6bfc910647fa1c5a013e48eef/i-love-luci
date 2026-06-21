@@ -1,41 +1,12 @@
 # I Love LuCI
 
-I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old theme-first approach with a standalone React shell, native dashboard, responsive navigation, route search, profile menu, web console bridge, and a LuCI compat bridge for existing LuCI pages.
+I Love LuCI is a modern OpenWrt administration app delivered as a LuCI application. It uses a React/Vite shell for the main experience, LuCI/rpcd/ubus for authenticated router access, native I Love LuCI screens where parity has been proven, and a LuCI compatibility bridge for every current or future LuCI app route that has not been rebuilt natively.
 
-## Sysupgrade Compatibility
+The current architecture is a wrapper, not a hard fork of LuCI. The package still depends on `luci-base`, installs LuCI menu/template files, discovers routes from live LuCI menu metadata, and keeps LuCI as the compatibility runtime. Third-party and package-specific LuCI apps such as banIP and AdBlock Fast default to LuCI compat so existing forms, JavaScript, save/apply behavior, deep links, ACL visibility, and side effects remain intact.
 
-`sysupgrade` does not guarantee that manually installed package files survive an OpenWrt release upgrade. Configuration can be preserved when users keep settings, but static package files under `/www`, LuCI templates, menu files, and `rpcd` scripts must be present in the upgraded firmware image or reinstalled from the package feed after the upgrade.
+The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` is included in OpenWrt configuration backups. This protects settings, not the package binaries.
-
-Recommended upgrade paths:
-
-- Build `luci-app-i-love-luci` into the firmware image.
-- Use Attended Sysupgrade or `owut` so installed packages are carried into the generated image where supported.
-- Keep the I Love LuCI package feed configured, then reinstall `luci-app-i-love-luci` after a manual `sysupgrade`.
-
-Current package shape:
-
-- The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
-- The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
-- The LuCI compat bridge only works when LuCI is installed.
-- The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` is not installed or configured by default; it is an optional trusted-LAN development fallback only. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
-
-Future-proof target:
-
-- Split a standalone `i-love-luci` package from the LuCI-specific compatibility layer.
-- Serve the React app directly through `uhttpd` instead of LuCI dispatcher/templates.
-- Keep `rpcd`/`ubus` as the backend bridge, with first-party auth/session handling.
-- Make LuCI optional: if installed, expose LuCI routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
-- Keep release-specific feeds for 24.10/opkg and 25.12+/apk until the package manager transition has settled.
-
-Relevant OpenWrt docs:
-
-- [Sysupgrade using LuCI and CLI](https://openwrt.org/docs/guide-user/installation/generic.sysupgrade)
-- [OpenWrt Upgrade Tool (`owut`)](https://openwrt.org/docs/guide-user/installation/sysupgrade.owut)
-- [Attended Sysupgrade](https://openwrt.org/docs/guide-user/installation/attended.sysupgrade)
-- [Creating OpenWrt packages](https://openwrt.org/docs/guide-developer/packages)
-- [Using the OpenWrt SDK](https://openwrt.org/docs/guide-developer/toolchain/using_the_sdk)
+Stable package version: `1.0.0-r4`.
 
 ## Install Without Building
 
@@ -73,39 +44,84 @@ Then open:
 http://router-address/cgi-bin/luci/admin/i-love-luci
 ```
 
-Feed signing is not configured yet. OpenWrt 25.12/apk therefore requires `--allow-untrusted` for this feed. Feed installs pull the `i-love-luci-console` helper through the package dependency. If you do not want to add the feed, install the matching GitHub Release assets manually: install both `i-love-luci-console` and `luci-app-i-love-luci` with `opkg install` for `.ipk` builds or `apk add --allow-untrusted --force-overwrite` for `.apk` builds.
+Feed installs pull the `i-love-luci-console` helper through the `luci-app-i-love-luci` package dependency. Feed signing is not configured yet, so OpenWrt 25.12/apk requires `--allow-untrusted` for this feed.
+
+If you do not want to add the feed, install the matching GitHub Release assets manually. Install both `i-love-luci-console` and `luci-app-i-love-luci`:
+
+```sh
+# OpenWrt 25.12/apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r4.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r4.apk
+
+# OpenWrt 24.10/opkg
+opkg install ./i-love-luci-console_1.0.0-r4_*.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r4_all.ipk
+```
 
 ## Screenshots
 
-Screenshots are captured from a router running OpenWrt with sanitized app data. They avoid real hostnames, addresses, MACs, leases, and configuration values.
+Screenshots are captured from the current router build. Console screenshots are taken before opening a terminal session so hostnames and shell banners are not exposed.
 
 | Dashboard | Search |
 | --- | --- |
-| ![I Love LuCI desktop dashboard with bandwidth, CPU, and memory panels](docs/assets/app-desktop-overview.png) | ![I Love LuCI desktop route search popover](docs/assets/app-desktop-search.png) |
+| ![I Love LuCI desktop dashboard with bandwidth, CPU, memory, and interface panels](docs/assets/app-desktop-overview.png) | ![I Love LuCI desktop route search popover with live results](docs/assets/app-desktop-search.png) |
 
-| Mobile | Mobile menu |
+| System | DHCP and DNS |
+| --- | --- |
+| ![I Love LuCI native system configuration screen](docs/assets/app-desktop-system.png) | ![I Love LuCI native DHCP and DNS configuration screen](docs/assets/app-desktop-dhcp.png) |
+
+| Firewall | Routing |
+| --- | --- |
+| ![I Love LuCI native firewall configuration screen](docs/assets/app-desktop-firewall.png) | ![I Love LuCI native routing status screen with structured tables](docs/assets/app-desktop-routes.png) |
+
+| Services | LuCI compat |
+| --- | --- |
+| ![I Love LuCI native services overview](docs/assets/app-desktop-services.png) | ![I Love LuCI LuCI compatibility bridge rendering banIP](docs/assets/app-desktop-compat-banip.png) |
+
+| Route settings | Console tunnel |
+| --- | --- |
+| ![I Love LuCI route compatibility settings](docs/assets/app-desktop-settings.png) | ![I Love LuCI router console tunnel screen before terminal launch](docs/assets/app-desktop-console.png) |
+
+| Logs | Processes |
+| --- | --- |
+| ![I Love LuCI native system logs screen](docs/assets/app-desktop-logs.png) | ![I Love LuCI native processes screen](docs/assets/app-desktop-processes.png) |
+
+| Diagnostics | Startup |
+| --- | --- |
+| ![I Love LuCI native diagnostics screen](docs/assets/app-desktop-diagnostics.png) | ![I Love LuCI native startup services screen](docs/assets/app-desktop-startup.png) |
+
+| Password | uHTTPd |
+| --- | --- |
+| ![I Love LuCI native router password screen](docs/assets/app-desktop-password.png) | ![I Love LuCI native uHTTPd service screen](docs/assets/app-desktop-uhttpd.png) |
+
+| Software compat | Profile menu |
+| --- | --- |
+| ![I Love LuCI LuCI compatibility bridge rendering package manager](docs/assets/app-desktop-compat-software.png) | ![I Love LuCI profile menu with logout](docs/assets/app-desktop-profile.png) |
+
+| Mobile dashboard | Mobile menu |
 | --- | --- |
 | ![I Love LuCI mobile dashboard with compact header](docs/assets/app-mobile-overview.png) | ![I Love LuCI mobile sidebar navigation](docs/assets/app-mobile-sidebar.png) |
 
-| Mobile search |
-| --- |
-| ![I Love LuCI mobile search popover](docs/assets/app-mobile-search.png) |
-
-| Route settings | Console bridge |
+| Mobile search | Mobile DHCP |
 | --- | --- |
-| ![I Love LuCI route compatibility settings](docs/assets/app-desktop-settings.png) | ![I Love LuCI router console dialog](docs/assets/app-desktop-console.png) |
+| ![I Love LuCI mobile search popover with live route results](docs/assets/app-mobile-search.png) | ![I Love LuCI mobile DHCP and DNS screen](docs/assets/app-mobile-dhcp.png) |
+
+| Mobile firewall | Mobile console |
+| --- | --- |
+| ![I Love LuCI mobile firewall screen](docs/assets/app-mobile-firewall.png) | ![I Love LuCI mobile console tunnel screen](docs/assets/app-mobile-console.png) |
 
 ## Features
 
-- Native React dashboard for bandwidth, CPU, and memory telemetry.
+- React/Vite shell loaded through LuCI today.
+- Native dashboard for bandwidth, CPU, memory, and interface telemetry.
 - Dynamic LuCI route discovery from installed menu definitions.
 - LuCI compat bridge for LuCI apps that have not yet been rebuilt as native screens.
 - Header search with recent routes and live results.
-- Responsive sidebar and mobile-first layout.
+- Responsive sidebar with mobile drawer and persisted desktop collapse state.
 - Profile menu with logout.
 - Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session.
 - Route rendering settings so individual LuCI paths can use native, LuCI compat, hidden, or automatic rendering.
-- Local shadcn-style component library and Sonner toasts.
+- Local shadcn-style component library, Tailwind CSS v4, Chart.js charts, and Sonner toasts.
 
 ## Route Model
 
@@ -116,6 +132,34 @@ User-facing routes have three outcomes:
 - `Hidden`: the route is intentionally omitted from I Love LuCI navigation/search.
 
 Unknown or newly installed `luci-app-*` routes are discovered from LuCI menu metadata and default to LuCI compat unless a native adapter explicitly supports the full workflow. Current release audits on the test router report 57 visible routes: 42 native routes, 15 LuCI compat routes, and 0 unsupported routes. Remaining compat routes are network interfaces, firmware flash, attended sysupgrade overview, package manager, banIP, and AdBlock Fast workflows where LuCI still owns behavior that is risky, destructive, long-running, or package-specific.
+
+## Sysupgrade Compatibility
+
+`sysupgrade` does not guarantee that manually installed package files survive an OpenWrt release upgrade. Configuration can be preserved when users keep settings, but static package files under `/www`, LuCI templates, menu files, and `rpcd` scripts must be present in the upgraded firmware image or reinstalled from the package feed after the upgrade.
+
+The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` is included in OpenWrt configuration backups. This protects settings, not package binaries.
+
+Recommended upgrade paths:
+
+- Build `luci-app-i-love-luci` into the firmware image.
+- Use Attended Sysupgrade or `owut` so installed packages are carried into the generated image where supported.
+- Keep the I Love LuCI package feed configured, then reinstall `luci-app-i-love-luci` after a manual `sysupgrade`.
+
+Future-proof target:
+
+- Split a standalone `i-love-luci` package from the LuCI-specific compatibility layer.
+- Serve the React app directly through `uhttpd` instead of LuCI dispatcher/templates.
+- Keep `rpcd`/`ubus` as the backend bridge, with first-party auth/session handling.
+- Make LuCI optional: if installed, expose LuCI routes through a compatibility adapter; if not installed, keep native I Love LuCI screens working.
+- Keep release-specific feeds for 24.10/opkg and 25.12+/apk until the package manager transition has settled.
+
+Relevant OpenWrt docs:
+
+- [Sysupgrade using LuCI and CLI](https://openwrt.org/docs/guide-user/installation/generic.sysupgrade)
+- [OpenWrt Upgrade Tool (`owut`)](https://openwrt.org/docs/guide-user/installation/sysupgrade.owut)
+- [Attended Sysupgrade](https://openwrt.org/docs/guide-user/installation/attended.sysupgrade)
+- [Creating OpenWrt packages](https://openwrt.org/docs/guide-developer/packages)
+- [Using the OpenWrt SDK](https://openwrt.org/docs/guide-developer/toolchain/using_the_sdk)
 
 ## Project Layout
 
