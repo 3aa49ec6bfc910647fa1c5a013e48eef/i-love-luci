@@ -1,4 +1,5 @@
 import { getShellConfig } from "@/lib/config";
+import { redirectToLogin } from "@/lib/auth";
 
 export type MenuItem = {
 	id?: string;
@@ -1322,6 +1323,7 @@ async function callBridge<T>(method: string, args: Record<string, unknown> = {})
 	const config = getShellConfig();
 
 	if (!config.sessionId) {
+		redirectToLogin();
 		throw new Error("Missing LuCI session id");
 	}
 
@@ -1338,11 +1340,27 @@ async function callBridge<T>(method: string, args: Record<string, unknown> = {})
 		}),
 	});
 
+	if (response.status === 403 || response.headers.get("X-LuCI-Login-Required") === "yes") {
+		redirectToLogin();
+		throw new Error("LuCI login required");
+	}
+
 	if (!response.ok) {
 		throw new Error(`Bridge call failed: ${response.status}`);
 	}
 
 	const payload = await response.json();
+	const ubusCode = payload?.result?.[0];
+
+	if (isAuthRejectedPayload(payload)) {
+		redirectToLogin();
+		throw new Error(payload?.error?.message ?? "LuCI session rejected");
+	}
+
+	if (payload?.error || (typeof ubusCode === "number" && ubusCode !== 0)) {
+		throw new Error(payload?.error?.message ?? `Bridge call failed: ubus status ${ubusCode}`);
+	}
+
 	const result = payload?.result?.[1] as BridgeResponse<T> | undefined;
 
 	if (!result?.ok) {
@@ -1350,6 +1368,13 @@ async function callBridge<T>(method: string, args: Record<string, unknown> = {})
 	}
 
 	return result.data;
+}
+
+function isAuthRejectedPayload(payload: { error?: { message?: string }; result?: unknown[] } | undefined): boolean {
+	const ubusCode = payload?.result?.[0];
+	const message = String(payload?.error?.message ?? "").toLowerCase();
+
+	return ubusCode === 6 || message.includes("permission denied") || message.includes("access denied");
 }
 
 export async function getSessionInfo(): Promise<SessionInfo> {

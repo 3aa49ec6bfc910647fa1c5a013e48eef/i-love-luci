@@ -55,11 +55,11 @@ export function AuthRoute({ children }: AuthRouteProps) {
 		}
 
 		function handleFocus() {
-			scheduleCheck(false);
+			scheduleCheck(true);
 		}
 
 		function handlePageShow() {
-			scheduleCheck(false);
+			scheduleCheck(true);
 		}
 
 		void checkAuth(true);

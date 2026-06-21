@@ -73,13 +73,16 @@ export function restoreReturnRouteAfterLogin(): void {
 	window.history.replaceState(null, "", nextUrl);
 }
 
+export function loginRedirectUrl(basePath: string, origin: string, route: string): string {
+	const url = new URL(basePath, origin);
+	url.hash = normalizeReturnRoute(route);
+	return url.toString();
+}
+
 export function redirectToLogin(): void {
 	const route = currentHashRoute();
 	storeReturnRoute(route);
 
 	const config = getShellConfig();
-	const url = new URL(config.basePath, window.location.origin);
-	url.hash = route;
-
-	window.location.assign(url.toString());
+	window.location.assign(loginRedirectUrl(config.basePath, window.location.origin, route));
 }
