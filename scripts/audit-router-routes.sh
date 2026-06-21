@@ -169,6 +169,9 @@ for item in visible:
 	):
 		failures.append(f"{path}: partial native route should default to LuCI compat until full-page parity is proven")
 
+	if item.get("configuredMode") == "modern" and item.get("nativeStatus") != "supported":
+		failures.append(f"{path}: non-supported route must not be configured for native mode")
+
 	if item.get("actionType") == "firstchild" and item.get("firstChildPath") and item["firstChildPath"] not in route_paths:
 		failures.append(f"{path}: firstChildPath missing from menu_tree: {item['firstChildPath']}")
 
@@ -272,12 +275,22 @@ approved_native_app_routes = [
 	item for item in visible
 	if any(item.get("path", "") == prefix or item.get("path", "").startswith(prefix + "/") for prefix in approved_native_app_prefixes)
 ]
+partial_default_routes = [
+	item for item in visible
+	if item.get("configuredMode", "auto") == "auto"
+	and item.get("nativeStatus") == "partial"
+	and item.get("effectiveMode") == "legacy"
+]
 
 print(f"compat_default_routes={len(legacy_app_routes)}")
 print(
 	f"strict_compat_app_routes={len(strict_compat_routes)} "
 	f"approved_native_app_routes={len(approved_native_app_routes)}"
 )
+print(f"partial_default_routes={len(partial_default_routes)}")
+
+if partial_default_routes:
+	print("partial_default_paths=" + ",".join(sorted(item.get("path", "") for item in partial_default_routes)))
 
 if warnings:
 	print("\nWarnings:")

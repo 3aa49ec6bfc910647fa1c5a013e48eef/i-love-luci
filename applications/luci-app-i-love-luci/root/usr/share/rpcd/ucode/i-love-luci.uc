@@ -396,7 +396,7 @@ function load_route_modes() {
 }
 
 function effective_mode(configuredMode, nativeStatus, autoMode) {
-	let has_native = nativeStatus == 'supported' || nativeStatus == 'partial';
+	let native_supported = nativeStatus == 'supported';
 
 	if (configuredMode == 'hidden')
 		return 'hidden';
@@ -405,13 +405,13 @@ function effective_mode(configuredMode, nativeStatus, autoMode) {
 		return 'legacy';
 
 	if (configuredMode == 'modern')
-		return has_native ? 'modern' : 'legacy';
+		return native_supported ? 'modern' : 'legacy';
 
 	if (autoMode == 'legacy')
 		return 'legacy';
 
 	if (autoMode == 'modern')
-		return has_native ? 'modern' : 'legacy';
+		return native_supported ? 'modern' : 'legacy';
 
 	return nativeStatus == 'supported' ? 'modern' : 'legacy';
 }
@@ -8702,6 +8702,9 @@ function build_menu() {
 
 function set_route_mode(path, mode) {
 	if (!routeModes[mode])
+		return false;
+
+	if (mode == 'modern' && nativeRoutes[path]?.status != 'supported')
 		return false;
 
 	uci.load('i-love-luci');

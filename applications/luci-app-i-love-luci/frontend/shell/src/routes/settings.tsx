@@ -8,6 +8,29 @@ import { Input } from "@/components/ui/input";
 import { getMenuTree, setRouteMode, type MenuItem } from "@/lib/rpc";
 
 const routeModes = ["auto", "modern", "legacy", "hidden"] as const;
+const routeModeLabels: Record<(typeof routeModes)[number], string> = {
+	auto: "Auto",
+	modern: "Native",
+	legacy: "LuCI compat",
+	hidden: "Hidden",
+};
+const coverageLabels: Record<NonNullable<MenuItem["nativeStatus"]>, string> = {
+	supported: "Native",
+	partial: "LuCI compat",
+	unsupported: "LuCI compat only",
+};
+
+function routeModeOptions(route: MenuItem) {
+	return route.nativeStatus === "supported" ? routeModes : routeModes.filter((mode) => mode !== "modern");
+}
+
+function selectedRouteMode(route: MenuItem) {
+	if (route.configuredMode === "modern" && route.nativeStatus !== "supported") {
+		return "auto";
+	}
+
+	return route.configuredMode ?? "auto";
+}
 
 export function SettingsPage() {
 	const [mfaOpen, setMfaOpen] = useState(false);
@@ -38,7 +61,7 @@ export function SettingsPage() {
 			current.map((item) => (item.path === route.path ? { ...item, configuredMode: nextMode } : item)),
 		);
 		toast.success("Route mode saved", {
-			description: `${route.title} uses ${nextMode}.`,
+			description: `${route.title} uses ${routeModeLabels[nextMode]}.`,
 		});
 	}
 
@@ -116,16 +139,18 @@ export function SettingsPage() {
 											<div className="font-medium">{route.title}</div>
 											<div className="text-xs text-muted-foreground">{route.path}</div>
 										</td>
-										<td className="px-3 py-2 text-muted-foreground">{route.nativeStatus ?? "unsupported"}</td>
+										<td className="px-3 py-2 text-muted-foreground">
+											{coverageLabels[route.nativeStatus ?? "unsupported"]}
+										</td>
 										<td className="px-3 py-2">
 											<select
 												className="h-9 rounded-md border bg-card px-2 text-sm"
-												value={route.configuredMode ?? "auto"}
+												value={selectedRouteMode(route)}
 												onChange={(event) => void updateRouteMode(route, event.target.value as MenuItem["configuredMode"])}
 											>
-												{routeModes.map((mode) => (
+												{routeModeOptions(route).map((mode) => (
 													<option key={mode} value={mode}>
-														{mode}
+														{routeModeLabels[mode]}
 													</option>
 												))}
 											</select>

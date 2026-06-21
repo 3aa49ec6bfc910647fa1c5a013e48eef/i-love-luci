@@ -67,7 +67,7 @@ export function LegacyFrame({ path }: LegacyFrameProps) {
 		<iframe
 			className="h-[calc(100vh-5rem)] w-full border-0 bg-card"
 			src={src}
-			title="Legacy LuCI content"
+			title="LuCI compatibility content"
 			onLoad={(event) => hideLegacyChrome(event.currentTarget)}
 		/>
 	);
