@@ -151,6 +151,15 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
 			if "Package state fingerprint" not in text:
 				failures.append(f"{relative_path}: package manager output must show package state fingerprints")
+			package_inventory_match = re.search(r"function PackageInventory\([^)]*\) \{(?P<body>.*?)\nfunction PackageActionOutput", text, re.S)
+			if not package_inventory_match:
+				failures.append(f"{relative_path}: expected PackageInventory guard target")
+			else:
+				package_inventory_body = package_inventory_match.group("body")
+				if "window.confirm" in package_inventory_body:
+					failures.append(f"{relative_path}: package manager apply must use structured confirmation dialog, not browser window.confirm")
+				if "PackageMutationConfirmDialog" not in package_inventory_body:
+					failures.append(f"{relative_path}: package manager apply must render PackageMutationConfirmDialog")
 			for forbidden_native_page_copy in (
 				"URL apply remains in LuCI compat",
 				"broader rollback workflows remain LuCI compat",

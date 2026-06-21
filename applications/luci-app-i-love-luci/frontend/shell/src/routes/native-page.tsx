@@ -102,6 +102,15 @@ type PackageUpgradeEntry = {
 	available: string;
 };
 
+type PackageActionKind = "install" | "remove" | "update" | "upgrade";
+
+type PackageActionRequest = {
+	action: PackageActionKind;
+	name: string;
+	simulate: boolean;
+	options: PackageActionOptions;
+};
+
 type FilesystemEntry = {
 	filesystem: string;
 	size: string;
@@ -3218,6 +3227,8 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const [actionBusy, setActionBusy] = useState<string | null>(null);
 	const [detailResult, setDetailResult] = useState<PackageDetailResult | null>(null);
 	const [detailBusy, setDetailBusy] = useState<string | null>(null);
+	const [pendingAction, setPendingAction] = useState<PackageActionRequest | null>(null);
+	const [actionConfirmation, setActionConfirmation] = useState("");
 	const packages = useMemo(() => data.lines.map(parsePackageLine), [data.lines]);
 	const upgrades = useMemo(() => parsePackageUpgrades(commandOutput(data.commands, "Available upgrades")), [data.commands]);
 	const filtered = useMemo(() => {
@@ -3245,11 +3256,17 @@ function PackageInventory({ data }: { data: NativePageData }) {
 	const luciCount = packages.filter((pkg) => pkg.name.startsWith("luci-")).length;
 	const kernelCount = packages.filter((pkg) => pkg.name.startsWith("kmod-")).length;
 
-	async function runAction(action: "install" | "remove" | "update" | "upgrade", name = "", simulate = true, options: PackageActionOptions = {}) {
-		if (!simulate && action !== "update" && !window.confirm(`${action === "install" ? "Install" : action === "remove" ? "Remove" : "Upgrade"} ${name}?`)) {
+	async function runAction(action: PackageActionKind, name = "", simulate = true, options: PackageActionOptions = {}) {
+		if (!simulate && action !== "update") {
+			setPendingAction({ action, name, simulate, options });
+			setActionConfirmation("");
 			return;
 		}
 
+		await executeAction(action, name, simulate, options);
+	}
+
+	async function executeAction(action: PackageActionKind, name = "", simulate = true, options: PackageActionOptions = {}) {
 		const key = `${action}:${name}:${simulate ? "plan" : "apply"}`;
 		setActionBusy(key);
 
@@ -3298,6 +3315,17 @@ function PackageInventory({ data }: { data: NativePageData }) {
 		}
 	}
 
+	async function confirmPendingAction() {
+		if (!pendingAction || actionConfirmation !== packageConfirmationTarget(pendingAction)) {
+			return;
+		}
+
+		const request = pendingAction;
+		setPendingAction(null);
+		setActionConfirmation("");
+		await executeAction(request.action, request.name, request.simulate, request.options);
+	}
+
 	async function showPackageDetail(name: string) {
 		setDetailBusy(name);
 		const result = await getPackageDetail(name);
@@ -3329,6 +3357,17 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			<AvailablePackageTable busy={actionBusy} detailBusy={detailBusy} lines={data.packageAvailable ?? []} onRunAction={runAction} onShowDetail={showPackageDetail} />
 			<AvailablePackageSearch busy={actionBusy} detailBusy={detailBusy} onRunAction={runAction} onShowDetail={showPackageDetail} />
 			<PackageFeedsEditor feeds={data.packageFeeds ?? []} />
+			<PackageMutationConfirmDialog
+				busy={Boolean(actionBusy)}
+				confirmation={actionConfirmation}
+				request={pendingAction}
+				onCancel={() => {
+					setPendingAction(null);
+					setActionConfirmation("");
+				}}
+				onConfirm={() => void confirmPendingAction()}
+				onConfirmationChange={setActionConfirmation}
+			/>
 			<Panel
 				title={
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -3425,6 +3464,71 @@ function PackageInventory({ data }: { data: NativePageData }) {
 			</Panel>
 		</div>
 	);
+}
+
+function PackageMutationConfirmDialog({
+	busy,
+	confirmation,
+	request,
+	onCancel,
+	onConfirm,
+	onConfirmationChange,
+}: {
+	busy: boolean;
+	confirmation: string;
+	request: PackageActionRequest | null;
+	onCancel: () => void;
+	onConfirm: () => void;
+	onConfirmationChange: (value: string) => void;
+}) {
+	if (!request) {
+		return null;
+	}
+
+	const target = packageConfirmationTarget(request);
+	const canConfirm = !busy && confirmation === target;
+	const actionLabel = request.action === "install" ? "Install" : request.action === "remove" ? "Remove" : "Apply";
+
+	return (
+		<Dialog className="max-w-2xl" open={true} title="Confirm package change" onOpenChange={(open) => !open && onCancel()}>
+			<div className="grid gap-4">
+				<SimpleValueTable
+					columns={["Field", "Value"]}
+					empty="No package action selected."
+					rows={[
+						["Action", actionLabel],
+						["Package or source", request.name || "package index"],
+						["Mode", request.simulate ? "plan" : "apply"],
+					]}
+					title="Package action"
+				/>
+				<div className="grid gap-2">
+					<label className="text-sm font-medium" htmlFor="package-confirmation">
+						Type package or source
+					</label>
+					<Input
+						autoComplete="off"
+						id="package-confirmation"
+						onChange={(event) => onConfirmationChange(event.target.value)}
+						value={confirmation}
+					/>
+					<div className="break-all font-mono text-xs text-muted-foreground">{target}</div>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={busy} onClick={onCancel} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!canConfirm} onClick={onConfirm} type="button">
+						{busy ? "Applying" : actionLabel}
+					</Button>
+				</div>
+			</div>
+		</Dialog>
+	);
+}
+
+function packageConfirmationTarget(request: PackageActionRequest) {
+	return request.name || request.action;
 }
 
 function PackageActionOutput({ result }: { result: PackageActionResult | null }) {
