@@ -1,7 +1,6 @@
 import {
 	Activity,
 	Boxes,
-	ChevronDown,
 	ChevronRight,
 	Cog,
 	LayoutDashboard,
@@ -21,6 +20,7 @@ import { getMenuTree, type MenuItem } from "@/lib/rpc";
 import { cn } from "@/lib/utils";
 
 type SidebarProps = {
+	desktopOpen: boolean;
 	open: boolean;
 	onClose: () => void;
 };
@@ -110,11 +110,11 @@ function NavItem({
 	const isExpanded = expanded.has(item.path);
 
 	return (
-		<div>
+		<div className="min-w-0">
 			<div className="flex items-center gap-1">
 				<Link
 					className={cn(
-						"flex h-9 min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground",
+						"flex h-9 min-w-0 flex-1 items-center gap-3 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-secondary hover:text-foreground",
 						active && hasChildren && "font-semibold text-foreground",
 						active && !hasChildren && "bg-secondary font-semibold text-foreground",
 					)}
@@ -134,12 +134,18 @@ function NavItem({
 						aria-expanded={isExpanded}
 						onClick={() => onToggle(item.path)}
 					>
-						{isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+						<ChevronRight className={cn("size-4 transition-transform duration-300 ease-out", isExpanded && "rotate-90")} />
 					</Button>
 				) : null}
 			</div>
-			{hasChildren && isExpanded ? (
-				<div className="mt-0.5 grid gap-0.5">
+			{hasChildren ? (
+				<div
+					className={cn(
+						"grid transition-[grid-template-rows,opacity] duration-300 ease-out",
+						isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+					)}
+				>
+					<div className="mt-0.5 grid min-h-0 gap-0.5 overflow-hidden">
 					{children.map((child) => (
 						<NavItem
 							depth={depth + 1}
@@ -150,6 +156,7 @@ function NavItem({
 							onToggle={onToggle}
 						/>
 					))}
+					</div>
 				</div>
 			) : null}
 		</div>
@@ -234,33 +241,48 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 	);
 }
 
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ desktopOpen, open, onClose }: SidebarProps) {
 	return (
 		<>
-			<aside className="hidden h-full min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r bg-card p-3 lg:flex">
-				<NavItems />
-			</aside>
-			{open ? (
-				<div className="fixed inset-0 z-50 lg:hidden">
-					<button
-						className="absolute inset-0 bg-foreground/30"
-						type="button"
-						aria-label="Close navigation overlay"
-						onClick={onClose}
-					/>
-					<aside className="absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-hidden border-r bg-card p-3 shadow-xl">
-						<div className="mb-2 flex shrink-0 items-center justify-between px-2">
-							<span className="font-semibold">I Love LuCI</span>
-							<Button size="icon" variant="ghost" aria-label="Close navigation" onClick={onClose}>
-								<X className="size-5" />
-							</Button>
-						</div>
-						<div className="min-h-0 flex-1">
-							<NavItems onClose={onClose} />
-						</div>
-					</aside>
+			<aside
+				className={cn(
+					"hidden h-full min-h-0 shrink-0 flex-col overflow-hidden border-r bg-card transition-[width,opacity,padding,border-color] duration-300 ease-out lg:flex",
+					desktopOpen ? "w-72 border-border p-3 opacity-100" : "w-0 border-transparent p-0 opacity-0",
+				)}
+				aria-hidden={!desktopOpen}
+			>
+				<div className={cn("min-h-0 w-[16.5rem] flex-1 transition-transform duration-300 ease-out", desktopOpen ? "translate-x-0" : "-translate-x-4")}>
+					<NavItems />
 				</div>
-			) : null}
+			</aside>
+			<div className={cn("fixed inset-0 z-50 lg:hidden", open ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
+				<button
+					className={cn(
+						"absolute inset-0 bg-foreground/30 transition-opacity duration-300 ease-out",
+						open ? "opacity-100" : "opacity-0",
+					)}
+					type="button"
+					aria-label="Close navigation overlay"
+					onClick={onClose}
+					tabIndex={open ? 0 : -1}
+				/>
+				<aside
+					className={cn(
+						"absolute inset-y-0 left-0 flex w-[min(20rem,85vw)] flex-col overflow-hidden border-r bg-card p-3 shadow-xl transition-transform duration-300 ease-out",
+						open ? "translate-x-0" : "-translate-x-full",
+					)}
+				>
+					<div className="mb-2 flex shrink-0 items-center justify-between px-2">
+						<span className="font-semibold">I Love LuCI</span>
+						<Button size="icon" variant="ghost" aria-label="Close navigation" onClick={onClose} tabIndex={open ? 0 : -1}>
+							<X className="size-5" />
+						</Button>
+					</div>
+					<div className="min-h-0 flex-1">
+						<NavItems onClose={onClose} />
+					</div>
+				</aside>
+			</div>
 		</>
 	);
 }

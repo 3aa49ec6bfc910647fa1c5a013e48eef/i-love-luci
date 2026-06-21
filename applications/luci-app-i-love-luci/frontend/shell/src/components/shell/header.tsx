@@ -76,7 +76,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-card/95 px-3 backdrop-blur sm:px-5">
-			<Button className="shrink-0 lg:hidden" size="icon" variant="ghost" aria-label="Open navigation" onClick={onMenuClick}>
+			<Button className="shrink-0" size="icon" variant="ghost" aria-label="Toggle navigation" onClick={onMenuClick}>
 				<Menu className="size-5" />
 			</Button>
 			<Link className="hidden items-center gap-2 font-semibold sm:flex" to="/">
