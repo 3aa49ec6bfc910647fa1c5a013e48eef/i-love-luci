@@ -3365,14 +3365,27 @@ function AvailablePackageTable({
 	onRunAction: (action: "install", name: string, simulate: boolean) => void | Promise<void>;
 }) {
 	const [query, setQuery] = useState("");
+	const [translationMode, setTranslationMode] = useState<"all" | "hide" | "only">("all");
 	const packages = useMemo(() => lines.map(parsePackageLine), [lines]);
 	const filtered = useMemo(() => {
 		const needle = query.trim().toLowerCase();
 
 		return packages
-			.filter((pkg) => !needle || pkg.name.toLowerCase().includes(needle) || pkg.description.toLowerCase().includes(needle))
+			.filter((pkg) => {
+				const isTranslation = pkg.name.startsWith("luci-i18n-");
+
+				if (translationMode === "hide" && isTranslation) {
+					return false;
+				}
+
+				if (translationMode === "only" && !isTranslation) {
+					return false;
+				}
+
+				return !needle || pkg.name.toLowerCase().includes(needle) || pkg.description.toLowerCase().includes(needle);
+			})
 			.slice(0, 80);
-	}, [packages, query]);
+	}, [packages, query, translationMode]);
 
 	return (
 		<Panel
@@ -3382,9 +3395,20 @@ function AvailablePackageTable({
 						<div>Available packages</div>
 						<div className="mt-1 text-xs font-normal text-muted-foreground">First 300 packages from configured feeds. Actions are plan-only.</div>
 					</div>
-					<div className="relative w-full sm:w-72">
-						<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-						<Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Filter available packages" value={query} />
+					<div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+						<select
+							className="h-10 rounded-md border bg-card px-3 text-sm outline-none focus-visible:border-ring"
+							onChange={(event) => setTranslationMode(event.target.value as "all" | "hide" | "only")}
+							value={translationMode}
+						>
+							<option value="all">All packages</option>
+							<option value="hide">Hide translations</option>
+							<option value="only">Only translations</option>
+						</select>
+						<div className="relative w-full sm:w-72">
+							<Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+							<Input className="pl-9" onChange={(event) => setQuery(event.target.value)} placeholder="Filter available packages" value={query} />
+						</div>
 					</div>
 				</div>
 			}
