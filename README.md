@@ -252,11 +252,12 @@ scripts/audit-router-routes.sh
 scripts/audit-router-route-inventory-doc.sh
 scripts/audit-router-route-mode-guards.sh
 scripts/audit-router-future-luci-app.sh
+scripts/audit-router-package-manager-mutation.sh
 scripts/audit-router-native-pages.sh
 scripts/smoke-router-http-routes.sh
 ```
 
-The generator refreshes [the route inventory](docs/ROUTE_INVENTORY.md) from live router metadata before validation. The audits verify that route terminology stays on the supported/compat/unsupported contract, route mode/status chips stay out of navigation and search UI, routing/firewall status pages cannot regress to raw command dumps, visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, the route inventory matches live router metadata, compat routes reject native-mode overrides, iframe source URLs load with `iloveluci_frame=1`, incomplete LuCI app routes default to compat mode, and installed `luci-app-*` routes remain discoverable for current and future app installs. The future-app audit temporarily installs and removes `luci-app-example`, then checks that new routes appear in the flat index, sidebar tree, and search data through compat, and that cleanup restores package state.
+The generator refreshes [the route inventory](docs/ROUTE_INVENTORY.md) from live router metadata before validation. The audits verify that route terminology stays on the supported/compat/unsupported contract, route mode/status chips stay out of navigation and search UI, routing/firewall status pages cannot regress to raw command dumps, visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, the route inventory matches live router metadata, compat routes reject native-mode overrides, iframe source URLs load with `iloveluci_frame=1`, incomplete LuCI app routes default to compat mode, installed `luci-app-*` routes remain discoverable for current and future app installs, and native package install/remove returns the router to a clean state. The future-app and package-manager mutation audits temporarily install and remove `luci-app-example`, then check that new routes appear through compat and cleanup restores package state.
 
 ## Secondary uhttpd Testing
 
