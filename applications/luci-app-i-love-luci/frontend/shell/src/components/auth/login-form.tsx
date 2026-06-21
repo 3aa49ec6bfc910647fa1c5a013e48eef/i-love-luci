@@ -11,6 +11,8 @@ export function LoginForm() {
 	const passwordRef = useRef<HTMLInputElement>(null);
 	const usernameRef = useRef<HTMLInputElement>(null);
 	const defaultUser = config.defaultUser || "root";
+	const loginAction =
+		typeof window === "undefined" ? undefined : `${window.location.pathname}${window.location.search}`;
 
 	useEffect(() => {
 		if (defaultUser) {
@@ -40,17 +42,24 @@ export function LoginForm() {
 					</div>
 				) : null}
 
-				<form className="grid gap-4" method="post">
+				<form action={loginAction} autoComplete="on" className="grid gap-4" method="post">
 					<div className="grid gap-2">
 						<label className="text-sm font-medium" htmlFor="luci_username">
 							Username
 						</label>
 						<Input
 							ref={usernameRef}
+							aria-label="Username"
+							autoCapitalize="none"
 							autoComplete="username"
+							autoCorrect="off"
 							defaultValue={defaultUser}
+							enterKeyHint="next"
 							id="luci_username"
 							name="luci_username"
+							required
+							spellCheck={false}
+							type="text"
 						/>
 					</div>
 					<div className="grid gap-2">
@@ -59,9 +68,12 @@ export function LoginForm() {
 						</label>
 						<Input
 							ref={passwordRef}
+							aria-label="Password"
 							autoComplete="current-password"
+							enterKeyHint="done"
 							id="luci_password"
 							name="luci_password"
+							required
 							type="password"
 						/>
 					</div>
