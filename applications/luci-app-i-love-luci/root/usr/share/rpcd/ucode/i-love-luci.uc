@@ -2340,6 +2340,8 @@ function save_network_interfaces(rows) {
 		let remove = dhcp_zero_one(row?.remove) == '1';
 		let zone_provided = row != null && row.zone != null;
 		let zone = zone_provided ? dhcp_clean_value(row?.zone || '') : null;
+		let zone_create = zone == '__custom';
+		let zone_name = zone_create ? dhcp_clean_value(row?.zoneName || '') : zone;
 
 		if (!length(section) || !valid_network_route_interface(section))
 			return {
@@ -2383,7 +2385,7 @@ function save_network_interfaces(rows) {
 		}
 
 		if (zone_provided) {
-			if (zone != '' && !valid_network_route_interface(zone))
+			if (zone_name != '' && !valid_network_route_interface(zone_name))
 				return {
 					saved: false,
 					message: 'Network interface firewall zone contains unsupported characters.',
@@ -2393,7 +2395,27 @@ function save_network_interfaces(rows) {
 					firewallSections: collect_uci_config('firewall', ['zone'])
 				};
 
-			if (zone != '' && !zone_sections[zone])
+			if (zone_create && !length(zone_name))
+				return {
+					saved: false,
+					message: 'New firewall zone name is required.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+					firewallSections: collect_uci_config('firewall', ['zone'])
+				};
+
+			if (zone_create && zone_sections[zone_name])
+				return {
+					saved: false,
+					message: 'New firewall zone already exists.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6']),
+					firewallSections: collect_uci_config('firewall', ['zone'])
+				};
+
+			if (!zone_create && zone_name != '' && !zone_sections[zone_name])
 				return {
 					saved: false,
 					message: 'Network interface firewall zone was not found.',
@@ -2500,7 +2522,8 @@ function save_network_interfaces(rows) {
 			section,
 			create: !exists,
 			zone_provided,
-			zone,
+			zone: zone_name,
+			zone_create,
 			ipaddr,
 			dns,
 			ip6class,
@@ -2525,6 +2548,17 @@ function save_network_interfaces(rows) {
 		if (item.create) {
 			changed = true;
 			uci.set('network', section, 'interface');
+		}
+
+		if (item.zone_create) {
+			let zone_section = item.zone;
+			firewall_changed = true;
+			uci.set('firewall', zone_section, 'zone');
+			uci.set('firewall', zone_section, 'name', item.zone);
+			uci.set('firewall', zone_section, 'input', 'REJECT');
+			uci.set('firewall', zone_section, 'output', 'ACCEPT');
+			uci.set('firewall', zone_section, 'forward', 'REJECT');
+			zone_sections[item.zone] = zone_section;
 		}
 
 		for (let key, value in next) {

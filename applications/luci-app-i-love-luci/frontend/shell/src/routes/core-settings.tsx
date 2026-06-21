@@ -6163,6 +6163,7 @@ function NetworkInterfaceEditor({
 				const name = rawValue(zone.values.name || zone.name);
 				return [name, name] as [string, string];
 			}),
+			["__custom", "Create new..."],
 		],
 		[firewallZones],
 	);
@@ -6274,12 +6275,22 @@ function NetworkInterfaceEditor({
 										)}
 									</td>
 									<td className="px-3 py-3">
-										<SelectField
-											id={`network-interface-zone-${index}`}
-											onChange={(value) => updateRow(index, "zone", value)}
-											options={firewallZoneOptions}
-											value={row.zone ?? ""}
-										/>
+										<div className="grid gap-2">
+											<SelectField
+												id={`network-interface-zone-${index}`}
+												onChange={(value) => updateRow(index, "zone", value)}
+												options={firewallZoneOptions}
+												value={row.zone ?? ""}
+											/>
+											{row.zone === "__custom" ? (
+												<Input
+													aria-label="New firewall zone name"
+													onChange={(event) => updateRow(index, "zoneName", event.target.value)}
+													placeholder="zone name"
+													value={row.zoneName ?? ""}
+												/>
+											) : null}
+										</div>
 									</td>
 									<td className="px-3 py-3">
 										<Input aria-label="Protocol" onChange={(event) => updateRow(index, "proto", event.target.value)} value={row.proto} />
@@ -7400,6 +7411,7 @@ function networkInterfaceValues(section: ConfigSection, firewallZones: ConfigSec
 	return normalizeNetworkInterface({
 		section: section.name,
 		zone: firewallZoneForInterface(section.name, firewallZones),
+		zoneName: "",
 		proto: rawValue(section.values.proto),
 		device: rawValue(section.values.device || section.values.ifname),
 		disabled: rawValue(section.values.disabled),
@@ -7433,6 +7445,7 @@ function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfac
 		remove: row.remove === "1" ? "1" : "",
 		isNew: row.isNew === "1" ? "1" : "",
 		zone: row.zone ?? "",
+		zoneName: row.zoneName ?? "",
 		proto: row.proto ?? "",
 		device: row.device ?? "",
 		disabled: row.disabled === "1" || row.disabled === "0" ? row.disabled : "",
@@ -7466,6 +7479,7 @@ function newNetworkInterfaceRow(section: string): NetworkInterfaceConfig {
 		remove: "",
 		isNew: "1",
 		zone: "",
+		zoneName: "",
 		proto: "none",
 		device: "",
 		disabled: "1",

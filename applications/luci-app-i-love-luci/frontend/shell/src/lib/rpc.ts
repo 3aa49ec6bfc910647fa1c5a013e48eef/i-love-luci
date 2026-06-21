@@ -998,6 +998,7 @@ export type NetworkInterfaceConfig = {
 	remove?: string;
 	isNew?: string;
 	zone?: string;
+	zoneName?: string;
 	proto: string;
 	device: string;
 	disabled: string;
