@@ -19,7 +19,7 @@ Properties:
 
 The app must not embed `https://user:pass@host/` ttyd URLs. Chromium blocks embedded-credential subresource requests, and credentials would remain visible in browser state.
 
-If the helper is absent, the backend can still report the older trusted-LAN ttyd fallback with `transport: "direct"`, but release validation expects the helper tunnel.
+The release package depends on the helper and does not install or configure `ttyd` by default. If an operator separately installs and enables `ttyd`, the backend can still report the older trusted-LAN fallback with `transport: "direct"`, but release validation expects the helper tunnel.
 
 ## Selected Production Direction
 
@@ -44,7 +44,7 @@ Current implementation:
 - the helper listens on `/var/run/i-love-luci-console/control.sock` with root-only permissions.
 - the helper can launch `/bin/login -f root` inside a PTY, poll output, write input, resize the terminal, and close sessions.
 - `luci-app-i-love-luci` depends on `i-love-luci-console` and switches `console_status` / `console_launch` to `transport: "tunnel"` when the helper responds.
-- if the helper is not installed or not running, current releases keep reporting `transport: "direct"` and use the old trusted-LAN ttyd fallback.
+- if the helper is not installed or not running, and an operator has separately installed/enabled `ttyd`, the backend can report `transport: "direct"` for the trusted-LAN development fallback.
 - local Linux smoke coverage compiled the helper, started the daemon, opened a PTY session, polled shell output, wrote `id`, polled the command output, and closed the session.
 - router smoke coverage on `172.16.172.1` installed `i-love-luci-console-1.0.0-r4.apk`, enabled and started the procd service, verified `console_status` reports `transport: "tunnel"`, launched a PTY session through same-origin RPC, wrote `echo ILOVE-CONSOLE-SMOKE`, observed the output, closed the session, and left `uci changes=0`.
 
@@ -57,7 +57,7 @@ Implementation guardrails:
 - cap concurrent sessions and output buffer size
 - avoid shell command arguments supplied from the browser
 - never return passwords, bearer tokens, or terminal credentials to the browser
-- keep direct ttyd as a development fallback only while `transport` reports `direct`
+- keep direct ttyd as an operator-installed development fallback only while `transport` reports `direct`
 
 ## Router Evidence
 

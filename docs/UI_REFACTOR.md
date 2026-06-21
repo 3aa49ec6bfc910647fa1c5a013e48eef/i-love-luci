@@ -798,7 +798,7 @@ Sysupgrade impact:
 - Config can be kept by OpenWrt when users keep settings, but package-owned files are not guaranteed to survive a release sysupgrade unless the package is included in the new image or reinstalled after upgrade.
 - The package feed reduces the recovery gap because users can reinstall with standard package tooling after upgrade.
 - More robust paths are: include I Love LuCI in a custom image, use Attended Sysupgrade or `owut` where supported, or add a post-upgrade reinstall checklist.
-- The package now installs `/lib/upgrade/keep.d/luci-app-i-love-luci` to preserve `/etc/config/i-love-luci` and `/etc/config/ttyd` in sysupgrade configuration backups.
+- The package now installs `/lib/upgrade/keep.d/luci-app-i-love-luci` to preserve `/etc/config/i-love-luci` in sysupgrade configuration backups. The release package uses `i-love-luci-console` for terminal sessions and no longer installs or configures `ttyd` by default.
 
 Future-proof target:
 
@@ -811,7 +811,7 @@ Future-proof target:
 
 Near-term hardening:
 
-- Add package-manager conffile metadata for package upgrades if needed; sysupgrade backup coverage now exists for `/etc/config/i-love-luci` and `/etc/config/ttyd`.
+- Add package-manager conffile metadata for package upgrades if needed; sysupgrade backup coverage now exists for `/etc/config/i-love-luci`.
 - Avoid persisting versioned asset URLs in config; keep cache keys template-owned.
 - Keep CI/build matrix for OpenWrt 24.10/opkg, 25.12+/apk, and snapshot when practical.
 - Prefer typed `rpcd` endpoints and UCI-backed settings over scraping LuCI pages.
@@ -1138,13 +1138,13 @@ Current implementation:
 - Helper sessions cap concurrent terminals and output buffer size, close on logout/timeout/process exit, and log open/deny events through syslog.
 - `console_status` reports `transport: "tunnel"`, `tunnelAvailable: true`, and `requiresDirectConnectivity: false` after the helper is installed, enabled, and running.
 - Router validation on `172.16.172.1` installed `i-love-luci-console-1.0.0-r4.apk`, enabled and started the service, launched a same-origin RPC console session, wrote `echo ILOVE-CONSOLE-SMOKE`, observed the command output, closed the session, and left `uci changes=0`.
-- The direct ttyd path remains a trusted-LAN fallback only when the helper is missing or stopped. Release validation expects the tunnel helper path.
+- The release package no longer depends on or auto-configures `ttyd`. The direct ttyd path remains available only if an operator installs and configures it as a trusted-LAN development fallback. Release validation expects the tunnel helper path.
 
 Alternative future option:
 
 - A uHTTPd WebSocket reverse-proxy enhancement could still allow ttyd behind a LuCI-session-protected gateway, but current uHTTPd CGI/ucode/ubus handlers do not provide that proxy and current uHTTPd only loads hard-coded plugins. That makes the native PTY helper the practical production path.
 
-Direct ttyd integration is acceptable only as a development fallback. Public release validation should use the session-bound PTY helper above so browser-visible terminal credentials are not produced. See [CONSOLE_TUNNEL.md](CONSOLE_TUNNEL.md) for the tunnel design and implementation constraints found on the `172.16.172.1` test router.
+Direct ttyd integration is acceptable only as an operator-installed development fallback. Public release validation should use the session-bound PTY helper above so browser-visible terminal credentials are not produced. See [CONSOLE_TUNNEL.md](CONSOLE_TUNNEL.md) for the tunnel design and implementation constraints found on the `172.16.172.1` test router.
 
 Router smoke tests should be manual at first. Add scheduled or self-hosted CI only after a stable test router/VM exists.
 

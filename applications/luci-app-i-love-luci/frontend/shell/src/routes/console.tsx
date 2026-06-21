@@ -1,5 +1,5 @@
 import { ExternalLink, SquareTerminal } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -80,15 +80,15 @@ export function ConsolePage() {
 	const isTunnel = (launch?.transport ?? status?.transport) === "tunnel";
 
 	return (
-		<div className="mx-auto grid h-[calc(100vh-7rem)] min-h-[36rem] w-full max-w-7xl grid-rows-[auto_1fr] gap-4">
-			<div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-				<div className="flex items-center gap-3">
-					<div className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
+		<div className="mx-auto grid h-[calc(100dvh-6rem)] max-h-[calc(100dvh-6rem)] min-h-0 w-full max-w-7xl grid-rows-[auto_minmax(0,1fr)] gap-3 sm:h-[calc(100dvh-7rem)] sm:max-h-[calc(100dvh-7rem)]">
+			<div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+				<div className="flex min-w-0 items-center gap-2 sm:gap-3">
+					<div className="grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground sm:size-9">
 						<SquareTerminal className="size-4" />
 					</div>
-					<div>
-						<h1 className="text-lg font-semibold">Router console</h1>
-						<p className="text-sm text-muted-foreground">
+					<div className="min-w-0">
+						<h1 className="text-base font-semibold sm:text-lg">Router console</h1>
+						<p className="truncate text-xs text-muted-foreground sm:text-sm">
 							{isTunnel
 								? "Same-origin terminal tunnel through the authenticated I Love LuCI session."
 								: "Trusted-LAN direct console fallback."}
@@ -146,6 +146,7 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 	const [sequence, setSequence] = useState(0);
 	const [input, setInput] = useState("");
 	const [active, setActive] = useState(true);
+	const outputRef = useRef<HTMLDivElement>(null);
 	const delay = Math.max(100, pollAfterMs ?? 200);
 
 	useEffect(() => {
@@ -190,6 +191,16 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 		};
 	}, [sessionId]);
 
+	useEffect(() => {
+		const element = outputRef.current;
+
+		if (!element) {
+			return;
+		}
+
+		element.scrollTop = element.scrollHeight;
+	}, [output, active]);
+
 	async function submit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
 		if (!input || !active) {
@@ -201,19 +212,19 @@ function TunnelConsole({ pollAfterMs, sessionId }: { pollAfterMs?: number; sessi
 	}
 
 	return (
-		<div className="flex size-full flex-col bg-black text-sm text-zinc-100">
-			<div className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-mono leading-relaxed">
+		<div className="flex size-full min-h-0 flex-col bg-black text-xs text-zinc-100 sm:text-sm">
+			<div ref={outputRef} className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-3 font-mono leading-relaxed sm:p-4">
 				{output || "Opening router shell..."}
 			</div>
 			<form className="flex border-t border-zinc-800" onSubmit={(event) => void submit(event)}>
 				<input
-					className="min-w-0 flex-1 bg-black px-4 py-3 font-mono text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+					className="min-w-0 flex-1 bg-black px-3 py-2 font-mono text-xs text-zinc-100 outline-none placeholder:text-zinc-500 sm:px-4 sm:py-3 sm:text-sm"
 					disabled={!active}
 					onChange={(event) => setInput(event.target.value)}
 					placeholder={active ? "Type a command" : "Console session ended"}
 					value={input}
 				/>
-				<Button className="m-2" disabled={!active || !input} type="submit" variant="secondary">
+				<Button className="m-1.5 h-8 px-3 text-xs sm:m-2 sm:h-9 sm:px-4 sm:text-sm" disabled={!active || !input} type="submit" variant="secondary">
 					Send
 				</Button>
 			</form>

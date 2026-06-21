@@ -1,23 +1,8 @@
 #!/bin/sh
 
-if command -v ttyd >/dev/null 2>&1; then
-	if ! uci -q get ttyd.@ttyd[0] >/dev/null; then
-		uci add ttyd ttyd >/dev/null
-	fi
-
-	if ! uci -q get ttyd.@ttyd[0].credential >/dev/null; then
-		console_password="$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | hexdump -ve '1/1 "%02x"')"
-		uci set ttyd.@ttyd[0].credential="iloveluci:${console_password}"
-	fi
-
-	uci set ttyd.@ttyd[0].enable='1'
-	uci set ttyd.@ttyd[0].interface='@lan'
-	uci set ttyd.@ttyd[0].port='7681'
-	uci set ttyd.@ttyd[0].readonly='0'
-	uci set ttyd.@ttyd[0].command='/bin/login -f root'
-	uci commit ttyd
-	/etc/init.d/ttyd enable >/dev/null 2>&1 || true
-	/etc/init.d/ttyd restart >/dev/null 2>&1 || true
+if [ -x /etc/init.d/i-love-luci-console ]; then
+	/etc/init.d/i-love-luci-console enable >/dev/null 2>&1 || true
+	/etc/init.d/i-love-luci-console restart >/dev/null 2>&1 || true
 fi
 
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache

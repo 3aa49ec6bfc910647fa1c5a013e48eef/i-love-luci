@@ -16,6 +16,9 @@ scan_roots = [
 	root / "docs" / "ROUTE_INVENTORY.md",
 	root / "docs" / "UI_REFACTOR.md",
 	root / "applications" / "luci-app-i-love-luci" / "frontend" / "shell" / "src",
+	root / "applications" / "luci-app-i-love-luci" / "Makefile",
+	root / "applications" / "luci-app-i-love-luci" / "root" / "etc" / "uci-defaults" / "90_luci-app-i-love-luci",
+	root / "applications" / "luci-app-i-love-luci" / "root" / "lib" / "upgrade" / "keep.d" / "luci-app-i-love-luci",
 	root / "applications" / "luci-app-i-love-luci" / "root" / "usr" / "share" / "rpcd" / "ucode" / "i-love-luci.uc",
 	root / "applications" / "luci-app-i-love-luci" / "root" / "usr" / "share" / "rpcd" / "acl.d" / "luci-app-i-love-luci.json",
 	root / "scripts",
@@ -52,6 +55,9 @@ header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/compone
 console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
 modern_shell_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/modern-shell.tsx")
 sidebar_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx")
+package_makefile = Path("applications/luci-app-i-love-luci/Makefile")
+uci_defaults_file = Path("applications/luci-app-i-love-luci/root/etc/uci-defaults/90_luci-app-i-love-luci")
+upgrade_keep_file = Path("applications/luci-app-i-love-luci/root/lib/upgrade/keep.d/luci-app-i-love-luci")
 sysauth_template_files = {
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/sysauth.ut"),
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
@@ -82,10 +88,14 @@ for base in scan_roots:
 	for path in iter_files(base):
 		if path.name == "audit-compat-contract.sh":
 			continue
-		if path.suffix not in {".md", ".ts", ".tsx", ".js", ".sh", ".uc", ".ut"} and path.name != "README.md":
-			continue
 		text = path.read_text(encoding="utf-8", errors="replace")
 		relative_path = path.relative_to(root)
+		if (
+			path.suffix not in {".md", ".ts", ".tsx", ".js", ".sh", ".uc", ".ut"}
+			and path.name != "README.md"
+			and relative_path not in {package_makefile, uci_defaults_file, upgrade_keep_file}
+		):
+			continue
 		if relative_path in sysauth_template_files:
 			for required in (
 				'data-iloveluci-login="true"',
@@ -240,6 +250,22 @@ for base in scan_roots:
 				failures.append(f"{relative_path}: embedded console URL must reject helper credentials")
 			if "buildConsoleFallbackUrl" not in text or "url.username" not in text or "url.password" not in text:
 				failures.append(f"{relative_path}: direct console fallback must isolate helper credential URL construction")
+		if relative_path == package_makefile:
+			if "+i-love-luci-console" not in text:
+				failures.append(f"{relative_path}: release package must depend on the console tunnel helper")
+			if "+ttyd" in text:
+				failures.append(f"{relative_path}: release package must not install direct ttyd by default")
+		if relative_path == uci_defaults_file:
+			for forbidden_ttyd_default in ("uci set ttyd", "uci add ttyd", "/etc/init.d/ttyd", "credential=\"iloveluci:"):
+				if forbidden_ttyd_default in text:
+					failures.append(f"{relative_path}: release install must not configure direct ttyd by default ({forbidden_ttyd_default})")
+			if "/etc/init.d/i-love-luci-console" not in text:
+				failures.append(f"{relative_path}: release install must enable/restart the console tunnel helper")
+		if relative_path == upgrade_keep_file:
+			if "/etc/config/i-love-luci" not in text:
+				failures.append(f"{relative_path}: sysupgrade keep file must preserve I Love LuCI settings")
+			if "/etc/config/ttyd" in text:
+				failures.append(f"{relative_path}: release keep file must not preserve generated ttyd config")
 		if relative_path == modern_shell_file:
 			if "flex min-h-0 flex-1 overflow-hidden" not in text:
 				failures.append(f"{relative_path}: shell body must constrain overflow for independent sidebar/main scrolling")

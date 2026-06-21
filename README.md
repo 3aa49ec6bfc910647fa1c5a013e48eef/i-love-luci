@@ -6,7 +6,7 @@ I Love LuCI is a modern OpenWrt administration app for LuCI. It replaces the old
 
 `sysupgrade` does not guarantee that manually installed package files survive an OpenWrt release upgrade. Configuration can be preserved when users keep settings, but static package files under `/www`, LuCI templates, menu files, and `rpcd` scripts must be present in the upgraded firmware image or reinstalled from the package feed after the upgrade.
 
-The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` and the generated `ttyd` helper config are included in OpenWrt configuration backups. This protects settings, not the package binaries.
+The package installs `/lib/upgrade/keep.d/luci-app-i-love-luci` so `/etc/config/i-love-luci` is included in OpenWrt configuration backups. This protects settings, not the package binaries.
 
 Recommended upgrade paths:
 
@@ -19,7 +19,7 @@ Current package shape:
 - The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
 - The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
 - The legacy bridge only works when LuCI is installed.
-- The router console uses the `i-love-luci-console` helper when installed. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` remains a trusted-LAN development fallback only when the helper is absent. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
+- The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` is not installed or configured by default; it is an optional trusted-LAN development fallback only. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
 
 Future-proof target:
 
@@ -103,7 +103,7 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
-- Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session, with direct `ttyd` kept as a fallback only when the helper is unavailable.
+- Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session.
 - Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
 
@@ -331,6 +331,6 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 ## Security Notes
 
 - The React app is never the source of security truth. Privileged work must go through LuCI, `rpcd`, `ubus`, or OpenWrt services.
-- The web console tunnel uses `i-love-luci-console` when installed and running. Terminal I/O stays behind authenticated LuCI RPC calls; direct `ttyd` is retained only as a trusted-LAN fallback when the helper is unavailable.
+- The web console tunnel uses `i-love-luci-console`. Terminal I/O stays behind authenticated LuCI RPC calls; direct `ttyd` is optional and should be used only as a trusted-LAN development fallback.
 - Passkey and MFA support require server-side challenge and secret handling before they are production-ready.
 - Do not commit router credentials, package signing keys, or screenshots containing real hostnames, MACs, leases, addresses, or secrets.
