@@ -5914,6 +5914,12 @@ function Field({ children, label, target }: { children: ReactNode; label: string
 	);
 }
 
+const DEFAULT_FLAG_OPTIONS: [string, string][] = [
+	["", "Default"],
+	["1", "Yes"],
+	["0", "No"],
+];
+
 function SelectField({
 	id,
 	onChange,
@@ -6185,19 +6191,34 @@ function NetworkInterfaceEditor({
 			</div>
 			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
 				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[92rem] text-left text-sm">
+					<table className="w-full min-w-[172rem] text-left text-sm">
 						<thead className="border-b text-xs uppercase text-muted-foreground">
 							<tr>
 								<th className="px-3 py-2 font-medium">Interface</th>
 								<th className="px-3 py-2 font-medium">Protocol</th>
 								<th className="px-3 py-2 font-medium">Device</th>
+								<th className="px-3 py-2 font-medium">Disabled</th>
+								<th className="px-3 py-2 font-medium">Boot</th>
+								<th className="px-3 py-2 font-medium">Force link</th>
+								<th className="px-3 py-2 font-medium">Default route</th>
 								<th className="px-3 py-2 font-medium">IPv4 address</th>
 								<th className="px-3 py-2 font-medium">Netmask</th>
 								<th className="px-3 py-2 font-medium">Gateway</th>
+								<th className="px-3 py-2 font-medium">Broadcast</th>
 								<th className="px-3 py-2 font-medium">IPv6 assign</th>
+								<th className="px-3 py-2 font-medium">IPv6 hint</th>
+								<th className="px-3 py-2 font-medium">IPv6 suffix</th>
+								<th className="px-3 py-2 font-medium">IPv6 classes</th>
+								<th className="px-3 py-2 font-medium">IPv6 prefixes</th>
 								<th className="px-3 py-2 font-medium">DNS</th>
+								<th className="px-3 py-2 font-medium">DNS weight</th>
+								<th className="px-3 py-2 font-medium">Metric</th>
 								<th className="px-3 py-2 font-medium">Peer DNS</th>
 								<th className="px-3 py-2 font-medium">Delegate</th>
+								<th className="px-3 py-2 font-medium">Hostname</th>
+								<th className="px-3 py-2 font-medium">Client ID</th>
+								<th className="px-3 py-2 font-medium">Vendor</th>
+								<th className="px-3 py-2 font-medium">No release</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -6209,6 +6230,38 @@ function NetworkInterfaceEditor({
 									</td>
 									<td className="px-3 py-3">
 										<Input aria-label="Device" onChange={(event) => updateRow(index, "device", event.target.value)} value={row.device} />
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-disabled-${index}`}
+											onChange={(value) => updateRow(index, "disabled", value)}
+											options={DEFAULT_FLAG_OPTIONS}
+											value={row.disabled}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-auto-${index}`}
+											onChange={(value) => updateRow(index, "auto", value)}
+											options={DEFAULT_FLAG_OPTIONS}
+											value={row.auto}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-force-link-${index}`}
+											onChange={(value) => updateRow(index, "force_link", value)}
+											options={DEFAULT_FLAG_OPTIONS}
+											value={row.force_link}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-defaultroute-${index}`}
+											onChange={(value) => updateRow(index, "defaultroute", value)}
+											options={DEFAULT_FLAG_OPTIONS}
+											value={row.defaultroute}
+										/>
 									</td>
 									<td className="px-3 py-3">
 										<textarea
@@ -6226,11 +6279,38 @@ function NetworkInterfaceEditor({
 										<Input aria-label="Gateway" onChange={(event) => updateRow(index, "gateway", event.target.value)} value={row.gateway} />
 									</td>
 									<td className="px-3 py-3">
+										<Input aria-label="Broadcast" onChange={(event) => updateRow(index, "broadcast", event.target.value)} value={row.broadcast} />
+									</td>
+									<td className="px-3 py-3">
 										<Input
 											aria-label="IPv6 assignment length"
 											inputMode="numeric"
 											onChange={(event) => updateRow(index, "ip6assign", event.target.value)}
 											value={row.ip6assign}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="IPv6 assignment hint" onChange={(event) => updateRow(index, "ip6hint", event.target.value)} value={row.ip6hint} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="IPv6 suffix" onChange={(event) => updateRow(index, "ip6ifaceid", event.target.value)} value={row.ip6ifaceid} />
+									</td>
+									<td className="px-3 py-3">
+										<textarea
+											aria-label="IPv6 prefix classes"
+											className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+											onChange={(event) => updateRow(index, "ip6class", event.target.value)}
+											spellCheck={false}
+											value={row.ip6class}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<textarea
+											aria-label="IPv6 routed prefixes"
+											className="min-h-10 w-48 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+											onChange={(event) => updateRow(index, "ip6prefix", event.target.value)}
+											spellCheck={false}
+											value={row.ip6prefix}
 										/>
 									</td>
 									<td className="px-3 py-3">
@@ -6240,6 +6320,22 @@ function NetworkInterfaceEditor({
 											onChange={(event) => updateRow(index, "dns", event.target.value)}
 											spellCheck={false}
 											value={row.dns}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input
+											aria-label="DNS weight"
+											inputMode="numeric"
+											onChange={(event) => updateRow(index, "dns_metric", event.target.value)}
+											value={row.dns_metric}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input
+											aria-label="Gateway metric"
+											inputMode="numeric"
+											onChange={(event) => updateRow(index, "metric", event.target.value)}
+											value={row.metric}
 										/>
 									</td>
 									<td className="px-3 py-3">
@@ -6262,6 +6358,23 @@ function NetworkInterfaceEditor({
 												["0", "No"],
 											]}
 											value={row.delegate}
+										/>
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="DHCP hostname" onChange={(event) => updateRow(index, "hostname", event.target.value)} value={row.hostname} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="DHCP client ID" onChange={(event) => updateRow(index, "clientid", event.target.value)} value={row.clientid} />
+									</td>
+									<td className="px-3 py-3">
+										<Input aria-label="DHCP vendor class" onChange={(event) => updateRow(index, "vendorid", event.target.value)} value={row.vendorid} />
+									</td>
+									<td className="px-3 py-3">
+										<SelectField
+											id={`network-interface-norelease-${index}`}
+											onChange={(value) => updateRow(index, "norelease", value)}
+											options={DEFAULT_FLAG_OPTIONS}
+											value={row.norelease}
 										/>
 									</td>
 								</tr>
@@ -7220,13 +7333,28 @@ function networkInterfaceValues(section: ConfigSection): NetworkInterfaceConfig 
 		section: section.name,
 		proto: rawValue(section.values.proto),
 		device: rawValue(section.values.device || section.values.ifname),
+		disabled: rawValue(section.values.disabled),
+		auto: rawValue(section.values.auto),
+		force_link: rawValue(section.values.force_link),
+		defaultroute: rawValue(section.values.defaultroute),
 		ipaddr: rawListValue(section.values.ipaddr).join("\n"),
 		netmask: rawValue(section.values.netmask),
 		gateway: rawValue(section.values.gateway),
+		broadcast: rawValue(section.values.broadcast),
 		ip6assign: rawValue(section.values.ip6assign),
+		ip6hint: rawValue(section.values.ip6hint),
+		ip6ifaceid: rawValue(section.values.ip6ifaceid),
+		ip6class: rawListValue(section.values.ip6class).join("\n"),
+		ip6prefix: rawListValue(section.values.ip6prefix).join("\n"),
 		dns: rawListValue(section.values.dns).join("\n"),
+		dns_metric: rawValue(section.values.dns_metric),
+		metric: rawValue(section.values.metric),
 		peerdns: isEnabledValue(section.values.peerdns) ? "1" : "0",
 		delegate: isEnabledValue(section.values.delegate) ? "1" : "0",
+		hostname: rawValue(section.values.hostname),
+		clientid: rawValue(section.values.clientid),
+		vendorid: rawValue(section.values.vendorid),
+		norelease: rawValue(section.values.norelease),
 	});
 }
 
@@ -7235,13 +7363,28 @@ function normalizeNetworkInterface(row: NetworkInterfaceConfig): NetworkInterfac
 		section: row.section ?? "",
 		proto: row.proto ?? "",
 		device: row.device ?? "",
+		disabled: row.disabled === "1" || row.disabled === "0" ? row.disabled : "",
+		auto: row.auto === "1" || row.auto === "0" ? row.auto : "",
+		force_link: row.force_link === "1" || row.force_link === "0" ? row.force_link : "",
+		defaultroute: row.defaultroute === "1" || row.defaultroute === "0" ? row.defaultroute : "",
 		ipaddr: row.ipaddr ?? "",
 		netmask: row.netmask ?? "",
 		gateway: row.gateway ?? "",
+		broadcast: row.broadcast ?? "",
 		ip6assign: row.ip6assign ?? "",
+		ip6hint: row.ip6hint ?? "",
+		ip6ifaceid: row.ip6ifaceid ?? "",
+		ip6class: row.ip6class ?? "",
+		ip6prefix: row.ip6prefix ?? "",
 		dns: row.dns ?? "",
+		dns_metric: row.dns_metric ?? "",
+		metric: row.metric ?? "",
 		peerdns: row.peerdns === "0" ? "0" : "1",
 		delegate: row.delegate === "0" ? "0" : "1",
+		hostname: row.hostname ?? "",
+		clientid: row.clientid ?? "",
+		vendorid: row.vendorid ?? "",
+		norelease: row.norelease === "1" || row.norelease === "0" ? row.norelease : "",
 	};
 }
 

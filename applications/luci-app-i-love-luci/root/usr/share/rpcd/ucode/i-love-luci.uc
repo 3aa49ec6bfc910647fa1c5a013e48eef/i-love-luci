@@ -2220,6 +2220,10 @@ function valid_network_route_interface(value) {
 	return length(value) && replace(value, /[^A-Za-z0-9_.:-]/g, '') == value;
 }
 
+function valid_network_interface_text(value) {
+	return value == '' || replace(value, /[^A-Za-z0-9:._/%@*+ -]/g, '') == value;
+}
+
 function network_interface_rows() {
 	let interfaces = [];
 
@@ -2235,13 +2239,28 @@ function network_interface_rows() {
 			section: section['.name'] || '',
 			proto: section.proto || '',
 			device: section.device || section.ifname || '',
+			disabled: section.disabled || '',
+			auto: section.auto || '',
+			force_link: section.force_link || '',
+			defaultroute: section.defaultroute || '',
 			ipaddr: join('\n', dhcp_normalize_list(section.ipaddr)),
 			netmask: section.netmask || '',
 			gateway: section.gateway || '',
+			broadcast: section.broadcast || '',
 			ip6assign: section.ip6assign || '',
+			ip6hint: section.ip6hint || '',
+			ip6ifaceid: section.ip6ifaceid || '',
+			ip6class: join('\n', dhcp_normalize_list(section.ip6class)),
+			ip6prefix: join('\n', dhcp_normalize_list(section.ip6prefix)),
 			dns: join('\n', dhcp_normalize_list(section.dns)),
+			dns_metric: section.dns_metric || '',
+			metric: section.metric || '',
 			peerdns: section.peerdns == '0' ? '0' : '1',
-			delegate: section.delegate == '0' ? '0' : '1'
+			delegate: section.delegate == '0' ? '0' : '1',
+			hostname: section.hostname || '',
+			clientid: section.clientid || '',
+			vendorid: section.vendorid || '',
+			norelease: section.norelease || ''
 		});
 	});
 
@@ -2269,14 +2288,29 @@ function save_network_interfaces(rows) {
 
 		let ipaddr = split_dhcp_list(row?.ipaddr || '');
 		let dns = split_dhcp_list(row?.dns || '');
+		let ip6class = split_dhcp_list(row?.ip6class || '');
+		let ip6prefix = split_dhcp_list(row?.ip6prefix || '');
 		let next = {
 			proto: dhcp_clean_value(row?.proto || ''),
 			device: dhcp_clean_value(row?.device || ''),
+			disabled: dhcp_optional_zero_one(row?.disabled),
+			auto: dhcp_optional_zero_one(row?.auto),
+			force_link: dhcp_optional_zero_one(row?.force_link),
+			defaultroute: dhcp_optional_zero_one(row?.defaultroute),
 			netmask: dhcp_clean_value(row?.netmask || ''),
 			gateway: dhcp_clean_value(row?.gateway || ''),
+			broadcast: dhcp_clean_value(row?.broadcast || ''),
 			ip6assign: dhcp_clean_value(row?.ip6assign || ''),
+			ip6hint: dhcp_clean_value(row?.ip6hint || ''),
+			ip6ifaceid: dhcp_clean_value(row?.ip6ifaceid || ''),
+			dns_metric: dhcp_clean_value(row?.dns_metric || ''),
+			metric: dhcp_clean_value(row?.metric || ''),
 			peerdns: dhcp_zero_one(row?.peerdns),
-			delegate: dhcp_zero_one(row?.delegate)
+			delegate: dhcp_zero_one(row?.delegate),
+			hostname: dhcp_clean_value(row?.hostname || ''),
+			clientid: dhcp_clean_value(row?.clientid || ''),
+			vendorid: dhcp_clean_value(row?.vendorid || ''),
+			norelease: dhcp_optional_zero_one(row?.norelease)
 		};
 
 		if (!valid_network_route_interface(next.proto))
@@ -2298,16 +2332,16 @@ function save_network_interfaces(rows) {
 			};
 
 		for (let key, value in next) {
-			if ((key == 'ip6assign') && value != '' && !dhcp_numeric_value(value))
+			if ((key == 'ip6assign' || key == 'dns_metric' || key == 'metric') && value != '' && !dhcp_numeric_value(value))
 				return {
 					saved: false,
-					message: 'Network interface IPv6 assignment length must be numeric.',
+					message: 'Network interface IPv6 assignment, DNS weight, and gateway metric must be numeric.',
 					changed: false,
 					interfaces: network_interface_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
 
-			if ((key == 'netmask' || key == 'gateway') && !valid_network_route_text(value))
+			if ((key == 'netmask' || key == 'gateway' || key == 'broadcast' || key == 'ip6hint' || key == 'ip6ifaceid') && !valid_network_route_text(value))
 				return {
 					saved: false,
 					message: 'Network interface address fields contain unsupported characters.',
@@ -2315,12 +2349,21 @@ function save_network_interfaces(rows) {
 					interfaces: network_interface_rows(),
 					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
 				};
+
+			if ((key == 'hostname' || key == 'clientid' || key == 'vendorid') && !valid_network_interface_text(value))
+				return {
+					saved: false,
+					message: 'Network interface DHCP client fields contain unsupported characters.',
+					changed: false,
+					interfaces: network_interface_rows(),
+					sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
+				};
 		}
 
-		if (!valid_network_route_list(ipaddr) || !valid_network_route_list(dns))
+		if (!valid_network_route_list(ipaddr) || !valid_network_route_list(dns) || !valid_network_route_list(ip6class) || !valid_network_route_list(ip6prefix))
 			return {
 				saved: false,
-				message: 'Network interface IP address and DNS fields contain unsupported characters.',
+				message: 'Network interface IP address, DNS, or IPv6 prefix fields contain unsupported characters.',
 				changed: false,
 				interfaces: network_interface_rows(),
 				sections: collect_uci_config('network', ['globals', 'device', 'interface', 'route', 'route6', 'rule', 'rule6'])
@@ -2330,6 +2373,8 @@ function save_network_interfaces(rows) {
 			section,
 			ipaddr,
 			dns,
+			ip6class,
+			ip6prefix,
 			next
 		});
 	}
@@ -2367,6 +2412,22 @@ function save_network_interfaces(rows) {
 				uci.set('network', section, 'dns', length(item.dns) == 1 ? item.dns[0] : item.dns);
 			else
 				uci.delete('network', section, 'dns');
+		}
+
+		if (!same_dhcp_list(uci.get('network', section, 'ip6class') || [], item.ip6class)) {
+			changed = true;
+			if (length(item.ip6class))
+				uci.set('network', section, 'ip6class', length(item.ip6class) == 1 ? item.ip6class[0] : item.ip6class);
+			else
+				uci.delete('network', section, 'ip6class');
+		}
+
+		if (!same_dhcp_list(uci.get('network', section, 'ip6prefix') || [], item.ip6prefix)) {
+			changed = true;
+			if (length(item.ip6prefix))
+				uci.set('network', section, 'ip6prefix', length(item.ip6prefix) == 1 ? item.ip6prefix[0] : item.ip6prefix);
+			else
+				uci.delete('network', section, 'ip6prefix');
 		}
 	}
 

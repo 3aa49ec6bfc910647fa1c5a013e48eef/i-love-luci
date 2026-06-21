@@ -997,13 +997,28 @@ export type NetworkInterfaceConfig = {
 	section: string;
 	proto: string;
 	device: string;
+	disabled: string;
+	auto: string;
+	force_link: string;
+	defaultroute: string;
 	ipaddr: string;
 	netmask: string;
 	gateway: string;
+	broadcast: string;
 	ip6assign: string;
+	ip6hint: string;
+	ip6ifaceid: string;
+	ip6class: string;
+	ip6prefix: string;
 	dns: string;
+	dns_metric: string;
+	metric: string;
 	peerdns: string;
 	delegate: string;
+	hostname: string;
+	clientid: string;
+	vendorid: string;
+	norelease: string;
 };
 
 export type NetworkInterfacesResult = {
