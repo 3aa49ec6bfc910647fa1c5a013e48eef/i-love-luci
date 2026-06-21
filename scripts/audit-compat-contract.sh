@@ -43,6 +43,7 @@ legacy_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/ro
 legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/legacy-route.ts")
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
+navigation_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/navigation.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
 console_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/console.tsx")
 sysauth_template_files = {
@@ -156,6 +157,14 @@ for base in scan_roots:
 						failures.append(f"{relative_path}: ConsoleStatus must not include helper {secret_term}")
 			if "export type ConsoleLaunch" not in text or "console_launch" not in text:
 				failures.append(f"{relative_path}: ConsoleLaunch type and RPC call are required")
+		if relative_path == navigation_file:
+			for compat_route in (
+				'"/admin/services/adblock-fast"',
+				'"/admin/services/banip"',
+				'"/admin/services/banip/',
+			):
+				if compat_route in text:
+					failures.append(f"{relative_path}: native fallback map must not include third-party LuCI app route {compat_route}")
 		if relative_path == header_file:
 			if "getConsoleLaunch" in text:
 				failures.append(f"{relative_path}: header must not request or handle helper console credentials")

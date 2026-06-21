@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { itemTarget, legacyHref, searchMenu } from "@/lib/navigation";
+import { itemTarget, legacyHref, nativePathFor, searchMenu } from "@/lib/navigation";
 
 describe("legacyHref", () => {
 	it("maps LuCI admin paths into the legacy base path", () => {
@@ -27,6 +27,12 @@ describe("searchMenu", () => {
 });
 
 describe("itemTarget", () => {
+	it("does not map third-party LuCI app routes through the native fallback table", () => {
+		expect(nativePathFor("/admin/services/banip")).toBeNull();
+		expect(nativePathFor("/admin/services/banip/allowlist")).toBeNull();
+		expect(nativePathFor("/admin/services/adblock-fast")).toBeNull();
+	});
+
 	it("uses LuCI compatibility when auto mode resolves to legacy", () => {
 		expect(
 			itemTarget({
