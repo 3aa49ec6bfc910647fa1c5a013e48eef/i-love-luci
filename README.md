@@ -203,7 +203,13 @@ Enable `LuCI -> Applications -> luci-app-i-love-luci` in `menuconfig` if buildin
 
 Local router credentials belong in `.env`, which is ignored by Git.
 
-For day-to-day development, use the reusable router scripts instead of hand-written SSH/SCP commands:
+For day-to-day development, use the reusable router scripts instead of hand-written SSH/SCP commands. The scripts read:
+
+- `OPENWRT_HOST`
+- `OPENWRT_USER` defaults to `root`
+- `OPENWRT_PASSWORD`
+
+Live asset deploy, useful while iterating on the frontend or rpcd bridge:
 
 ```sh
 scripts/deploy-router-assets.sh
@@ -213,26 +219,27 @@ uci changes
 EOF
 ```
 
-`scripts/deploy-router-assets.sh --no-build` redeploys the current generated assets, rpcd bridge, and login templates without rebuilding. `scripts/router-copy.sh <local-file> <remote-path>` copies a single file when a targeted router patch is safer.
+`scripts/deploy-router-assets.sh --no-build` redeploys the current generated assets, rpcd bridge, and login templates without rebuilding.
 
-For 25.12/apk artifacts:
+Full package install, useful when validating release artifacts:
 
 ```sh
-scp -O dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted --force-overwrite /tmp/luci-app-i-love-luci-*.apk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
+scripts/router-install-package.sh dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk
 ```
 
-For 24.10/opkg artifacts:
+Targeted command and file copy helpers:
 
 ```sh
-scp -O dist/openwrt/24.10.7/rockchip-armv8/luci-app-i-love-luci_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg install /tmp/luci-app-i-love-luci_*.ipk && rm -rf /tmp/luci-indexcache /tmp/luci-modulecache && /etc/init.d/rpcd reload && /etc/init.d/uhttpd restart'
+scripts/router-run.sh ./local-router-check.sh
+scripts/router-copy.sh ./local-file /tmp/local-file
 ```
 
 After install, run the route compatibility audit:
 
 ```sh
-OPENWRT_HOST=192.168.1.1 OPENWRT_USER=root OPENWRT_PASSWORD='router-password' scripts/audit-router-routes.sh
+scripts/audit-router-routes.sh
+scripts/audit-router-native-pages.sh
+scripts/smoke-router-http-routes.sh
 ```
 
 The audit verifies that visible LuCI routes resolve to either native I Love LuCI screens or the LuCI compatibility bridge, incomplete LuCI app routes default to compat mode, and installed `luci-app-*` routes remain discoverable for current and future app installs.
