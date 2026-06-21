@@ -44,6 +44,10 @@ legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/l
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
+sysauth_template_files = {
+	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/sysauth.ut"),
+	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
+}
 
 allowed_archived = [
 	"Historical validation notes below may contain older raw audit labels",
@@ -70,10 +74,33 @@ for base in scan_roots:
 	for path in iter_files(base):
 		if path.name == "audit-compat-contract.sh":
 			continue
-		if path.suffix not in {".md", ".ts", ".tsx", ".js", ".sh", ".uc"} and path.name != "README.md":
+		if path.suffix not in {".md", ".ts", ".tsx", ".js", ".sh", ".uc", ".ut"} and path.name != "README.md":
 			continue
 		text = path.read_text(encoding="utf-8", errors="replace")
 		relative_path = path.relative_to(root)
+		if relative_path in sysauth_template_files:
+			for required in (
+				'data-iloveluci-login="true"',
+				"/luci-static/i-love-luci-app/assets/app.css",
+				"/luci-static/i-love-luci-app/assets/app.js",
+				"window.ILoveLuCI",
+				"login: true",
+				"data-login-failed",
+				"data-default-user",
+				"maximum-scale=1.0",
+				"user-scalable=no",
+			):
+				if required not in text:
+					failures.append(f"{relative_path}: React/Vite login template missing {required}")
+			for forbidden_login_text in (
+				"Authorization Required",
+				"Please enter your username and password.",
+				'type="reset"',
+				"id=\"mainmenu\"",
+				"id=\"menubar\"",
+			):
+				if forbidden_login_text in text:
+					failures.append(f"{relative_path}: React/Vite login template must not include legacy login/header UI ({forbidden_login_text})")
 		if relative_path in route_ui_files and ("<Badge" in text or "from \"@/components/ui/badge\"" in text):
 			failures.append(f"{relative_path}: route UI must not render mode/coverage/status chips")
 		if relative_path in route_ui_files - {Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/settings.tsx")}:
