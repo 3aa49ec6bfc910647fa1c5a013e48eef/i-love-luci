@@ -14,6 +14,7 @@ import {
 	saveFirewallForwardings,
 	saveFirewallIncludes,
 	saveFirewallIpSets,
+	saveFirewallNats,
 	saveFirewallRedirects,
 	saveFirewallRules,
 	saveFirewallZones,
@@ -40,6 +41,7 @@ import {
 	type FirewallForwarding,
 	type FirewallInclude,
 	type FirewallIpSet,
+	type FirewallNat,
 	type FirewallRedirect,
 	type FirewallRuleRow,
 	type FirewallZone,
@@ -1450,6 +1452,7 @@ function FirewallSummary({
 	const forwardings = settings.firewall.filter((section) => section.type === "forwarding");
 	const rules = settings.firewall.filter((section) => section.type === "rule");
 	const redirects = settings.firewall.filter((section) => section.type === "redirect");
+	const nats = settings.firewall.filter((section) => section.type === "nat");
 	const ipsets = settings.firewall.filter((section) => section.type === "ipset");
 	const includes = settings.firewall.filter((section) => section.type === "include");
 	const firstDefaults = defaults[0] ?? null;
@@ -1522,6 +1525,16 @@ function FirewallSummary({
 					})
 				}
 				redirects={redirects}
+			/>
+
+			<FirewallNatEditor
+				nats={nats}
+				onSaved={(sections) =>
+					onSettingsChange({
+						...settings,
+						firewall: sections,
+					})
+				}
 			/>
 
 			<FirewallIpSetEditor
@@ -3404,6 +3417,389 @@ function normalizeFirewallRedirect(redirect: FirewallRedirect): FirewallRedirect
 function firewallRedirectTargetText(value: unknown) {
 	const text = rawValue(value).toUpperCase();
 	return text === "SNAT" ? "SNAT" : "DNAT";
+}
+
+function FirewallNatEditor({
+	nats,
+	onSaved,
+}: {
+	nats: ConfigSection[];
+	onSaved: (sections: ConfigSection[]) => void;
+}) {
+	const [rows, setRows] = useState(() => nats.map(firewallNatValues));
+	const [savedRows, setSavedRows] = useState(rows);
+	const [saving, setSaving] = useState(false);
+	const dirty = JSON.stringify(rows) !== JSON.stringify(savedRows);
+
+	function updateRow(index: number, field: keyof FirewallNat, value: string) {
+		setRows((current) =>
+			current.map((row, rowIndex) =>
+				rowIndex === index
+					? {
+							...row,
+							[field]: value,
+						}
+					: row,
+			),
+		);
+	}
+
+	function addRow() {
+		setRows((current) => [
+			...current,
+			{
+				section: "",
+				name: "",
+				enabled: "1",
+				family: "",
+				proto: "all",
+				src: "lan",
+				src_ip: "",
+				src_port: "",
+				dest_ip: "",
+				dest_port: "",
+				target: "SNAT",
+				snat_ip: "",
+				snat_port: "",
+				ipset: "",
+				device: "",
+				mark: "",
+				limit: "",
+				limit_burst: "",
+				log: "0",
+				extra: "",
+				weekdays: "",
+				monthdays: "",
+				start_time: "",
+				stop_time: "",
+				start_date: "",
+				stop_date: "",
+				utc_time: "0",
+			},
+		]);
+	}
+
+	function removeRow(index: number) {
+		setRows((current) => current.filter((_, rowIndex) => rowIndex !== index));
+	}
+
+	async function submit(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setSaving(true);
+		const result = await saveFirewallNats(rows);
+		setSaving(false);
+
+		if (!result.saved) {
+			toast.error(result.message);
+			return;
+		}
+
+		const nextRows = result.nats.map(normalizeFirewallNat);
+		toast.success(result.message);
+		setRows(nextRows);
+		setSavedRows(nextRows);
+		onSaved(result.sections);
+	}
+
+	return (
+		<section className="grid gap-3">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div>
+					<h2 className="text-base font-semibold">NAT rules</h2>
+					<p className="text-sm text-muted-foreground">Configure source NAT, masquerade, and NAT bypass rules.</p>
+				</div>
+				<Button onClick={addRow} type="button" variant="outline">
+					<Plus className="mr-1 size-4" />
+					Add NAT rule
+				</Button>
+			</div>
+			<form className="grid gap-3" onSubmit={(event) => void submit(event)}>
+				<div className="overflow-x-auto rounded-md border bg-card">
+					<table className="w-full min-w-[220rem] text-left text-sm">
+						<thead className="border-b text-xs uppercase text-muted-foreground">
+							<tr>
+								<th className="px-3 py-2 font-medium">Name</th>
+								<th className="px-3 py-2 font-medium">Status</th>
+								<th className="px-3 py-2 font-medium">Family</th>
+								<th className="px-3 py-2 font-medium">Protocols</th>
+								<th className="px-3 py-2 font-medium">Outbound zone</th>
+								<th className="px-3 py-2 font-medium">Source IP</th>
+								<th className="px-3 py-2 font-medium">Source port</th>
+								<th className="px-3 py-2 font-medium">Destination IP</th>
+								<th className="px-3 py-2 font-medium">Destination port</th>
+								<th className="px-3 py-2 font-medium">Action</th>
+								<th className="px-3 py-2 font-medium">Rewrite IP</th>
+								<th className="px-3 py-2 font-medium">Rewrite port</th>
+								<th className="px-3 py-2 font-medium">IP set</th>
+								<th className="px-3 py-2 font-medium">Outbound device</th>
+								<th className="px-3 py-2 font-medium">Mark</th>
+								<th className="px-3 py-2 font-medium">Limit</th>
+								<th className="px-3 py-2 font-medium">Burst</th>
+								<th className="px-3 py-2 font-medium">Log</th>
+								<th className="px-3 py-2 font-medium">Weekdays</th>
+								<th className="px-3 py-2 font-medium">Month days</th>
+								<th className="px-3 py-2 font-medium">Start time</th>
+								<th className="px-3 py-2 font-medium">Stop time</th>
+								<th className="px-3 py-2 font-medium">Start date</th>
+								<th className="px-3 py-2 font-medium">Stop date</th>
+								<th className="px-3 py-2 font-medium">UTC</th>
+								<th className="px-3 py-2 font-medium">Extra</th>
+								<th className="px-3 py-2 text-right font-medium">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.length ? (
+								rows.map((nat, index) => (
+									<tr className="border-b align-top last:border-0" key={`${nat.section || "new"}.${index}`}>
+										<td className="px-3 py-3">
+											<Input aria-label="NAT rule name" onChange={(event) => updateRow(index, "name", event.target.value)} value={nat.name} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-nat-enabled-${index}`}
+												onChange={(value) => updateRow(index, "enabled", value)}
+												options={[
+													["1", "Enabled"],
+													["0", "Disabled"],
+												]}
+												value={nat.enabled}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-nat-family-${index}`}
+												onChange={(value) => updateRow(index, "family", value)}
+												options={[
+													["", "Automatic"],
+													["any", "IPv4 and IPv6"],
+													["ipv4", "IPv4"],
+													["ipv6", "IPv6"],
+												]}
+												value={nat.family}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="NAT protocols"
+												className="min-h-10 w-40 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "proto", event.target.value)}
+												spellCheck={false}
+												value={nat.proto}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Outbound zone" onChange={(event) => updateRow(index, "src", event.target.value)} value={nat.src} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Source IP" onChange={(event) => updateRow(index, "src_ip", event.target.value)} value={nat.src_ip} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Source port" onChange={(event) => updateRow(index, "src_port", event.target.value)} value={nat.src_port} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Destination IP" onChange={(event) => updateRow(index, "dest_ip", event.target.value)} value={nat.dest_ip} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Destination port" onChange={(event) => updateRow(index, "dest_port", event.target.value)} value={nat.dest_port} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-nat-target-${index}`}
+												onChange={(value) => updateRow(index, "target", value)}
+												options={[
+													["SNAT", "SNAT"],
+													["MASQUERADE", "Masquerade"],
+													["ACCEPT", "Bypass"],
+												]}
+												value={nat.target}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Rewrite IP" onChange={(event) => updateRow(index, "snat_ip", event.target.value)} value={nat.snat_ip} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Rewrite port" onChange={(event) => updateRow(index, "snat_port", event.target.value)} value={nat.snat_port} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="IP set" onChange={(event) => updateRow(index, "ipset", event.target.value)} value={nat.ipset} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Outbound device" onChange={(event) => updateRow(index, "device", event.target.value)} value={nat.device} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Mark" onChange={(event) => updateRow(index, "mark", event.target.value)} value={nat.mark} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Limit" onChange={(event) => updateRow(index, "limit", event.target.value)} value={nat.limit} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Limit burst" inputMode="numeric" onChange={(event) => updateRow(index, "limit_burst", event.target.value)} value={nat.limit_burst} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-nat-log-${index}`}
+												onChange={(value) => updateRow(index, "log", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={nat.log}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Weekdays"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "weekdays", event.target.value)}
+												spellCheck={false}
+												value={nat.weekdays}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<textarea
+												aria-label="Month days"
+												className="min-h-10 w-44 rounded-md border bg-card px-3 py-2 text-sm outline-none focus-visible:border-ring"
+												onChange={(event) => updateRow(index, "monthdays", event.target.value)}
+												spellCheck={false}
+												value={nat.monthdays}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Start time" onChange={(event) => updateRow(index, "start_time", event.target.value)} value={nat.start_time} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Stop time" onChange={(event) => updateRow(index, "stop_time", event.target.value)} value={nat.stop_time} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Start date" onChange={(event) => updateRow(index, "start_date", event.target.value)} value={nat.start_date} />
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Stop date" onChange={(event) => updateRow(index, "stop_date", event.target.value)} value={nat.stop_date} />
+										</td>
+										<td className="px-3 py-3">
+											<SelectField
+												id={`firewall-nat-utc-${index}`}
+												onChange={(value) => updateRow(index, "utc_time", value)}
+												options={[
+													["0", "No"],
+													["1", "Yes"],
+												]}
+												value={nat.utc_time}
+											/>
+										</td>
+										<td className="px-3 py-3">
+											<Input aria-label="Extra arguments" onChange={(event) => updateRow(index, "extra", event.target.value)} value={nat.extra} />
+										</td>
+										<td className="px-3 py-3 text-right">
+											<Button
+												aria-label={`Remove ${nat.name || "NAT rule"}`}
+												onClick={() => removeRow(index)}
+												size="icon"
+												type="button"
+												variant="ghost"
+											>
+												<Trash2 className="size-4" />
+											</Button>
+										</td>
+									</tr>
+								))
+							) : (
+								<tr>
+									<td className="px-3 py-6 text-muted-foreground" colSpan={27}>
+										No NAT rules configured.
+									</td>
+								</tr>
+							)}
+						</tbody>
+					</table>
+				</div>
+				<div className="flex justify-end gap-2">
+					<Button disabled={!dirty || saving} onClick={() => setRows(savedRows)} type="button" variant="outline">
+						Cancel
+					</Button>
+					<Button disabled={!dirty || saving} type="submit">
+						Save
+					</Button>
+				</div>
+			</form>
+		</section>
+	);
+}
+
+function firewallNatValues(section: ConfigSection): FirewallNat {
+	return normalizeFirewallNat({
+		section: section.name,
+		name: rawValue(section.values.name || section.name),
+		enabled: isEnabledValue(section.values.enabled) ? "1" : "0",
+		family: firewallNatFamilyText(section.values.family),
+		proto: rawListValue(section.values.proto).join("\n"),
+		src: rawValue(section.values.src),
+		src_ip: rawValue(section.values.src_ip),
+		src_port: rawValue(section.values.src_port),
+		dest_ip: rawValue(section.values.dest_ip),
+		dest_port: rawValue(section.values.dest_port),
+		target: firewallNatTargetText(section.values.target),
+		snat_ip: rawValue(section.values.snat_ip),
+		snat_port: rawValue(section.values.snat_port),
+		ipset: rawValue(section.values.ipset),
+		device: rawValue(section.values.device),
+		mark: rawValue(section.values.mark),
+		limit: rawValue(section.values.limit),
+		limit_burst: rawValue(section.values.limit_burst),
+		log: booleanValue(section.values.log),
+		extra: rawValue(section.values.extra),
+		weekdays: rawListValue(section.values.weekdays).join("\n"),
+		monthdays: rawListValue(section.values.monthdays).join("\n"),
+		start_time: rawValue(section.values.start_time),
+		stop_time: rawValue(section.values.stop_time),
+		start_date: rawValue(section.values.start_date),
+		stop_date: rawValue(section.values.stop_date),
+		utc_time: booleanValue(section.values.utc_time),
+	});
+}
+
+function normalizeFirewallNat(nat: FirewallNat): FirewallNat {
+	return {
+		section: nat.section ?? "",
+		name: nat.name ?? "",
+		enabled: nat.enabled === "0" ? "0" : "1",
+		family: firewallNatFamilyText(nat.family),
+		proto: nat.proto ?? "",
+		src: nat.src ?? "",
+		src_ip: nat.src_ip ?? "",
+		src_port: nat.src_port ?? "",
+		dest_ip: nat.dest_ip ?? "",
+		dest_port: nat.dest_port ?? "",
+		target: firewallNatTargetText(nat.target),
+		snat_ip: nat.snat_ip ?? "",
+		snat_port: nat.snat_port ?? "",
+		ipset: nat.ipset ?? "",
+		device: nat.device ?? "",
+		mark: nat.mark ?? "",
+		limit: nat.limit ?? "",
+		limit_burst: nat.limit_burst ?? "",
+		log: nat.log === "1" ? "1" : "0",
+		extra: nat.extra ?? "",
+		weekdays: nat.weekdays ?? "",
+		monthdays: nat.monthdays ?? "",
+		start_time: nat.start_time ?? "",
+		stop_time: nat.stop_time ?? "",
+		start_date: nat.start_date ?? "",
+		stop_date: nat.stop_date ?? "",
+		utc_time: nat.utc_time === "1" ? "1" : "0",
+	};
+}
+
+function firewallNatFamilyText(value: unknown) {
+	const text = rawValue(value);
+	if (text === "any" || text === "all" || text === "*")
+		return "any";
+	return text === "ipv4" || text === "ipv6" ? text : "";
+}
+
+function firewallNatTargetText(value: unknown) {
+	const text = rawValue(value).toUpperCase();
+	return ["SNAT", "MASQUERADE", "ACCEPT"].includes(text) ? text : "SNAT";
 }
 
 function SystemSummary({ settings, dashboard }: { settings: CoreSettings; dashboard: DashboardStatus | null }) {

@@ -964,6 +964,44 @@ export type FirewallRedirectsResult = {
 	sections: ConfigSection[];
 };
 
+export type FirewallNat = {
+	section: string;
+	name: string;
+	enabled: string;
+	family: string;
+	proto: string;
+	src: string;
+	src_ip: string;
+	src_port: string;
+	dest_ip: string;
+	dest_port: string;
+	target: string;
+	snat_ip: string;
+	snat_port: string;
+	ipset: string;
+	device: string;
+	mark: string;
+	limit: string;
+	limit_burst: string;
+	log: string;
+	extra: string;
+	weekdays: string;
+	monthdays: string;
+	start_time: string;
+	stop_time: string;
+	start_date: string;
+	stop_date: string;
+	utc_time: string;
+};
+
+export type FirewallNatsResult = {
+	saved: boolean;
+	message: string;
+	changed: boolean;
+	nats: FirewallNat[];
+	sections: ConfigSection[];
+};
+
 export type FirewallIpSet = {
 	section: string;
 	name: string;
@@ -1764,6 +1802,21 @@ export async function saveFirewallRedirects(rows: FirewallRedirect[]): Promise<F
 			message: "Firewall redirects save failed.",
 			changed: false,
 			redirects: [],
+			sections: [],
+		};
+	}
+}
+
+export async function saveFirewallNats(rows: FirewallNat[]): Promise<FirewallNatsResult> {
+	try {
+		return await callBridge<FirewallNatsResult>("firewall_nats_save", { rows });
+	}
+	catch {
+		return {
+			saved: false,
+			message: "Firewall NAT rules save failed.",
+			changed: false,
+			nats: [],
 			sections: [],
 		};
 	}

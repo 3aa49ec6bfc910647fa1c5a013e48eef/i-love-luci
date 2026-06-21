@@ -44,7 +44,7 @@ const nativeRoutes = {
 	'/admin/network/firewall/zones': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/forwards': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/rules': { status: 'supported', nativePath: '/core/firewall' },
-	'/admin/network/firewall/snats': { status: 'partial', nativePath: '/core/firewall' },
+	'/admin/network/firewall/snats': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/custom': { status: 'partial', nativePath: '/core/firewall' },
 	'/admin/system': { status: 'partial', nativePath: '/core/system' },
@@ -2004,7 +2004,7 @@ function save_firewall_defaults(config) {
 			message: 'Firewall default policies must be ACCEPT, REJECT, or DROP.',
 			changed: false,
 			section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
-			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 		};
 
 	let changed = false;
@@ -2034,7 +2034,7 @@ function save_firewall_defaults(config) {
 		message: changed ? 'Firewall defaults saved and firewall reloaded.' : 'Firewall defaults already up to date.',
 		changed,
 		section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -2138,7 +2138,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone name is required and may contain only letters, numbers, dots, dashes, and underscores.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (names[name])
@@ -2147,7 +2147,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone names must be unique.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		names[name] = true;
@@ -2158,7 +2158,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone policies must be ACCEPT, REJECT, or DROP.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (family == null)
@@ -2167,7 +2167,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone family must be any, ipv4, ipv6, or blank.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!valid_firewall_list_values(networks) || !valid_firewall_list_values(devices))
@@ -2176,7 +2176,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone networks and devices contain unsupported characters.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!valid_firewall_rule_list(subnets) || !valid_firewall_rule_list(masq_src) || !valid_firewall_rule_list(masq_dest) || !valid_firewall_rule_list(helpers) || !valid_firewall_rule_list(log_tables) || !valid_firewall_rule_value(next.log_limit) || !valid_firewall_rule_value(next.extra_src) || !valid_firewall_rule_value(next.extra_dest))
@@ -2185,7 +2185,7 @@ function save_firewall_zones(rows) {
 				message: 'Firewall zone advanced fields contain unsupported characters.',
 				changed: false,
 				zones: firewall_zone_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		push(validated, {
@@ -2313,7 +2313,7 @@ function save_firewall_zones(rows) {
 		message: changed ? 'Firewall zones saved and firewall reloaded.' : 'Firewall zones already up to date.',
 		changed,
 		zones: firewall_zone_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -2364,7 +2364,7 @@ function save_firewall_forwardings(rows) {
 				message: 'Firewall forwarding source and destination zones are required.',
 				changed: false,
 				forwardings: firewall_forwarding_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		push(validated, {
@@ -2413,7 +2413,7 @@ function save_firewall_forwardings(rows) {
 		message: changed ? 'Firewall forwardings saved and firewall reloaded.' : 'Firewall forwardings already up to date.',
 		changed,
 		forwardings: firewall_forwarding_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -2565,7 +2565,7 @@ function save_firewall_rules(rows) {
 				message: 'Firewall rule name is required.',
 				changed: false,
 				rules: firewall_rule_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!length(target))
@@ -2574,7 +2574,7 @@ function save_firewall_rules(rows) {
 				message: 'Firewall rule target must be ACCEPT, REJECT, DROP, NOTRACK, HELPER, MARK, or DSCP.',
 				changed: false,
 				rules: firewall_rule_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (family == null)
@@ -2583,7 +2583,7 @@ function save_firewall_rules(rows) {
 				message: 'Firewall rule family must be any, ipv4, ipv6, or blank.',
 				changed: false,
 				rules: firewall_rule_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (direction != '' && direction != 'in' && direction != 'out')
@@ -2592,7 +2592,7 @@ function save_firewall_rules(rows) {
 				message: 'Firewall rule direction must be in, out, or blank.',
 				changed: false,
 				rules: firewall_rule_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		for (let key, value in next) {
@@ -2602,7 +2602,7 @@ function save_firewall_rules(rows) {
 					message: 'Firewall rule zone names contain unsupported characters.',
 					changed: false,
 					rules: firewall_rule_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 
 			if ((key == 'src_ip' || key == 'dest_ip' || key == 'src_port' || key == 'dest_port' || key == 'device' || key == 'ipset' || key == 'set_mark' || key == 'set_xmark' || key == 'set_dscp' || key == 'set_helper' || key == 'helper' || key == 'mark' || key == 'dscp' || key == 'limit' || key == 'limit_burst' || key == 'log_limit' || key == 'extra' || key == 'start_time' || key == 'stop_time' || key == 'start_date' || key == 'stop_date') && !valid_firewall_rule_value(value))
@@ -2611,7 +2611,7 @@ function save_firewall_rules(rows) {
 					message: 'Firewall rule match fields contain unsupported characters.',
 					changed: false,
 					rules: firewall_rule_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 		}
 
@@ -2621,7 +2621,7 @@ function save_firewall_rules(rows) {
 				message: 'Firewall rule list fields contain unsupported characters.',
 				changed: false,
 				rules: firewall_rule_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		push(validated, {
@@ -2729,7 +2729,7 @@ function save_firewall_rules(rows) {
 		message: changed ? 'Firewall rules saved and firewall reloaded.' : 'Firewall rules already up to date.',
 		changed,
 		rules: firewall_rule_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -2843,7 +2843,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect name is required.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!length(target))
@@ -2852,7 +2852,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect target must be DNAT or SNAT.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (family == null)
@@ -2861,7 +2861,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect family must be any, ipv4, ipv6, or blank.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (reflection_src != '' && reflection_src != 'internal' && reflection_src != 'external')
@@ -2870,7 +2870,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect loopback source must be internal or external.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		for (let key, value in next) {
@@ -2880,7 +2880,7 @@ function save_firewall_redirects(rows) {
 					message: 'Firewall redirect zone names contain unsupported characters.',
 					changed: false,
 					redirects: firewall_redirect_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 
 			if ((key == 'src_ip' || key == 'src_port' || key == 'src_dip' || key == 'src_dport' || key == 'dest_ip' || key == 'dest_port' || key == 'ipset' || key == 'helper' || key == 'mark' || key == 'limit' || key == 'limit_burst' || key == 'log_limit' || key == 'extra') && !valid_firewall_rule_value(value))
@@ -2889,7 +2889,7 @@ function save_firewall_redirects(rows) {
 					message: 'Firewall redirect match fields contain unsupported characters.',
 					changed: false,
 					redirects: firewall_redirect_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 		}
 
@@ -2899,7 +2899,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect protocol field contains unsupported characters.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!valid_firewall_rule_list(src_mac) || !valid_firewall_list_values(reflection_zone))
@@ -2908,7 +2908,7 @@ function save_firewall_redirects(rows) {
 				message: 'Firewall redirect MAC or reflection zone fields contain unsupported characters.',
 				changed: false,
 				redirects: firewall_redirect_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		push(validated, {
@@ -3010,7 +3010,265 @@ function save_firewall_redirects(rows) {
 		message: changed ? 'Firewall redirects saved and firewall reloaded.' : 'Firewall redirects already up to date.',
 		changed,
 		redirects: firewall_redirect_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+	};
+}
+
+function firewall_nat_rows() {
+	let nats = [];
+
+	try {
+		uci.load('firewall');
+	}
+	catch (e) {
+		return nats;
+	}
+
+	uci.foreach('firewall', 'nat', function(section) {
+		push(nats, {
+			section: section['.name'] || '',
+			name: section.name || '',
+			enabled: section.enabled == '0' ? '0' : '1',
+			family: section.family || '',
+			proto: join('\n', dhcp_normalize_list(section.proto)),
+			src: section.src || '',
+			src_ip: section.src_ip || '',
+			src_port: section.src_port || '',
+			dest_ip: section.dest_ip || '',
+			dest_port: section.dest_port || '',
+			target: section.target || 'SNAT',
+			snat_ip: section.snat_ip || '',
+			snat_port: section.snat_port || '',
+			ipset: section.ipset || '',
+			device: section.device || '',
+			mark: section.mark || '',
+			limit: section.limit || '',
+			limit_burst: section.limit_burst || '',
+			log: section.log == '1' ? '1' : '0',
+			extra: section.extra || '',
+			weekdays: join('\n', dhcp_normalize_list(section.weekdays)),
+			monthdays: join('\n', dhcp_normalize_list(section.monthdays)),
+			start_time: section.start_time || '',
+			stop_time: section.stop_time || '',
+			start_date: section.start_date || '',
+			stop_date: section.stop_date || '',
+			utc_time: section.utc_time == '1' ? '1' : '0'
+		});
+	});
+
+	return nats;
+}
+
+function firewall_nat_target_value(value) {
+	value = uc(value || 'SNAT');
+
+	if (value == 'SNAT' || value == 'MASQUERADE' || value == 'ACCEPT')
+		return value;
+
+	return '';
+}
+
+function save_firewall_nats(rows) {
+	rows ||= [];
+	uci.load('firewall');
+
+	let changed = false;
+	let keep = {};
+	let existing = {};
+
+	uci.foreach('firewall', 'nat', function(section) {
+		existing[section['.name']] = true;
+	});
+
+	let validated = [];
+
+	for (let row in rows) {
+		let section = dhcp_clean_value(row?.section || '');
+		let is_existing = length(section) && uci.get('firewall', section) == 'nat';
+		let proto = split_dhcp_list(row?.proto || '');
+		let weekdays = split_dhcp_list(row?.weekdays || '');
+		let monthdays = split_dhcp_list(row?.monthdays || '');
+		let family = firewall_family_value(row?.family || '');
+		let target = firewall_nat_target_value(row?.target || 'SNAT');
+		let next = {
+			name: dhcp_clean_value(row?.name || ''),
+			enabled: dhcp_zero_one(row?.enabled),
+			family,
+			src: dhcp_clean_value(row?.src || ''),
+			src_ip: dhcp_clean_value(row?.src_ip || ''),
+			src_port: dhcp_clean_value(row?.src_port || ''),
+			dest_ip: dhcp_clean_value(row?.dest_ip || ''),
+			dest_port: dhcp_clean_value(row?.dest_port || ''),
+			target,
+			snat_ip: dhcp_clean_value(row?.snat_ip || ''),
+			snat_port: dhcp_clean_value(row?.snat_port || ''),
+			ipset: dhcp_clean_value(row?.ipset || ''),
+			device: dhcp_clean_value(row?.device || ''),
+			mark: dhcp_clean_value(row?.mark || ''),
+			limit: dhcp_clean_value(row?.limit || ''),
+			limit_burst: dhcp_clean_value(row?.limit_burst || ''),
+			log: dhcp_zero_one(row?.log),
+			extra: dhcp_clean_value(row?.extra || ''),
+			start_time: dhcp_clean_value(row?.start_time || ''),
+			stop_time: dhcp_clean_value(row?.stop_time || ''),
+			start_date: dhcp_clean_value(row?.start_date || ''),
+			stop_date: dhcp_clean_value(row?.stop_date || ''),
+			utc_time: dhcp_zero_one(row?.utc_time)
+		};
+
+		if (!length(next.name))
+			return {
+				saved: false,
+				message: 'Firewall NAT rule name is required.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		if (!length(target))
+			return {
+				saved: false,
+				message: 'Firewall NAT target must be SNAT, MASQUERADE, or ACCEPT.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		if (family == null)
+			return {
+				saved: false,
+				message: 'Firewall NAT family must be any, ipv4, ipv6, or blank.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		if (target == 'SNAT' && !length(next.snat_ip) && !length(next.snat_port))
+			return {
+				saved: false,
+				message: 'SNAT rules require a rewrite IP address or rewrite port.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		if (next.src != '' && next.src != '*' && !valid_firewall_name(next.src))
+			return {
+				saved: false,
+				message: 'Firewall NAT outbound zone contains unsupported characters.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		for (let key, value in next)
+			if ((key == 'src_ip' || key == 'src_port' || key == 'dest_ip' || key == 'dest_port' || key == 'snat_ip' || key == 'snat_port' || key == 'ipset' || key == 'device' || key == 'mark' || key == 'limit' || key == 'limit_burst' || key == 'extra' || key == 'start_time' || key == 'stop_time' || key == 'start_date' || key == 'stop_date') && !valid_firewall_rule_value(value))
+				return {
+					saved: false,
+					message: 'Firewall NAT fields contain unsupported characters.',
+					changed: false,
+					nats: firewall_nat_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+				};
+
+		if (!valid_firewall_rule_list(proto) || !valid_firewall_rule_list(weekdays) || !valid_firewall_rule_list(monthdays))
+			return {
+				saved: false,
+				message: 'Firewall NAT list fields contain unsupported characters.',
+				changed: false,
+				nats: firewall_nat_rows(),
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+			};
+
+		push(validated, {
+			section,
+			is_existing,
+			proto,
+			weekdays,
+			monthdays,
+			next
+		});
+	}
+
+	for (let item in validated) {
+		let section = item.section;
+
+		if (!item.is_existing) {
+			section = uci.add('firewall', 'nat');
+			changed = true;
+		}
+
+		keep[section] = true;
+
+		let proto = item.proto;
+		let weekdays = item.weekdays;
+		let monthdays = item.monthdays;
+		let next = item.next;
+
+		for (let key, value in next) {
+			let current = uci.get('firewall', section, key) || '';
+
+			if (key == 'enabled' && value == '1' && current == '')
+				continue;
+
+			if (key == 'target' && value == 'SNAT' && current == '')
+				continue;
+
+			if ((key == 'log' || key == 'utc_time') && value == '0' && current == '')
+				continue;
+
+			if (current != value) {
+				changed = true;
+				if ((key == 'enabled' && value == '1') || (key == 'target' && value == 'SNAT') || ((key == 'log' || key == 'utc_time') && value == '0') || value == '')
+					uci.delete('firewall', section, key);
+				else
+					uci.set('firewall', section, key, value);
+			}
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'proto') || [], proto)) {
+			changed = true;
+			if (length(proto))
+				uci.set('firewall', section, 'proto', length(proto) == 1 ? proto[0] : proto);
+			else
+				uci.delete('firewall', section, 'proto');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'weekdays') || [], weekdays)) {
+			changed = true;
+			if (length(weekdays))
+				uci.set('firewall', section, 'weekdays', length(weekdays) == 1 ? weekdays[0] : weekdays);
+			else
+				uci.delete('firewall', section, 'weekdays');
+		}
+
+		if (!same_dhcp_list(uci.get('firewall', section, 'monthdays') || [], monthdays)) {
+			changed = true;
+			if (length(monthdays))
+				uci.set('firewall', section, 'monthdays', length(monthdays) == 1 ? monthdays[0] : monthdays);
+			else
+				uci.delete('firewall', section, 'monthdays');
+		}
+	}
+
+	for (let section in existing) {
+		if (!keep[section]) {
+			uci.delete('firewall', section);
+			changed = true;
+		}
+	}
+
+	if (changed) {
+		uci.commit('firewall');
+		system('/etc/init.d/firewall reload >/dev/null 2>&1 || /etc/init.d/firewall restart >/dev/null 2>&1');
+	}
+
+	return {
+		saved: true,
+		message: changed ? 'Firewall NAT rules saved and firewall reloaded.' : 'Firewall NAT rules already up to date.',
+		changed,
+		nats: firewall_nat_rows(),
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -3097,7 +3355,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 			message: 'Refusing to remove all firewall IP sets without confirmation.',
 			changed: false,
 			ipsets: firewall_ipset_rows(),
-			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+			sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 		};
 
 	let validated = [];
@@ -3133,7 +3391,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 				message: 'Firewall IP set name is required and may contain letters, numbers, dots, dashes, underscores, and slashes.',
 				changed: false,
 				ipsets: firewall_ipset_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (names[name])
@@ -3142,7 +3400,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 				message: 'Firewall IP set names must be unique.',
 				changed: false,
 				ipsets: firewall_ipset_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		names[name] = true;
@@ -3153,7 +3411,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 				message: 'Firewall IP set family or storage value is invalid.',
 				changed: false,
 				ipsets: firewall_ipset_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (!valid_firewall_rule_list(match_values) || !valid_firewall_rule_list(entry_values))
@@ -3162,7 +3420,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 				message: 'Firewall IP set match or entry values contain unsupported characters.',
 				changed: false,
 				ipsets: firewall_ipset_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		for (let key, value in next) {
@@ -3172,7 +3430,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 					message: 'Firewall IP set numeric fields must be numbers.',
 					changed: false,
 					ipsets: firewall_ipset_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 
 			if ((key == 'external' || key == 'iprange' || key == 'portrange' || key == 'netmask' || key == 'loadfile') && !valid_firewall_rule_value(value))
@@ -3181,7 +3439,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 					message: 'Firewall IP set fields contain unsupported characters.',
 					changed: false,
 					ipsets: firewall_ipset_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				};
 		}
 
@@ -3293,7 +3551,7 @@ function save_firewall_ipsets(rows, allow_empty) {
 		message: changed ? 'Firewall IP sets saved and firewall reloaded.' : 'Firewall IP sets already up to date.',
 		changed,
 		ipsets: firewall_ipset_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -3386,7 +3644,7 @@ function save_firewall_includes(rows) {
 				message: 'Firewall include path must be /etc/nftables.d/*.nft or existing /etc/firewall.user.',
 				changed: false,
 				includes: firewall_include_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (include_type == null)
@@ -3395,7 +3653,7 @@ function save_firewall_includes(rows) {
 				message: 'Firewall include type must be nftables or script.',
 				changed: false,
 				includes: firewall_include_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		if (paths[path])
@@ -3404,7 +3662,7 @@ function save_firewall_includes(rows) {
 				message: 'Firewall include paths must be unique.',
 				changed: false,
 				includes: firewall_include_rows(),
-				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+				sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 			};
 
 		paths[path] = true;
@@ -3465,7 +3723,7 @@ function save_firewall_includes(rows) {
 		message: changed ? 'Firewall includes saved and firewall reloaded.' : 'Firewall includes already up to date.',
 		changed,
 		includes: firewall_include_rows(),
-		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+		sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 	};
 }
 
@@ -6863,7 +7121,7 @@ function build_core_settings(page) {
 		data.dhcpStatus = dhcp_status();
 	}
 	else if (page == 'firewall') {
-		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include']);
+		data.firewall = collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include']);
 		data.firewallFiles = firewall_files();
 	}
 	else if (page == 'system') {
@@ -7218,7 +7476,7 @@ const methods = {
 					message: 'Firewall defaults save failed: ' + e,
 					changed: false,
 					section: (collect_uci_config('firewall', ['defaults']) || [])[0] || null,
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7238,7 +7496,7 @@ const methods = {
 					message: 'Firewall zones save failed: ' + e,
 					changed: false,
 					zones: firewall_zone_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7258,7 +7516,7 @@ const methods = {
 					message: 'Firewall forwardings save failed: ' + e,
 					changed: false,
 					forwardings: firewall_forwarding_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7278,7 +7536,7 @@ const methods = {
 					message: 'Firewall rules save failed: ' + e,
 					changed: false,
 					rules: firewall_rule_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7298,7 +7556,7 @@ const methods = {
 					message: 'Firewall includes save failed: ' + e,
 					changed: false,
 					includes: firewall_include_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7319,7 +7577,7 @@ const methods = {
 					message: 'Firewall IP sets save failed: ' + e,
 					changed: false,
 					ipsets: firewall_ipset_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
@@ -7744,7 +8002,27 @@ const methods = {
 					message: 'Firewall redirects save failed: ' + e,
 					changed: false,
 					redirects: firewall_redirect_rows(),
-					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'ipset', 'include'])
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
+				});
+			}
+		}
+	},
+
+	firewall_nats_save: {
+		args: {
+			rows: []
+		},
+		call: function(request) {
+			try {
+				return respond(save_firewall_nats(request.args.rows || []));
+			}
+			catch (e) {
+				return respond({
+					saved: false,
+					message: 'Firewall NAT rules save failed: ' + e,
+					changed: false,
+					nats: firewall_nat_rows(),
+					sections: collect_uci_config('firewall', ['defaults', 'zone', 'forwarding', 'rule', 'redirect', 'nat', 'ipset', 'include'])
 				});
 			}
 		}
