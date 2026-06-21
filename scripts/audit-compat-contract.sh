@@ -38,6 +38,9 @@ route_ui_files = {
 }
 native_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/native-page.tsx")
 frontend_src_root = Path("applications/luci-app-i-love-luci/frontend/shell/src")
+app_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/app/app.tsx")
+legacy_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/legacy.tsx")
+legacy_route_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/legacy-route.ts")
 rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
 rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
 header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
@@ -79,6 +82,23 @@ for base in scan_roots:
 					failures.append(f"{relative_path}: navigation/search UI must not display route mode metadata ({term})")
 		if relative_path.is_relative_to(frontend_src_root) and "<pre" in text:
 			failures.append(f"{relative_path}: frontend source must not render raw <pre> command dumps")
+		if relative_path == app_file:
+			if "LegacyFallbackPage" not in text:
+				failures.append(f"{relative_path}: direct LuCI admin hash routes must use LegacyFallbackPage")
+			if '<Route path="*" element={<LegacyFallbackPage />} />' not in text:
+				failures.append(f"{relative_path}: wildcard hash route must render LegacyFallbackPage instead of redirecting to dashboard")
+		if relative_path == legacy_page_file:
+			if "legacyPathFromUnmatchedLocation" not in text:
+				failures.append(f"{relative_path}: direct LuCI fallback must call legacyPathFromUnmatchedLocation")
+			if "<LegacyFrame path={path}" not in text:
+				failures.append(f"{relative_path}: direct LuCI fallback must render the compat frame")
+			if '<Navigate to="/" replace />' not in text:
+				failures.append(f"{relative_path}: non-LuCI unmatched shell routes must still fall back to dashboard")
+		if relative_path == legacy_route_file:
+			if "pathname.startsWith(\"/admin/\")" not in text:
+				failures.append(f"{relative_path}: direct LuCI fallback must detect /admin/* routes")
+			if "`${pathname}${search}${hash}`" not in text:
+				failures.append(f"{relative_path}: direct LuCI fallback must preserve path, query string, and hash")
 		if relative_path == native_page_file:
 			for function_name in ("RoutingSummary", "NftablesSummary"):
 				match = re.search(rf"function {function_name}\([^)]*\) \{{(?P<body>.*?)\nfunction ", text, re.S)
