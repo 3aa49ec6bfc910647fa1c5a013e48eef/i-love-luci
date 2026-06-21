@@ -69,6 +69,19 @@ for action in check list blob; do
 	printf '%s\n' \"---ILOVELUCI-ASU-PLAN:\$action---\"
 	ubus call luci.iloveluci attendedsysupgrade_plan \"{\\\"action\\\":\\\"\$action\\\"}\"
 done
+echo '---ILOVELUCI-ASU-CONFIG-NOOP---'
+server_section=\$(uci show attendedsysupgrade 2>/dev/null | grep '=server$' | cut -d. -f2 | cut -d= -f1 | head -n 1)
+client_section=\$(uci show attendedsysupgrade 2>/dev/null | grep '=client$' | cut -d. -f2 | cut -d= -f1 | head -n 1)
+server_url=\$(uci -q get attendedsysupgrade.\"\$server_section\".url 2>/dev/null || true)
+rebuilder=\$(uci -q get attendedsysupgrade.\"\$server_section\".rebuilder 2>/dev/null || true)
+upgrade_packages=\$(uci -q get attendedsysupgrade.\"\$client_section\".upgrade_packages 2>/dev/null || echo 0)
+auto_search=\$(uci -q get attendedsysupgrade.\"\$client_section\".auto_search 2>/dev/null || echo 0)
+advanced_mode=\$(uci -q get attendedsysupgrade.\"\$client_section\".advanced_mode 2>/dev/null || echo 0)
+login_check_for_upgrades=\$(uci -q get attendedsysupgrade.\"\$client_section\".login_check_for_upgrades 2>/dev/null || echo 0)
+asu_payload=\$(printf '{\"config\":{\"server_url\":\"%s\",\"rebuilder\":\"%s\",\"upgrade_packages\":\"%s\",\"auto_search\":\"%s\",\"advanced_mode\":\"%s\",\"login_check_for_upgrades\":\"%s\"}}' \"\$server_url\" \"\$rebuilder\" \"\$upgrade_packages\" \"\$auto_search\" \"\$advanced_mode\" \"\$login_check_for_upgrades\")
+ubus call luci.iloveluci attendedsysupgrade_config_save \"\$asu_payload\"
+echo '---ILOVELUCI-ASU-CONFIG-CHANGES---'
+uci changes attendedsysupgrade | wc -l
 echo '---ILOVELUCI-PACKAGE-FEEDS-NOOP---'
 ubus call luci.iloveluci native_page '{\"page\":\"packages\"}' >/tmp/i-love-luci-package-feeds.json
 feeds_payload=\$(jsonfilter -i /tmp/i-love-luci-package-feeds.json -e '@.data.packageFeeds' | sed 's/^/{\"rows\":/; s/\$/}/')
@@ -423,6 +436,31 @@ for action in ("check", "list", "blob"):
 		failures.append(f"attendedsysupgrade_plan {action} did not return lines")
 	if not asu_data.get("message"):
 		failures.append(f"attendedsysupgrade_plan {action} did not return message")
+
+asu_config_save = json_after_marker("---ILOVELUCI-ASU-CONFIG-NOOP---")
+if not asu_config_save or not asu_config_save.get("ok"):
+	failures.append("attendedsysupgrade_config_save no-op did not return ok")
+else:
+	asu_config_data = asu_config_save.get("data") or {}
+	if asu_config_data.get("saved") is not True:
+		failures.append("attendedsysupgrade_config_save no-op did not save cleanly")
+	if asu_config_data.get("changed") is not False:
+		failures.append("attendedsysupgrade_config_save no-op reported changes")
+	if not asu_config_data.get("sections"):
+		failures.append("attendedsysupgrade_config_save no-op did not return sections")
+
+asu_config_changes = None
+if "---ILOVELUCI-ASU-CONFIG-CHANGES---" in raw:
+	for line in raw.rsplit("---ILOVELUCI-ASU-CONFIG-CHANGES---", 1)[1].splitlines():
+		line = line.strip()
+		if line.isdigit():
+			asu_config_changes = int(line)
+			break
+
+if asu_config_changes is None:
+	failures.append("attendedsysupgrade_config_save no-op change count was not found")
+elif asu_config_changes != 0:
+	failures.append(f"attendedsysupgrade_config_save no-op left UCI changes: {asu_config_changes}")
 
 package_feed_save = json_after_marker("---ILOVELUCI-PACKAGE-FEEDS-NOOP---")
 if not package_feed_save or not package_feed_save.get("ok"):
