@@ -341,6 +341,15 @@ install_result = (install_status.get("data") or {}).get("result") if install_sta
 remove_result = (remove_status.get("data") or {}).get("result") if remove_status else None
 stage_data = (stage_result or {}).get("data") or {}
 
+def valid_snapshot(snapshot):
+	return (
+		isinstance(snapshot, dict)
+		and bool(snapshot.get("worldPath"))
+		and bool(snapshot.get("databaseHash"))
+		and isinstance(snapshot.get("packageCount"), int)
+		and isinstance(snapshot.get("luciAppCount"), int)
+	)
+
 if not stage_result or not stage_result.get("ok") or not stage_data.get("ok"):
 	failures.append("fetched test package was not staged for install")
 if not str(stage_data.get("path") or "").startswith("/tmp/i-love-luci-package-"):
@@ -354,8 +363,12 @@ if not install_result or not install_result.get("ok"):
 	failures.append("package_action install did not report ok")
 elif not str(install_result.get("name") or "").startswith("/tmp/i-love-luci-package-"):
 	failures.append("package_action install did not use staged upload path")
+elif not valid_snapshot(install_result.get("stateBefore")) or not valid_snapshot(install_result.get("stateAfter")):
+	failures.append("package_action install did not return before/after package state fingerprints")
 if not remove_result or not remove_result.get("ok"):
 	failures.append("package_action remove did not report ok")
+elif not valid_snapshot(remove_result.get("stateBefore")) or not valid_snapshot(remove_result.get("stateAfter")):
+	failures.append("package_action remove did not return before/after package state fingerprints")
 
 before = json_after_marker("---ILOVELUCI-MENU-BEFORE---", lambda obj: isinstance(obj.get("data"), dict) and isinstance(obj["data"].get("items"), list))
 installed = json_after_marker("---ILOVELUCI-MENU-INSTALLED---", lambda obj: isinstance(obj.get("data"), dict) and isinstance(obj["data"].get("items"), list))
@@ -412,6 +425,7 @@ print(f"remove_ok={bool(remove_result and remove_result.get('ok'))}")
 print(f"staged_install={bool(stage_data.get('ok'))}")
 print(f"http_smoke_checks={len(smoke_ok)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
+print(f"fingerprints_returned={bool(install_result and remove_result and valid_snapshot(install_result.get('stateBefore')) and valid_snapshot(install_result.get('stateAfter')) and valid_snapshot(remove_result.get('stateBefore')) and valid_snapshot(remove_result.get('stateAfter')))}")
 print(f"uci_changes_baseline={len(uci_before) if uci_before is not None else 'unknown'}")
 print(f"uci_changes_preserved={uci_before == uci_after if uci_before is not None and uci_after is not None else 'unknown'}")
 

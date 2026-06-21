@@ -3432,6 +3432,8 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 		return null;
 	}
 
+	const stateBefore = result.stateBefore ?? null;
+	const stateAfter = result.stateAfter ?? null;
 	const lines = result.output
 		.split(/\r?\n/)
 		.map((line) => line.trim())
@@ -3457,6 +3459,20 @@ function PackageActionOutput({ result }: { result: PackageActionResult | null })
 				title="Package action context"
 			/>
 			<OutputLinesTable empty="No package manager output." lines={lines} title="Package manager output" />
+			{stateBefore || stateAfter ? (
+				<SimpleValueTable
+					columns={["Signal", "Before", "After"]}
+					empty="No package state fingerprint."
+					rows={[
+						["World path", stateBefore?.worldPath || "unknown", stateAfter?.worldPath || "pending"],
+						["World hash", stateBefore?.worldHash || "unknown", stateAfter?.worldHash || "pending"],
+						["Package DB hash", stateBefore?.databaseHash || "unknown", stateAfter?.databaseHash || "pending"],
+						["Installed packages", stateBefore?.packageCount ?? "unknown", stateAfter?.packageCount ?? "pending"],
+						["LuCI apps", stateBefore?.luciAppCount ?? "unknown", stateAfter?.luciAppCount ?? "pending"],
+					]}
+					title="Package state fingerprint"
+				/>
+			) : null}
 		</div>
 	);
 }

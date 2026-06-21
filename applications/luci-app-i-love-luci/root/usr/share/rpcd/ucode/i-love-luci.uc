@@ -6495,18 +6495,47 @@ function package_action_plan(action, name, simulate, options) {
 	};
 }
 
+function package_state_snapshot(manager) {
+	manager ||= command_exists('apk') ? 'apk' : 'opkg';
+
+	let world_path = manager == 'apk' ? '/etc/apk/world' : '/usr/lib/opkg/status';
+	let world_hash = manager == 'apk'
+		? trim(shell_output("sha256sum /etc/apk/world 2>/dev/null | awk '{print $1}'"))
+		: trim(shell_output("sha256sum /usr/lib/opkg/status 2>/dev/null | awk '{print $1}'"));
+	let database_hash = manager == 'apk'
+		? trim(shell_output("apk info -vv 2>/dev/null | sort | sha256sum | awk '{print $1}'"))
+		: trim(shell_output("opkg list-installed 2>/dev/null | sort | sha256sum | awk '{print $1}'"));
+	let package_count = manager == 'apk'
+		? int(trim(shell_output("apk info -vv 2>/dev/null | wc -l")))
+		: int(trim(shell_output("opkg list-installed 2>/dev/null | wc -l")));
+	let luci_app_count = manager == 'apk'
+		? int(trim(shell_output("apk info -vv 2>/dev/null | grep -c '^luci-app-'")))
+		: int(trim(shell_output("opkg list-installed 2>/dev/null | grep -c '^luci-app-'")));
+
+	return {
+		manager,
+		worldPath: world_path,
+		worldHash: world_hash,
+		databaseHash: database_hash,
+		packageCount: package_count,
+		luciAppCount: luci_app_count
+	};
+}
+
 function package_action(action, name, simulate, options) {
 	let plan = package_action_plan(action, name, simulate, options);
 
 	if (!plan.ok)
 		return plan;
 
+	let state_before = package_state_snapshot(plan.manager);
 	let command = plan.command;
 	let output_path = '/tmp/i-love-luci-package-action.log';
 	let output_quoted = quote_command_args([output_path])[0];
 	let code = system(`${command} >${output_quoted} 2>&1`);
 	let output = shell_output(`sed -n "1,220p" ${output_quoted}`);
 	system(`rm -f ${output_quoted} >/dev/null 2>&1 || true`);
+	let state_after = package_state_snapshot(plan.manager);
 
 	return {
 		ok: code == 0,
@@ -6516,6 +6545,8 @@ function package_action(action, name, simulate, options) {
 		simulate: plan.simulate,
 		command,
 		output,
+		stateBefore: state_before,
+		stateAfter: state_after,
 		message: code == 0 ? (plan.simulate ? 'Package action simulated.' : 'Package action complete.') : (plan.simulate ? 'Package action simulation failed.' : 'Package action failed.')
 	};
 }
@@ -6577,6 +6608,7 @@ function package_job_start(action, name, options) {
 		name: plan.name,
 		simulate: false,
 		command: plan.command,
+		stateBefore: package_state_snapshot(plan.manager),
 		startedAt: trim(shell_output('date +%s'))
 	};
 	let output_quoted = quote_command_args([paths.output])[0];
@@ -6650,6 +6682,8 @@ package_job_status = function(id) {
 			simulate: false,
 			command: meta.command || '',
 			output,
+			stateBefore: meta.stateBefore || null,
+			stateAfter: done ? package_state_snapshot(meta.manager || (command_exists('apk') ? 'apk' : 'opkg')) : null,
 			message: done ? (ok ? 'Package action complete.' : 'Package action failed.') : 'Package action running.'
 		}
 	};

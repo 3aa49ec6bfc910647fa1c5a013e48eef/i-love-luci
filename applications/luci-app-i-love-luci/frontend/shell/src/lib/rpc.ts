@@ -413,6 +413,15 @@ export type PackageI18nSuggestionResult = {
 
 export type PackageAction = "install" | "remove" | "update" | "upgrade";
 
+export type PackageStateSnapshot = {
+	manager: string;
+	worldPath: string;
+	worldHash: string;
+	databaseHash: string;
+	packageCount: number;
+	luciAppCount: number;
+};
+
 export type PackageActionResult = {
 	ok: boolean;
 	manager: string;
@@ -421,6 +430,8 @@ export type PackageActionResult = {
 	simulate: boolean;
 	command: string;
 	output: string;
+	stateBefore?: PackageStateSnapshot | null;
+	stateAfter?: PackageStateSnapshot | null;
 	message: string;
 };
 
