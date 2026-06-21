@@ -19,7 +19,7 @@ Current package shape:
 - The package is still a LuCI application: it uses `luci.mk`, depends on `luci-base`, installs LuCI menu/template files, and uses LuCI session/auth paths.
 - The React shell wraps and progressively replaces LuCI screens, but LuCI remains an upstream runtime dependency today.
 - The legacy bridge only works when LuCI is installed.
-- The router console is currently direct `ttyd` access and requires browser connectivity to the ttyd port. Same-origin tunnelling through `uhttpd` is the preferred production design, but current uHTTPd does not load arbitrary third-party proxy plugins from UCI. The tunnel needs an upstream uHTTPd enhancement, a rebuilt uHTTPd package, or a separate front proxy before ttyd can be hidden behind the LuCI session without browser-visible helper credentials. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
+- The router console uses the `i-love-luci-console` helper when installed. The helper owns PTY sessions behind a root-only UNIX socket, and the browser sends input/output through authenticated same-origin LuCI RPC calls without receiving helper credentials or connecting to a second router port. Direct `ttyd` remains a trusted-LAN development fallback only when the helper is absent. See [docs/CONSOLE_TUNNEL.md](docs/CONSOLE_TUNNEL.md).
 
 Future-proof target:
 
@@ -103,7 +103,7 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
-- Web console bridge backed by `ttyd`; safe status is loaded on page render and the helper credential is rotated/requested only when the user opens the console.
+- Web console tunnel backed by `i-love-luci-console`; terminal I/O stays inside the authenticated I Love LuCI session, with direct `ttyd` kept as a fallback only when the helper is unavailable.
 - Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
 

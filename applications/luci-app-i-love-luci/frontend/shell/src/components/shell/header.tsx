@@ -143,8 +143,9 @@ export function Header({ onMenuClick }: HeaderProps) {
 				{consoleStatus?.available && consoleStatus.enabled ? (
 					<div className="grid gap-4 text-sm">
 						<p className="text-muted-foreground">
-							Console service is available on port {consoleStatus.port}. This build opens ttyd directly; same-origin
-							tunnelling over uHTTPd is planned but not active.
+							{consoleStatus.transport === "tunnel"
+								? "Console tunnel is available through the authenticated I Love LuCI session."
+								: `Console service is available on port ${consoleStatus.port}. This will use the trusted-LAN direct fallback.`}
 						</p>
 						<div className="flex justify-end">
 							<Button variant="outline" onClick={() => void openConsole()}>
@@ -154,7 +155,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 					</div>
 				) : (
 					<div className="grid gap-3 text-sm text-muted-foreground">
-						<p>Console bridge is not available. Install or enable `ttyd` on the router.</p>
+						<p>Console bridge is not available. Install and enable the `i-love-luci-console` helper on the router.</p>
 					</div>
 				)}
 			</Dialog>
