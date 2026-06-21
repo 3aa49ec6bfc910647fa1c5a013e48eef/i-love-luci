@@ -3,10 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_DIR="${ROOT_DIR}/applications/luci-app-i-love-luci/frontend/shell"
+GENERATED_ASSET_PATH="applications/luci-app-i-love-luci/htdocs/luci-static/i-love-luci-app"
 
 : "${RUN_FRONTEND:=1}"
 : "${RUN_ROUTER:=1}"
 : "${RUN_MUTATION:=1}"
+: "${CHECK_GENERATED_ASSETS:=1}"
 
 step() {
 	printf '\n==> %s\n' "$*"
@@ -22,6 +24,10 @@ if [ "${RUN_FRONTEND}" = "1" ]; then
 	run npm --prefix "${FRONTEND_DIR}" run typecheck
 	run npm --prefix "${FRONTEND_DIR}" run lint
 	run npm --prefix "${FRONTEND_DIR}" run build
+
+	if [ "${CHECK_GENERATED_ASSETS}" = "1" ]; then
+		run git -C "${ROOT_DIR}" diff --exit-code -- "${GENERATED_ASSET_PATH}"
+	fi
 fi
 
 run bash -n \

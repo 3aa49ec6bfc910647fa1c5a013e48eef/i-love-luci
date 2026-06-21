@@ -1078,6 +1078,7 @@ Final release/test gate:
 
 - Merge validated work through PR into `main`.
 - Publish package/feed artifacts from GitHub.
+- Before publishing, run `scripts/audit-release-readiness.sh` and confirm the generated Vite assets committed under `applications/luci-app-i-love-luci/htdocs/luci-static/i-love-luci-app` match the current frontend source after `npm run build`.
 - Install the GitHub-published package on `172.16.172.1`, not a local file copy.
 - Run `scripts/audit-release-readiness.sh` against the installed release package.
 - Confirm all LuCI apps have working compat routes unless a native route has documented parity and test evidence.
