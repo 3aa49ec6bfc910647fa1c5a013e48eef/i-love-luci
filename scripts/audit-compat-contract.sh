@@ -27,6 +27,12 @@ forbidden = [
 	(re.compile(r"nativeStatus:\s*['\"]supported['\"]\s*\|\s*['\"]partial['\"]"), "types must use supported | compat | unsupported"),
 ]
 
+route_ui_files = {
+	Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/settings.tsx"),
+	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header-search.tsx"),
+	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx"),
+}
+
 allowed_archived = [
 	"Historical validation notes below may contain older raw audit labels",
 	"Archived route audit",
@@ -55,6 +61,13 @@ for base in scan_roots:
 		if path.suffix not in {".md", ".ts", ".tsx", ".js", ".sh", ".uc"} and path.name != "README.md":
 			continue
 		text = path.read_text(encoding="utf-8", errors="replace")
+		relative_path = path.relative_to(root)
+		if relative_path in route_ui_files and ("<Badge" in text or "from \"@/components/ui/badge\"" in text):
+			failures.append(f"{relative_path}: route UI must not render mode/coverage/status chips")
+		if relative_path in route_ui_files - {Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/settings.tsx")}:
+			for term in ("nativeStatus", "effectiveMode", "configuredMode"):
+				if term in text:
+					failures.append(f"{relative_path}: navigation/search UI must not display route mode metadata ({term})")
 		archived_history = False
 		for line_no, line in enumerate(text.splitlines(), 1):
 			if path.name == "UI_REFACTOR.md" and line.startswith("Historical validation notes below"):
