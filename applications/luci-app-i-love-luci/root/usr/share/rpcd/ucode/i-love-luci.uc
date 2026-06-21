@@ -10604,6 +10604,31 @@ const methods = {
 
 			const port = section?.port || '7681';
 			const ssl = section?.ssl == '1';
+			const enabled = section?.enable != '0' && port != '0' && section?.command != null;
+
+			return respond({
+				available: section != null,
+				enabled,
+				port,
+				ssl,
+				path: '/',
+				url: `${ssl ? 'https' : 'http'}://{{host}}:${port}/`
+			});
+		}
+	},
+
+	console_launch: {
+		call: function() {
+			uci.load('ttyd');
+
+			let section = null;
+
+			uci.foreach('ttyd', 'ttyd', function(s) {
+				section ??= s;
+			});
+
+			const port = section?.port || '7681';
+			const ssl = section?.ssl == '1';
 			const credential = section?.credential || '';
 			const parts = split(credential, ':');
 			const username = parts?.[0] || '';

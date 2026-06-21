@@ -52,10 +52,13 @@ export type ConsoleStatus = {
 	enabled: boolean;
 	port?: string;
 	ssl?: boolean;
-	username?: string;
-	password?: string;
 	path?: string;
 	url?: string;
+};
+
+export type ConsoleLaunch = ConsoleStatus & {
+	username?: string;
+	password?: string;
 };
 
 export type PendingChange = {
@@ -1601,6 +1604,18 @@ export async function revertPendingChanges(): Promise<{ reverted: boolean; count
 export async function getConsoleStatus(): Promise<ConsoleStatus> {
 	try {
 		return await callBridge<ConsoleStatus>("console_status");
+	}
+	catch {
+		return {
+			available: false,
+			enabled: false,
+		};
+	}
+}
+
+export async function getConsoleLaunch(): Promise<ConsoleLaunch> {
+	try {
+		return await callBridge<ConsoleLaunch>("console_launch");
 	}
 	catch {
 		return {

@@ -50,6 +50,8 @@ for service in \$services; do
 done
 echo '---ILOVELUCI-CONSOLE---'
 ubus call luci.iloveluci console_status
+echo '---ILOVELUCI-CONSOLE-LAUNCH---'
+ubus call luci.iloveluci console_launch
 echo '---ILOVELUCI-CHANGES---'
 ubus call luci.iloveluci changes_list
 echo '---ILOVELUCI-REBOOT-REJECT---'
@@ -352,12 +354,24 @@ else:
 		warnings.append("console_status reports ttyd unavailable")
 	if console_data.get("enabled") and not console_data.get("url"):
 		failures.append("console_status enabled but missing URL")
-	if console_data.get("enabled") and not console_data.get("username"):
-		failures.append("console_status enabled but missing helper username")
-	if console_data.get("enabled") and not console_data.get("password"):
-		failures.append("console_status enabled but missing helper password")
+	if console_data.get("username") or console_data.get("password"):
+		failures.append("console_status must not expose helper credentials before explicit console launch")
 	if console_data.get("enabled") and console_data.get("path") != "/":
 		failures.append("console_status enabled but did not expose the ttyd root path")
+
+console_launch = json_after_marker("---ILOVELUCI-CONSOLE-LAUNCH---")
+if not console_launch or not console_launch.get("ok"):
+	warnings.append("console_launch did not return ok")
+else:
+	console_launch_data = console_launch.get("data") or {}
+	if console_launch_data.get("enabled") and not console_launch_data.get("url"):
+		failures.append("console_launch enabled but missing URL")
+	if console_launch_data.get("enabled") and not console_launch_data.get("username"):
+		failures.append("console_launch enabled but missing helper username")
+	if console_launch_data.get("enabled") and not console_launch_data.get("password"):
+		failures.append("console_launch enabled but missing helper password")
+	if console_launch_data.get("enabled") and console_launch_data.get("path") != "/":
+		failures.append("console_launch enabled but did not expose the ttyd root path")
 
 changes = json_after_marker("---ILOVELUCI-CHANGES---")
 if not changes or not changes.get("ok"):

@@ -680,8 +680,8 @@ Historical validation notes below may contain older raw audit labels that predat
 - Firewall port-forward editing now covers installed LuCI `firewall/forwards.js` fields. Router validation added and removed a disabled DNAT test forward with negated source IP/MAC and mark matches, source port, destination mapping, protocol list, default NAT reflection behavior, reflection zones, limit/burst, logging, and extra-args handling; `/etc/config/firewall` restored to the same SHA-256 hash and `uci changes` was empty afterward. Route audit passed with `visible_routes=60`, `modern=47`, `legacy=13`, `native_status supported=32`, `partial=28`, `unsupported=0`; native page audit passed with `core_pages=4`, `native_pages=18`, `service_adapters=6`; HTTP smoke passed with `native_shell_checks=47`, `legacy_route_checks=13`.
 - Historical route audit once used broader preview-path checks. Current policy supersedes this: only supported routes expose `nativePath`; routes with in-progress adapter evidence are clean LuCI compat and expose no native path.
 - Native page audit asserts focused service-adapter data sources for banIP, including allowlist, blocklist, custom-feed file summaries, and service activity logs, so future migration evidence cannot silently regress to empty views. The latest native page audit on `172.16.172.1` passed.
-- Native page audit now fails if the console bridge is enabled but does not expose the ttyd helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
-- Console no-reprompt design is currently implemented with `ttyd` bound to LAN, a generated helper HTTP basic-auth credential stored in UCI, and `/bin/login -f root` as the ttyd command. The React header opens ttyd with the helper credential in the URL so the user does not need to type router credentials again. Security constraints: LAN binding, random helper credential, existing LuCI session required to read the helper credential, and native audit coverage for helper URL fields.
+- Native page audit now fails if `console_status` exposes the ttyd helper credential before explicit launch, and fails if `console_launch` cannot return the helper username, helper password, root path, and URL required to open the terminal without asking the user for router credentials again. The latest native page audit on `172.16.172.1` passed with ttyd enabled.
+- Console no-reprompt design is currently implemented with `ttyd` bound to LAN, a generated helper HTTP basic-auth credential stored in UCI, and `/bin/login -f root` as the ttyd command. The React header reads safe console metadata on load, then calls `console_launch` only after the user clicks the console button and opens ttyd with the helper credential in the URL, so the user does not need to type router credentials again. Security constraints: LAN binding, random helper credential, existing LuCI session required to request the launch credential, explicit user action before credential exposure, and native audit coverage for helper URL fields.
 - Auth resume handling now probes the LuCI ubus session on app mount, browser focus, tab visibility resume, and page-cache restore. Expired sessions redirect to the LuCI login page, preserve the current hash-router deep link in session storage, and restore the route after successful login. Unknown/network probe failures do not force logout.
 - Native flash backup parity was expanded on `172.16.172.1`: `sysupgrade -l` backup file list renders in the native page and `sysupgrade_config_save` was exercised with current `/etc/sysupgrade.conf`, returning `changed=false` while the file SHA-256 stayed unchanged.
 - Native DHCP/DNS parity was expanded on `172.16.172.1`: dnsmasq optional DHCP lease limit, address-local, non-wildcard bind, DHCP logging, TFTP/PXE basics, listen interface/address/exclude lists, and log facility fields are now surfaced. `dnsmasq_config_save` was exercised with current router values, returned `changed=false`, exported `dhcp` UCI checksum stayed `d15e4bc2723b2bd844ee87e8d843c1c2f874b26728d21f2b5ab79264f59d4fa8`, and no pending UCI changes were left.
@@ -1061,12 +1061,13 @@ Current implementation:
 
 - `ttyd` is installed as a package dependency and configured by `90_luci-app-i-love-luci`.
 - The command is `/bin/login -f root`, so the terminal session does not ask for the root password after ttyd accepts the helper credential.
-- `console_status` reads the generated ttyd credential from UCI and the header opens the terminal URL with embedded basic-auth credentials.
+- `console_status` returns safe ttyd availability metadata without the helper credential.
+- `console_launch` reads the generated ttyd credential from UCI only after explicit user action, then the header opens the terminal URL with embedded basic-auth credentials.
 - This means the user does not need to manually provide credentials again.
 
 Security gap:
 
-- The ttyd helper credential is long-lived while stored in UCI, and embedding it in a URL can expose it in browser history or logs.
+- The ttyd helper credential is long-lived while stored in UCI, and embedding it in a URL can expose it in browser history or logs after launch.
 
 Preferred future helper:
 

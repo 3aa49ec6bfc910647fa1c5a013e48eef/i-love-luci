@@ -102,7 +102,7 @@ Screenshots are captured from a router running OpenWrt with sanitized app data. 
 - Header search with recent routes and live results.
 - Responsive sidebar and mobile-first layout.
 - Profile menu with logout.
-- Web console bridge backed by `ttyd`.
+- Web console bridge backed by `ttyd`; safe status is loaded on page render and the helper credential is requested only when the user opens the console.
 - Route compatibility settings so individual LuCI paths can use native, legacy, hidden, or automatic rendering.
 - Local shadcn-style component library and Sonner toasts.
 

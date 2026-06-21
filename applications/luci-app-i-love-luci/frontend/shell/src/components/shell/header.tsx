@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import {
+	getConsoleLaunch,
 	getConsoleStatus,
 	getPendingChangeList,
 	getPendingChanges,
 	getSessionInfo,
 	revertPendingChanges,
+	type ConsoleLaunch,
 	type ConsoleStatus,
 	type PendingChange,
 	type SessionInfo,
@@ -32,7 +34,6 @@ export function Header({ onMenuClick }: HeaderProps) {
 	const [profileOpen, setProfileOpen] = useState(false);
 	const user = session?.user ?? "root";
 	const initials = useMemo(() => user.slice(0, 1).toUpperCase() || "R", [user]);
-	const consoleUrl = useMemo(() => buildConsoleUrl(consoleStatus), [consoleStatus]);
 
 	useEffect(() => {
 		void getSessionInfo().then(setSession);
@@ -44,9 +45,15 @@ export function Header({ onMenuClick }: HeaderProps) {
 		const status = consoleStatus ?? (await getConsoleStatus());
 		setConsoleStatus(status);
 
-		const url = buildConsoleUrl(status);
+		if (!status.available || !status.enabled) {
+			setConsoleOpen(true);
+			return;
+		}
 
-		if (status.available && status.enabled && url) {
+		const launch = await getConsoleLaunch();
+		const url = buildConsoleUrl(launch);
+
+		if (launch.available && launch.enabled && url) {
 			window.open(url, "_blank", "noopener");
 			return;
 		}
@@ -143,14 +150,14 @@ export function Header({ onMenuClick }: HeaderProps) {
 				title="Router console"
 				onOpenChange={setConsoleOpen}
 			>
-				{consoleStatus?.available && consoleStatus.enabled && consoleUrl ? (
+				{consoleStatus?.available && consoleStatus.enabled ? (
 					<div className="grid gap-4 text-sm">
 						<p className="text-muted-foreground">
 							Console service is available on port {consoleStatus.port}. It opens in a separate tab so ttyd can own
 							its terminal websocket session.
 						</p>
 						<div className="flex justify-end">
-							<Button variant="outline" onClick={() => window.open(consoleUrl, "_blank", "noopener")}>
+							<Button variant="outline" onClick={() => void openConsole()}>
 								Open console
 							</Button>
 						</div>
@@ -214,7 +221,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 	);
 }
 
-function buildConsoleUrl(status: ConsoleStatus | null) {
+function buildConsoleUrl(status: ConsoleLaunch | null) {
 	if (!status?.url) {
 		return null;
 	}

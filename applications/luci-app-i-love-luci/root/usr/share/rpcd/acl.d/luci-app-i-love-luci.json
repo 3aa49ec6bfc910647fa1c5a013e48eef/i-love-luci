@@ -33,6 +33,7 @@
 					"config_backup_create",
 					"changes_apply",
 					"changes_revert",
+					"console_launch",
 					"crontab_save",
 					"custom_command_run",
 					"custom_commands_save",
