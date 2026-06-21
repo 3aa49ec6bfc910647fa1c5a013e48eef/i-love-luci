@@ -3673,7 +3673,7 @@ function ManualPackagePlanner({
 					<div className="font-medium">Package file</div>
 					<Input accept=".apk,.ipk" disabled={staging} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
 					<div className="text-xs text-muted-foreground">
-						File is staged under `/tmp` for planning or guarded install. URL apply remains in LuCI compat. Native upload limit is {formatBytes(packageUploadLimit)}.
+						File is staged under `/tmp` for planning or guarded install. URL-based install uses the full software workflow. Upload limit is {formatBytes(packageUploadLimit)}.
 					</div>
 				</div>
 				<label className="inline-flex items-center gap-2 text-sm">
@@ -4066,7 +4066,7 @@ function AvailablePackageSearch({
 					<div>
 						<div>Available package search</div>
 						<div className="mt-1 text-xs font-normal text-muted-foreground">
-							Package index search with guarded plan/apply actions. URL apply and broader rollback workflows remain LuCI compat.
+							Package index search with guarded plan/apply actions.
 						</div>
 					</div>
 					<form className="flex w-full gap-2 sm:w-[26rem]" onSubmit={(event) => void submit(event)}>
@@ -5274,8 +5274,7 @@ function AttendedSysupgradeSummary({ data }: { data: NativePageData }) {
 			<AttendedSysupgradeConfigPanel client={client} helper={helper} server={server} />
 			<Panel title="Guardrails">
 				<p className="text-sm text-muted-foreground">
-					Image requests, package retention, build progress, and flash handoff remain in LuCI compat until the native flow
-					has rollback-safe confirmation and progress RPCs.
+					Image requests, package retention, build progress, and flash handoff require rollback-safe confirmation and progress tracking.
 				</p>
 			</Panel>
 		</div>
@@ -5451,7 +5450,7 @@ function AttendedSysupgradeConfigPanel({
 			title="Attended sysupgrade settings"
 			actions={
 				<Badge className={helper.includes("not installed") ? "" : "text-primary"}>
-					{helper.includes("not installed") ? "manual / LuCI compat" : "helper available"}
+					{helper.includes("not installed") ? "manual workflow" : "helper available"}
 				</Badge>
 			}
 		>
@@ -5624,7 +5623,7 @@ function FlashSummary({ data }: { data: NativePageData }) {
 		}
 
 		if (file.size > nativeFirmwareUploadLimit) {
-			toast.error("Firmware image is too large for native ubus upload. Use LuCI compat for this image.");
+			toast.error("Firmware image is too large for browser upload. Use the full firmware workflow for this image.");
 			return;
 		}
 
@@ -5722,7 +5721,7 @@ function FlashSummary({ data }: { data: NativePageData }) {
 				<div className="grid gap-2 text-sm">
 					<Input accept=".bin,.img,.itb,.trx,.tar,.gz" disabled={!backup?.available || firmwareChecking || firmwareFlashing} onChange={(event) => void selectFirmwareImage(event.target.files?.[0])} type="file" />
 					<div className="text-xs text-muted-foreground">
-						Image is staged under /tmp and checked with sysupgrade before flashing. Native upload limit is {formatBytes(nativeFirmwareUploadLimit)}; use LuCI compat for larger images.
+						Image is staged under /tmp and checked with sysupgrade before flashing. Upload limit is {formatBytes(nativeFirmwareUploadLimit)}; use the full firmware workflow for larger images.
 					</div>
 				</div>
 			</Panel>

@@ -1120,6 +1120,8 @@ App-level login coverage now renders `App` in login mode and asserts the React l
 
 Native page headers now use user-facing descriptions only. The compat contract audit fails if route header metadata reintroduces internal migration words such as `Modern`, `read-only`, or `LuCI compat`; compat details remain in documentation and audits, not page header copy.
 
+Native page body copy now follows the same rule for package, firmware, attended sysupgrade, and firewall helper text. User-facing guidance describes the full workflow or manual workflow instead of exposing internal compat/migration labels.
+
 The compat contract audit now scans both LuCI `sysauth.ut` templates and fails if they stop loading the React/Vite app bundle, lose login-mode data attributes, lose the mobile viewport lock, or reintroduce legacy login/header UI.
 
 ## Console Access Strategy

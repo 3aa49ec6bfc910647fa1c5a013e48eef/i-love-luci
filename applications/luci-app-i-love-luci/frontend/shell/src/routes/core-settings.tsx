@@ -3207,7 +3207,7 @@ function FirewallIncludeEditor({
 			</div>
 			{readonly.length ? (
 				<div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-					{readonly.length} non-whitelisted include sections are preserved in LuCI compat.
+					{readonly.length} unmanaged include sections are preserved unchanged.
 				</div>
 			) : null}
 			<div className="flex justify-end gap-2">

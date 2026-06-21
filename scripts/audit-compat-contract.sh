@@ -135,6 +135,16 @@ for base in scan_roots:
 		if relative_path == native_page_file:
 			if "nativePageCompatPath(page)" not in text or "return <Navigate replace to={legacyTarget(compatPath)} />" not in text:
 				failures.append(f"{relative_path}: NativePage must redirect stale compat-only native aliases back to LuCI compat")
+			for forbidden_native_page_copy in (
+				"URL apply remains in LuCI compat",
+				"broader rollback workflows remain LuCI compat",
+				"remain in LuCI compat until",
+				"manual / LuCI compat",
+				"Use LuCI compat",
+				"Native upload limit",
+			):
+				if forbidden_native_page_copy in text:
+					failures.append(f"{relative_path}: user-visible native page copy must not expose migration wording ({forbidden_native_page_copy})")
 			page_meta_match = re.search(r"const pageMeta: Record<string, PageMeta> = \{(?P<body>.*?)\n\};\n\nexport function NativePage", text, re.S)
 			if not page_meta_match:
 				failures.append(f"{relative_path}: expected pageMeta guard target")
