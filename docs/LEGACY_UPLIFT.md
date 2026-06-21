@@ -225,7 +225,7 @@ type LuCIMenuEntry = {
   eligible: boolean;          // dependency check result
   hasChildren: boolean;
   nativeComponent?: string;   // e.g. DashboardPage, DhcpPage
-  nativeStatus: "supported" | "partial" | "unsupported";
+  nativeStatus: "supported" | "compat" | "unsupported";
   configuredMode: ModernRouteMode;
   effectiveMode: "modern" | "legacy" | "hidden";
 };
@@ -261,7 +261,7 @@ config route '/admin/system/flash'
 Modes:
 
 - `auto`: use modern if `nativeStatus` is `supported`; otherwise legacy
-- `modern`: force modern when available, otherwise show disabled warning and fall back to legacy
+- `modern`: force modern only when `nativeStatus` is `supported`; reject this mode for compat-only routes
 - `legacy`: always use iframe bridge
 - `hidden`: hide from modern shell navigation/search, but do not delete LuCI route
 
@@ -274,7 +274,7 @@ requested path -> menu entry -> route config -> native registry -> effective ren
 Behavior:
 
 - If modern is supported and effective mode is modern, route to the native React path.
-- If modern is unsupported, always route to `LegacyFrame`.
+- If modern is unsupported or compat-only, always route to `LegacyFrame`.
 - If a user directly opens `/legacy?path=<migrated-route>`, show a small "Open modern version" affordance unless mode is forced legacy.
 - Do not remove or mutate original LuCI menu files for default routes. The old routes remain fallback and direct-access recovery.
 - Once confidence is high, the modern shell can hide migrated legacy entries from its own search/sidebar by resolving them to native routes.
@@ -289,12 +289,12 @@ Keep a typed registry in the app:
 const nativeRoutes = {
   "/admin/status/overview": {
     component: "DashboardPage",
-    status: "partial",
+    status: "supported",
     dataContract: "dashboard_status",
   },
   "/admin/network/dhcp": {
     component: "DhcpPage",
-    status: "planned",
+    status: "compat",
     dataContract: "dhcp_status",
   },
 } as const;
@@ -304,7 +304,7 @@ The registry should drive:
 
 - route resolution
 - settings toggle UI
-- migration status in admin settings
+- coverage status in admin settings
 - search result labels
 - test coverage requirements
 
@@ -316,7 +316,7 @@ Expected controls:
 
 - filter by section: Status, System, Network, Services, VPN, Other
 - search route/title
-- show route status: Modern, Partial, Legacy
+- show route coverage: Supported native, LuCI compat, Unsupported
 - toggle mode: Auto, Modern, Legacy, Hidden
 - reset route to default
 - export debug JSON for support
@@ -325,7 +325,7 @@ Safety:
 
 - default all unknown routes to `auto`
 - default all unsupported routes to legacy
-- show warning when forcing modern for a partial page
+- reject modern mode for compat-only pages
 - never hide the settings route itself
 - never hide all routes in a section
 

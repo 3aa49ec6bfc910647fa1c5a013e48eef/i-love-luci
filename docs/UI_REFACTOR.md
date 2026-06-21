@@ -309,7 +309,7 @@ Current compatibility model:
 - In-progress adapter evidence is internal migration metadata only. It means data-source or form coverage evidence exists, but the user-facing route is still LuCI compat.
 - Routes with internal adapter evidence must not advertise `nativePath`, must not offer native mode in settings, and must reject native-mode overrides in `rpcd`.
 - The plan should describe these as LuCI compat routes with in-progress adapter evidence, not as a separate user-facing route class.
-- Do not use "partial" as a product or routing state. Current route metadata uses `nativeStatus=compat` for LuCI compat routes with internal adapter evidence, and the UI/audits must describe them as LuCI compat rather than partial native routes.
+- Do not expose any in-between product state for native coverage. Current route metadata uses `nativeStatus=compat` for LuCI compat routes with internal adapter evidence, and the UI/audits must describe them as LuCI compat.
 
 Audit scope:
 
@@ -626,7 +626,7 @@ Installed LuCI app renderer policy:
 - Approved native app exceptions on the router: `luci-app-firewall`, `luci-app-commands`, `luci-app-uhttpd`, and `luci-app-upnp`. These are allowed to default to native because parity evidence and no-op/mutation safety tests are recorded below.
 - Unknown future `luci-app-*` routes must appear through LuCI compat automatically unless a native adapter explicitly supports them.
 - Internal route metadata may still mark migration work as in progress, but user-facing UI should describe that path as `LuCI compat`. Routes with incomplete adapter evidence are clean compat routes in normal use: `menu_tree` does not advertise a native path for them, the settings UI does not offer native mode, and the bridge rejects native-mode overrides unless the route is fully supported.
-- Compatibility route promotion is binary: a route stays LuCI compat until it has documented native parity and successful route/browser/save tests. There is no user-facing "partial native" mode.
+- Compatibility route promotion is binary: a route stays LuCI compat until it has documented native parity and successful route/browser/save tests. There is no user-facing in-between native mode.
 
 Validation on `172.16.172.1`:
 
