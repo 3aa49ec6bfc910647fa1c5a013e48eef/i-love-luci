@@ -2304,24 +2304,14 @@ function network_interface_action(name, action) {
 			state: null
 		};
 
-	if (action != 'status' && action != 'up' && action != 'down' && action != 'restart')
+	if (action != 'status')
 		return {
 			ok: false,
 			name,
 			action,
-			message: 'Unsupported network interface action.',
+			message: 'Unsupported network interface action. Native link actions remain LuCI compat until tested.',
 			state: null
 		};
-
-	let quoted = quote_command_args([name])[0];
-	let code = 0;
-
-	if (action == 'up')
-		code = system(`ifup ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1`);
-	else if (action == 'down')
-		code = system(`ifdown ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1`);
-	else if (action == 'restart')
-		code = system(`ifdown ${quoted} >/tmp/i-love-luci-ifaction.log 2>&1; ifup ${quoted} >>/tmp/i-love-luci-ifaction.log 2>&1`);
 
 	let state = null;
 	try {
@@ -2332,14 +2322,11 @@ function network_interface_action(name, action) {
 	}
 
 	return {
-		ok: action == 'status' ? state != null : code == 0,
+		ok: state != null,
 		name,
 		action,
-		message: action == 'status'
-			? (state != null ? 'Interface status loaded.' : 'Interface status is unavailable.')
-			: (code == 0 ? 'Interface action completed.' : 'Interface action failed.'),
-		state,
-		output: action == 'status' ? '' : (readfile('/tmp/i-love-luci-ifaction.log') || '')
+		message: state != null ? 'Interface status loaded.' : 'Interface status is unavailable.',
+		state
 	};
 }
 

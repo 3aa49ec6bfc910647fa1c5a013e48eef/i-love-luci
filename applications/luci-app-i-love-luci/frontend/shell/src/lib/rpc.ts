@@ -1112,7 +1112,7 @@ export type NetworkInterfacesResult = {
 	firewallSections?: ConfigSection[];
 };
 
-export type NetworkInterfaceAction = "status" | "up" | "down" | "restart";
+export type NetworkInterfaceAction = "status";
 
 export type NetworkInterfaceActionResult = {
 	ok: boolean;
@@ -1120,7 +1120,6 @@ export type NetworkInterfaceActionResult = {
 	action: NetworkInterfaceAction | string;
 	message: string;
 	state: NetworkInterfaceStatus | null;
-	output?: string;
 };
 
 export type NetworkDeviceConfig = {
