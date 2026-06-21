@@ -37,6 +37,9 @@ route_ui_files = {
 	Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/sidebar.tsx"),
 }
 native_page_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/routes/native-page.tsx")
+rpc_bridge_file = Path("applications/luci-app-i-love-luci/root/usr/share/rpcd/ucode/i-love-luci.uc")
+rpc_types_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/lib/rpc.ts")
+header_file = Path("applications/luci-app-i-love-luci/frontend/shell/src/components/shell/header.tsx")
 
 allowed_archived = [
 	"Historical validation notes below may contain older raw audit labels",
@@ -83,6 +86,33 @@ for base in scan_roots:
 					continue
 				if "OutputLinesTable" in match.group("body"):
 					failures.append(f"{relative_path}: {function_name} must render structured tables, not generic command output")
+		if relative_path == rpc_bridge_file:
+			status_match = re.search(r"console_status:\s*\{\s*call:\s*function\(\)\s*\{(?P<body>.*?)\n\t\},\n\n\tconsole_launch:", text, re.S)
+			if not status_match:
+				failures.append(f"{relative_path}: expected console_status before console_launch")
+			else:
+				status_body = status_match.group("body")
+				for secret_term in ("username", "password", "credential"):
+					if secret_term in status_body:
+						failures.append(f"{relative_path}: console_status must not expose or read helper {secret_term}")
+			if "console_launch:" not in text:
+				failures.append(f"{relative_path}: console_launch RPC is required for explicit console credential release")
+		if relative_path == rpc_types_file:
+			status_type = re.search(r"export type ConsoleStatus = \{(?P<body>.*?)\n\};", text, re.S)
+			if not status_type:
+				failures.append(f"{relative_path}: expected ConsoleStatus type")
+			else:
+				for secret_term in ("username", "password"):
+					if secret_term in status_type.group("body"):
+						failures.append(f"{relative_path}: ConsoleStatus must not include helper {secret_term}")
+			if "export type ConsoleLaunch" not in text or "console_launch" not in text:
+				failures.append(f"{relative_path}: ConsoleLaunch type and RPC call are required")
+		if relative_path == header_file:
+			if "getConsoleLaunch" not in text:
+				failures.append(f"{relative_path}: header console action must use explicit console_launch RPC")
+			effect_match = re.search(r"useEffect\(\(\) => \{(?P<body>.*?)\n\t\}, \[\]\);", text, re.S)
+			if effect_match and "getConsoleLaunch" in effect_match.group("body"):
+				failures.append(f"{relative_path}: console_launch must not run on page load")
 		if relative_path == Path("docs/ROUTE_INVENTORY.md"):
 			if "| LuCI compat |" not in text:
 				failures.append(f"{relative_path}: route inventory must include LuCI compat renderer decisions")
