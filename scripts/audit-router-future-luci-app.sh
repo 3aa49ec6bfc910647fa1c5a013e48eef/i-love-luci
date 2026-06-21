@@ -94,6 +94,19 @@ http_smoke_installed_routes() {
 	done
 }
 
+route_mode_guard_installed_routes() {
+	paths="$(jsonfilter -i /tmp/i-love-luci-future-app-menu-installed.json -e '@.data.items[*].path' 2>/dev/null | grep '^/admin/example' | sort -u || true)"
+	if [ -z "${paths}" ]; then
+		echo "MODE_GUARD_FAIL no example paths"
+		return
+	fi
+
+	for path in ${paths}; do
+		echo "MODE_GUARD ${path}"
+		ubus call luci.iloveluci route_mode_set "{\"path\":\"${path}\",\"mode\":\"modern\"}" || echo "MODE_GUARD_FAIL ${path}"
+	done
+}
+
 echo "---ILOVELUCI-WORLD-BEFORE---"
 sha256sum /etc/apk/world 2>/dev/null || true
 
@@ -115,6 +128,9 @@ menu_tree_retry | tee /tmp/i-love-luci-future-app-menu-installed.json
 
 echo "---ILOVELUCI-INSTALLED-HTTP-SMOKE---"
 http_smoke_installed_routes
+
+echo "---ILOVELUCI-INSTALLED-ROUTE-MODE-GUARDS---"
+route_mode_guard_installed_routes
 
 echo "---ILOVELUCI-REMOVE---"
 apk del "${pkg}"
@@ -191,6 +207,14 @@ def json_after_marker(marker):
 	for obj in extract_json_objects(raw[idx:]):
 		if isinstance(obj.get("data"), dict) and isinstance(obj["data"].get("items"), list):
 			return obj["data"]
+	return None
+
+def first_json_after_marker(marker):
+	idx = raw.find(marker)
+	if idx < 0:
+		return None
+	for obj in extract_json_objects(raw[idx:]):
+		return obj
 	return None
 
 def visible_paths(menu):
@@ -280,6 +304,9 @@ smoke_ok_paths = {
 	if line.startswith("SMOKE_OK ") and len(line.split()) >= 2
 }
 smoke_failures = [line for line in smoke_section.splitlines() if line.startswith("SMOKE_FAIL ")]
+guard_section = raw.split("---ILOVELUCI-INSTALLED-ROUTE-MODE-GUARDS---", 1)[1].split("---ILOVELUCI-REMOVE---", 1)[0] if "---ILOVELUCI-INSTALLED-ROUTE-MODE-GUARDS---" in raw else ""
+guard_failures = [line for line in guard_section.splitlines() if line.startswith("MODE_GUARD_FAIL ")]
+guard_checked_paths = set()
 
 for path in new_paths:
 	item = installed_paths[path]
@@ -299,9 +326,20 @@ for path in new_paths:
 		failures.append(f"{path}: future app compat route exposed nativePath={item.get('nativePath')!r}")
 	if path not in smoke_ok_paths:
 		failures.append(f"{path}: future app route was not HTTP-smoked through direct LuCI route and compat frame")
+	guard_result = first_json_after_marker(f"MODE_GUARD {path}")
+	guard_data = guard_result.get("data") if isinstance(guard_result, dict) else None
+	if not guard_result or not guard_result.get("ok") or not isinstance(guard_data, dict):
+		failures.append(f"{path}: future app route mode guard did not return wrapped data")
+	elif guard_data.get("saved") is not False:
+		failures.append(f"{path}: future app compat route accepted native-mode override")
+	else:
+		guard_checked_paths.add(path)
 
 for failure in smoke_failures:
 	failures.append(f"future app HTTP smoke failed: {failure}")
+
+for failure in guard_failures:
+	failures.append(f"future app route-mode guard failed: {failure}")
 
 leftover = sorted(set(new_paths) & set(removed_paths))
 if leftover:
@@ -330,6 +368,7 @@ print(f"new_routes={len(new_paths)}")
 if new_paths:
 	print("new_paths=" + ",".join(new_paths))
 print(f"http_smoke_checks={len(smoke_ok_paths)}")
+print(f"route_mode_guard_checks={len(guard_checked_paths)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
 print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")
 
