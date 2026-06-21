@@ -196,14 +196,18 @@ Stable package version is `1.0.0-r4`. Development and UAT work is validated thro
 
 ## OpenWrt Source Integration
 
-To build inside an OpenWrt source tree, copy or overlay `applications/luci-app-i-love-luci` into the LuCI feed:
+To build inside an OpenWrt source tree, copy or overlay both packages into the LuCI feed:
 
 ```sh
 mkdir -p feeds/luci/applications/luci-app-i-love-luci
+mkdir -p feeds/luci/utils/i-love-luci-console
 rsync -a applications/luci-app-i-love-luci/ feeds/luci/applications/luci-app-i-love-luci/
+rsync -a utils/i-love-luci-console/ feeds/luci/utils/i-love-luci-console/
 ./scripts/feeds update luci
+./scripts/feeds install i-love-luci-console
 ./scripts/feeds install luci-app-i-love-luci
 make menuconfig
+make package/feeds/luci/i-love-luci-console/compile V=s
 make package/feeds/luci/luci-app-i-love-luci/compile V=s
 ```
 
@@ -234,7 +238,9 @@ EOF
 Full package install, useful when validating release artifacts:
 
 ```sh
-scripts/router-install-package.sh dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk
+scripts/router-install-package.sh \
+  dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk \
+  dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk
 ```
 
 Targeted command and file copy helpers:
@@ -300,7 +306,7 @@ uci commit uhttpd
 OpenWrt 25.12/apk:
 
 ```sh
-apk del luci-app-i-love-luci
+apk del luci-app-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart
@@ -309,7 +315,7 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 OpenWrt 24.10/opkg:
 
 ```sh
-opkg remove luci-app-i-love-luci
+opkg remove luci-app-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart
