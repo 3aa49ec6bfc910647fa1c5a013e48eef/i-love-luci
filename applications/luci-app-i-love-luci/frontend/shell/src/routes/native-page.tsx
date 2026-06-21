@@ -3505,6 +3505,7 @@ function ManualPackagePlanner({
 }) {
 	const [name, setName] = useState("");
 	const [overwrite, setOverwrite] = useState(false);
+	const [allowUntrusted, setAllowUntrusted] = useState(false);
 	const [staging, setStaging] = useState(false);
 	const [stagedFile, setStagedFile] = useState<PackageFileStageResult | null>(null);
 	const [suggestionBusy, setSuggestionBusy] = useState(false);
@@ -3593,7 +3594,7 @@ function ManualPackagePlanner({
 				<div className="flex flex-col gap-1">
 					<div>Manual package install</div>
 					<div className="text-xs font-normal text-muted-foreground">
-						Plan package-name, URL, uploaded `.apk`, or uploaded `.ipk` installs without changing the router. Apply stays in LuCI compat.
+						Plan package-name, URL, uploaded `.apk`, or uploaded `.ipk` installs. Uploaded package files can be installed after staging.
 					</div>
 				</div>
 			}
@@ -3645,26 +3646,61 @@ function ManualPackagePlanner({
 					<div className="font-medium">Package file</div>
 					<Input accept=".apk,.ipk" disabled={staging} onChange={(event) => void selectFile(event.target.files?.[0])} type="file" />
 					<div className="text-xs text-muted-foreground">
-						File is staged under `/tmp` for install planning only. Native upload limit is {formatBytes(packageUploadLimit)}.
+						File is staged under `/tmp` for planning or guarded install. URL apply remains in LuCI compat. Native upload limit is {formatBytes(packageUploadLimit)}.
 					</div>
 				</div>
+				<label className="inline-flex items-center gap-2 text-sm">
+					<input checked={allowUntrusted} onChange={(event) => setAllowUntrusted(event.target.checked)} type="checkbox" />
+					Allow untrusted signature for staged package files
+				</label>
 				{stagedFile?.ok ? (
-					<div className="overflow-x-auto rounded-md border">
-						<table className="w-full min-w-[32rem] text-left text-sm">
-							<tbody>
-								{[
-									["File", stagedFile.filename],
-									["Path", stagedFile.path],
-									["Size", formatBytes(stagedFile.size)],
-									["SHA256", stagedFile.sha256sum || "unknown"],
-								].map(([field, value]) => (
-									<tr className="border-b last:border-0" key={field}>
-										<td className="px-3 py-2 font-medium">{field}</td>
-										<td className="px-3 py-2 font-mono text-xs">{value}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+					<div className="grid gap-3 rounded-md border">
+						<div className="overflow-x-auto">
+							<table className="w-full min-w-[32rem] text-left text-sm">
+								<tbody>
+									{[
+										["File", stagedFile.filename],
+										["Path", stagedFile.path],
+										["Size", formatBytes(stagedFile.size)],
+										["SHA256", stagedFile.sha256sum || "unknown"],
+									].map(([field, value]) => (
+										<tr className="border-b last:border-0" key={field}>
+											<td className="px-3 py-2 font-medium">{field}</td>
+											<td className="px-3 py-2 font-mono text-xs">{value}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+						<div className="flex flex-wrap justify-end gap-2 border-t p-3">
+							<Button
+								disabled={busy === `install:${stagedFile.path}:plan`}
+								onClick={() =>
+									void onRunAction("install", stagedFile.path, true, {
+										overwrite,
+										i18nPackages: selectedTranslations,
+										allowUntrusted,
+									})
+								}
+								type="button"
+								variant="outline"
+							>
+								Plan staged file
+							</Button>
+							<Button
+								disabled={busy === `install:${stagedFile.path}:apply`}
+								onClick={() =>
+									void onRunAction("install", stagedFile.path, false, {
+										overwrite,
+										i18nPackages: selectedTranslations,
+										allowUntrusted,
+									})
+								}
+								type="button"
+							>
+								Install staged file
+							</Button>
+						</div>
 					</div>
 				) : null}
 				<label className="inline-flex items-center gap-2 text-sm">

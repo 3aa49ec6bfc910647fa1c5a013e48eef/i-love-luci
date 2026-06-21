@@ -24,13 +24,15 @@ pkg="luci-app-example"
 installed=0
 http_user=__ILOVELUCI_HTTP_USER__
 http_password=__ILOVELUCI_HTTP_PASSWORD__
+staged_install_path=""
 
 cleanup() {
 	if [ "${installed}" = "1" ]; then
 		ubus call luci.iloveluci package_action "{\"action\":\"remove\",\"name\":\"${pkg}\",\"simulate\":false,\"options\":{}}" >/dev/null 2>&1 || true
 		apk del "${pkg}" >/dev/null 2>&1 || true
 	fi
-	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json /tmp/i-love-luci-package-menu-installed.json /tmp/i-love-luci-package-http-* 2>/dev/null || true
+	rm -rf /tmp/i-love-luci-package-fetch 2>/dev/null || true
+	rm -f /tmp/luci-indexcache* /tmp/luci-modulecache* /tmp/i-love-luci-package-job-* /tmp/i-love-luci-package-*-status.json /tmp/i-love-luci-package-*-start.json /tmp/i-love-luci-package-menu-installed.json /tmp/i-love-luci-package-http-* /tmp/i-love-luci-package-stage-*.json /tmp/i-love-luci-package-fetch.log /tmp/i-love-luci-package-*.apk /tmp/i-love-luci-package-*.ipk 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -107,8 +109,29 @@ fi
 echo "---ILOVELUCI-MENU-BEFORE---"
 menu_tree_retry
 
+echo "---ILOVELUCI-STAGED-PACKAGE---"
+rm -rf /tmp/i-love-luci-package-fetch 2>/dev/null || true
+mkdir -p /tmp/i-love-luci-package-fetch
+if command -v apk >/dev/null 2>&1; then
+	(cd /tmp/i-love-luci-package-fetch && apk fetch "${pkg}" >/tmp/i-love-luci-package-fetch.log 2>&1) || true
+	stage_source="$(find /tmp/i-love-luci-package-fetch -maxdepth 1 -type f -name "${pkg}-*.apk" | head -n 1 || true)"
+	if [ -n "${stage_source}" ]; then
+		stage_filename="$(basename "${stage_source}" | sed 's/[^A-Za-z0-9_.-]/-/g')"
+		staged_install_path="/tmp/i-love-luci-package-${stage_filename}"
+		cp "${stage_source}" "${staged_install_path}"
+		chmod 0600 "${staged_install_path}"
+		stage_size="$(wc -c < "${staged_install_path}" | tr -d ' ')"
+		stage_sha256="$(sha256sum "${staged_install_path}" | awk '{print $1}')"
+		printf '{"ok":true,"data":{"ok":true,"path":"%s","filename":"%s","size":%s,"sha256sum":"%s"}}\n' "${staged_install_path}" "${stage_filename}" "${stage_size:-0}" "${stage_sha256}"
+	else
+		cat /tmp/i-love-luci-package-fetch.log 2>/dev/null || true
+	fi
+else
+	echo "apk fetch unavailable"
+fi
+
 echo "---ILOVELUCI-INSTALL-RPC---"
-ubus call luci.iloveluci package_job_start "{\"action\":\"install\",\"name\":\"${pkg}\",\"options\":{}}" > /tmp/i-love-luci-package-install-start.json 2>/dev/null || true
+ubus call luci.iloveluci package_job_start "{\"action\":\"install\",\"name\":\"${staged_install_path}\",\"options\":{\"allowUntrusted\":true}}" > /tmp/i-love-luci-package-install-start.json 2>/dev/null || true
 cat /tmp/i-love-luci-package-install-start.json
 install_job_id="$(jsonfilter -i /tmp/i-love-luci-package-install-start.json -e '@.data.job.id' 2>/dev/null || true)"
 if [ -n "${install_job_id}" ]; then
@@ -284,12 +307,19 @@ if "---ILOVELUCI-PREINSTALLED---" in raw:
 
 install_objects = json_objects_between("---ILOVELUCI-INSTALL-RPC---", "---ILOVELUCI-MENU-INSTALLED---")
 remove_objects = json_objects_between("---ILOVELUCI-REMOVE-RPC---", "---ILOVELUCI-MENU-REMOVED---")
+stage_result = json_after_marker("---ILOVELUCI-STAGED-PACKAGE---")
 install_start = next((obj for obj in install_objects if (obj.get("data") or {}).get("started") is True), None)
 remove_start = next((obj for obj in remove_objects if (obj.get("data") or {}).get("started") is True), None)
 install_status = next((obj for obj in reversed(install_objects) if isinstance((obj.get("data") or {}).get("result"), dict)), None)
 remove_status = next((obj for obj in reversed(remove_objects) if isinstance((obj.get("data") or {}).get("result"), dict)), None)
 install_result = (install_status.get("data") or {}).get("result") if install_status else None
 remove_result = (remove_status.get("data") or {}).get("result") if remove_status else None
+stage_data = (stage_result or {}).get("data") or {}
+
+if not stage_result or not stage_result.get("ok") or not stage_data.get("ok"):
+	failures.append("fetched test package was not staged for install")
+if not str(stage_data.get("path") or "").startswith("/tmp/i-love-luci-package-"):
+	failures.append("staged package returned unexpected install path")
 
 if not install_start:
 	failures.append("package_job_start install did not start")
@@ -297,6 +327,8 @@ if not remove_start:
 	failures.append("package_job_start remove did not start")
 if not install_result or not install_result.get("ok"):
 	failures.append("package_action install did not report ok")
+elif not str(install_result.get("name") or "").startswith("/tmp/i-love-luci-package-"):
+	failures.append("package_action install did not use staged upload path")
 if not remove_result or not remove_result.get("ok"):
 	failures.append("package_action remove did not report ok")
 
@@ -350,6 +382,7 @@ if new_paths:
 	print("new_paths=" + ",".join(new_paths))
 print(f"install_ok={bool(install_result and install_result.get('ok'))}")
 print(f"remove_ok={bool(remove_result and remove_result.get('ok'))}")
+print(f"staged_install={bool(stage_data.get('ok'))}")
 print(f"http_smoke_checks={len(smoke_ok)}")
 print(f"world_restored={bool(world_before and world_after and world_before == world_after)}")
 print(f"uci_changes={uci_changes if uci_changes is not None else 'unknown'}")

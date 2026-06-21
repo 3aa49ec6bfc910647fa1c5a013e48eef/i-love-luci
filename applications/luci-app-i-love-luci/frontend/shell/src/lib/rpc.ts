@@ -419,6 +419,7 @@ export type PackageActionOptions = {
 	overwrite?: boolean;
 	autoremove?: boolean;
 	i18nPackages?: string[];
+	allowUntrusted?: boolean;
 };
 
 export type PackageFileStageResult = {

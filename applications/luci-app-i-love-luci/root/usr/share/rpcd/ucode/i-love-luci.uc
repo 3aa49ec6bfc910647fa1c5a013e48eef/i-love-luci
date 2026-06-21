@@ -6005,6 +6005,15 @@ function valid_package_name(name) {
 	return length(name) > 0 && length(name) <= 120 && replace(name, /[^A-Za-z0-9_.+:-]/g, '') == name;
 }
 
+function staged_package_path(name) {
+	name = trim('' + (name || ''));
+
+	if (match(name, /^\/tmp\/i-love-luci-package-[A-Za-z0-9_.-]+\.(apk|ipk)$/))
+		return name;
+
+	return '';
+}
+
 function package_detail(name) {
 	name = trim('' + (name || ''));
 	let manager = command_exists('apk') ? 'apk' : 'opkg';
@@ -6218,7 +6227,10 @@ function valid_package_reference(name, simulate) {
 		return true;
 
 	if (!simulate || length(name) <= 0 || length(name) > 2048)
-		return false;
+		return length(staged_package_path(name)) > 0;
+
+	if (length(staged_package_path(name)))
+		return true;
 
 	if ((substr(name, 0, 7) == 'http://' || substr(name, 0, 8) == 'https://') && replace(name, /[^A-Za-z0-9._~:\/?#=@&%+;,!$()*-]/g, '') == name)
 		return true;
@@ -6311,7 +6323,9 @@ function package_action_plan(action, name, simulate, options) {
 	let argv = [];
 	let overwrite = !!options.overwrite;
 	let autoremove = !!options.autoremove;
+	let allow_untrusted = !!options.allowUntrusted;
 	let i18n = [];
+	let staged_path = staged_package_path(name);
 
 	for (let pkg in (options.i18nPackages || [])) {
 		pkg = trim('' + pkg);
@@ -6339,7 +6353,7 @@ function package_action_plan(action, name, simulate, options) {
 				output: '',
 				message: 'Package name contains unsupported characters.'
 			};
-		else if (!simulate && !valid_package_name(name))
+		else if (!simulate && !valid_package_name(name) && !length(staged_path))
 			return {
 				ok: false,
 				manager,
@@ -6348,7 +6362,7 @@ function package_action_plan(action, name, simulate, options) {
 				simulate,
 				command: '',
 				output: '',
-				message: 'URL and staged package install apply stays in LuCI compat until rollback parity is complete.'
+				message: 'URL package install apply stays in LuCI compat until rollback parity is complete.'
 			};
 		else if (action == 'upgrade' && !simulate)
 			return {
@@ -6366,6 +6380,8 @@ function package_action_plan(action, name, simulate, options) {
 				argv = ['apk', 'add'];
 				if (simulate)
 					push(argv, '--simulate');
+				if (!simulate && length(staged_path) && allow_untrusted)
+					push(argv, '--allow-untrusted');
 				if (overwrite)
 					push(argv, '--force-overwrite');
 				for (let pkg in i18n)
@@ -6418,7 +6434,7 @@ function package_action_plan(action, name, simulate, options) {
 		};
 	}
 
-	if (simulate && match(name, /^\/tmp\/[A-Za-z0-9._+-]+\.(apk|ipk)$/)) {
+	if (length(staged_path) || (simulate && match(name, /^\/tmp\/[A-Za-z0-9._+-]+\.(apk|ipk)$/))) {
 		let staged = stat(name);
 		if (staged?.type != 'file')
 			return {
