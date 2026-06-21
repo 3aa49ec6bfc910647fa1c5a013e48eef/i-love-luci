@@ -3971,6 +3971,17 @@ function LuciUiSettingsEditor({
 							value={values.mediaurlbase}
 						/>
 					</Field>
+					<Field label="Table filters" target="luci-tablefilters">
+						<SelectField
+							id="luci-tablefilters"
+							onChange={(value) => updateField("tablefilters", value)}
+							options={[
+								["0", "Disabled"],
+								["1", "Enabled"],
+							]}
+							value={values.tablefilters}
+						/>
+					</Field>
 					<Field label="Session timeout" target="luci-session-timeout">
 						<Input
 							id="luci-session-timeout"
@@ -4011,6 +4022,7 @@ function luciUiSettingsValues(main: ConfigSection, apply: ConfigSection, themeOp
 	return {
 		lang: rawValue(main.values.lang || "auto"),
 		mediaurlbase,
+		tablefilters: rawValue(main.values.tablefilters) === "1" ? "1" : "0",
 		sessiontime: rawValue(main.values.sessiontime || "3600"),
 		rollback: rawValue(apply.values.rollback || "90"),
 		holdoff: rawValue(apply.values.holdoff || "4"),

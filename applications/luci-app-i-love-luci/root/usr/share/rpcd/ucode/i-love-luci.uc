@@ -48,7 +48,7 @@ const nativeRoutes = {
 	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/custom': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/system': { status: 'partial', nativePath: '/core/system' },
-	'/admin/system/system': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system/system': { status: 'supported', nativePath: '/core/system' },
 	'/admin/system/admin': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/password': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/dropbear': { status: 'supported', nativePath: '/native/service/dropbear' },
@@ -5091,6 +5091,7 @@ function collect_luci_config_sections() {
 			mediaurlbase: luci_get('luci.main.mediaurlbase', ''),
 			resourcebase: luci_get('luci.main.resourcebase', ''),
 			ubuspath: luci_get('luci.main.ubuspath', ''),
+			tablefilters: luci_get('luci.main.tablefilters', ''),
 			sessiontime: luci_get('luci.sauth.sessiontime', '')
 		}
 	},
@@ -5151,6 +5152,7 @@ function save_luci_ui_settings(config) {
 	let apply = uci.get('luci', 'apply') ? 'apply' : uci.add('luci', 'internal');
 	let lang = clean_uci_value(config.lang || 'auto');
 	let mediaurlbase = clean_uci_value(config.mediaurlbase || '');
+	let tablefilters = zero_one(config.tablefilters);
 	let sessiontime = clean_uci_value(config.sessiontime || '');
 	let rollback = clean_uci_value(config.rollback || '');
 	let holdoff = clean_uci_value(config.holdoff || '');
@@ -5209,6 +5211,15 @@ function save_luci_ui_settings(config) {
 			changed = true;
 			set_uci_option('luci', main, key, value);
 		}
+	}
+
+	let current_tablefilters = uci.get('luci', main, 'tablefilters') || '0';
+	if (current_tablefilters != tablefilters) {
+		changed = true;
+		if (tablefilters == '1')
+			uci.set('luci', main, 'tablefilters', '1');
+		else
+			uci.delete('luci', main, 'tablefilters');
 	}
 
 	for (let key, value in sauth_next) {

@@ -712,6 +712,7 @@ export type SystemSettingsResult = {
 export type LuciUiSettingsInput = {
 	lang: string;
 	mediaurlbase: string;
+	tablefilters: string;
 	sessiontime: string;
 	rollback: string;
 	holdoff: string;
