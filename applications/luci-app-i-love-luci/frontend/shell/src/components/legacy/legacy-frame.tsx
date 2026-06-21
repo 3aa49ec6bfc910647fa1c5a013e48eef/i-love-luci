@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { getShellConfig } from "@/lib/config";
+import { withLegacyFrameMarker } from "@/lib/legacy-frame-url";
 import { legacyHref } from "@/lib/navigation";
 
 type LegacyFrameProps = {
@@ -34,12 +35,6 @@ body {
 	margin-top: 0 !important;
 }
 `;
-
-function withLegacyFrameMarker(src: string) {
-	const url = new URL(src, window.location.origin);
-	url.searchParams.set("iloveluci_frame", "1");
-	return `${url.pathname}${url.search}${url.hash}`;
-}
 
 function hideLegacyChrome(frame: HTMLIFrameElement | null) {
 	const doc = frame?.contentDocument;

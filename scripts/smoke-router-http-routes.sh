@@ -157,6 +157,7 @@ if 'data-iloveluci-login="true"' in app_body:
 native_seen = 0
 legacy_seen = 0
 legacy_frame_seen = 0
+legacy_query_seen = 0
 
 for item in visible:
 	path = item.get("resolvedPath") or item.get("firstChildPath") or item.get("path")
@@ -195,6 +196,24 @@ for item in visible:
 		if frame_final_url.endswith("/logout"):
 			warnings.append(f"{item.get('path')}: legacy iframe source resolved to logout URL")
 
+		if legacy_query_seen == 0:
+			query_probe_path = path + ("&" if "?" in path else "?") + "iloveluci_query_probe=1"
+			probe_href = frame_href(query_probe_path)
+			probe_query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(probe_href).query, keep_blank_values=True))
+			if probe_query.get("iloveluci_query_probe") != "1" or probe_query.get("iloveluci_frame") != "1":
+				failures.append(f"{item.get('path')}: legacy iframe source did not preserve existing query params")
+			else:
+				query_status, query_final_url, query_body = open_url(opener, base + probe_href)
+				legacy_query_seen += 1
+				if query_status >= 400:
+					failures.append(f"{item.get('path')}: legacy iframe query source returned HTTP {query_status}")
+				if 'data-iloveluci-login="true"' in query_body or "Log in | I Love LuCI" in query_body:
+					failures.append(f"{item.get('path')}: legacy iframe query source redirected to login")
+				if "404 Not Found" in query_body or "Unable to dispatch" in query_body:
+					failures.append(f"{item.get('path')}: legacy iframe query source dispatch failed")
+				if query_final_url.endswith("/logout"):
+					warnings.append(f"{item.get('path')}: legacy iframe query source resolved to logout URL")
+
 if native_seen == 0:
 	failures.append("No native routes were smoked")
 if legacy_seen == 0:
@@ -203,7 +222,8 @@ if legacy_seen == 0:
 print("I Love LuCI HTTP route smoke")
 print(
 	f"visible_routes={len(visible)} native_shell_checks={native_seen} "
-	f"legacy_route_checks={legacy_seen} legacy_frame_checks={legacy_frame_seen}"
+	f"legacy_route_checks={legacy_seen} legacy_frame_checks={legacy_frame_seen} "
+	f"legacy_query_checks={legacy_query_seen}"
 )
 
 if warnings:

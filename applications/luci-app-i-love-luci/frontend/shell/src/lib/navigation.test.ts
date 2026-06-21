@@ -6,6 +6,12 @@ describe("legacyHref", () => {
 	it("maps LuCI admin paths into the legacy base path", () => {
 		expect(legacyHref("/admin/network/dhcp", "/cgi-bin/luci/admin")).toBe("/cgi-bin/luci/admin/network/dhcp");
 	});
+
+	it("preserves query strings and hashes when mapping compat routes", () => {
+		expect(legacyHref("/admin/system/package-manager?tab=updates#available", "/cgi-bin/luci/admin")).toBe(
+			"/cgi-bin/luci/admin/system/package-manager?tab=updates#available",
+		);
+	});
 });
 
 describe("searchMenu", () => {
@@ -85,5 +91,18 @@ describe("itemTarget", () => {
 				legacy: false,
 			}),
 		).toBe("/legacy?path=%2Fadmin%2Fservices%2Fbanip%2Fallowlist");
+	});
+
+	it("keeps query strings when routing to LuCI compatibility", () => {
+		expect(
+			itemTarget({
+				title: "Software",
+				path: "/admin/system/package-manager?tab=updates",
+				effectiveMode: "legacy",
+				configuredMode: "auto",
+				nativeStatus: "compat",
+				legacy: true,
+			}),
+		).toBe("/legacy?path=%2Fadmin%2Fsystem%2Fpackage-manager%3Ftab%3Dupdates");
 	});
 });
