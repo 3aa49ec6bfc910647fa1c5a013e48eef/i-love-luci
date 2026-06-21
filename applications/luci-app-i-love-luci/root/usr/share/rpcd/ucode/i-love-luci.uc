@@ -47,7 +47,7 @@ const nativeRoutes = {
 	'/admin/network/firewall/snats': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/ipsets': { status: 'supported', nativePath: '/core/firewall' },
 	'/admin/network/firewall/custom': { status: 'supported', nativePath: '/core/firewall' },
-	'/admin/system': { status: 'partial', nativePath: '/core/system' },
+	'/admin/system': { status: 'supported', nativePath: '/core/system' },
 	'/admin/system/system': { status: 'supported', nativePath: '/core/system' },
 	'/admin/system/admin': { status: 'supported', nativePath: '/native/password' },
 	'/admin/system/admin/password': { status: 'supported', nativePath: '/native/password' },
