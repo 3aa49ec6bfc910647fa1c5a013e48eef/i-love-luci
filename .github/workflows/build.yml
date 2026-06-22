@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: read
   pages: write
   id-token: write
@@ -181,3 +181,72 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-22.04
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: v1.0.0-r4
+      RELEASE_NAME: I Love LuCI 1.0.0-r4
+
+    steps:
+      - name: Download package feed artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-artifacts
+          pattern: i-love-luci-stable-*
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+
+          mkdir -p release-upload
+
+          tar -C release-artifacts/i-love-luci-stable-24.10.7-ipk \
+            -czf release-upload/i-love-luci-stable-24.10.7-rockchip-armv8-ipk-feed.tar.gz .
+          tar -C release-artifacts/i-love-luci-stable-25.12.4-apk \
+            -czf release-upload/i-love-luci-stable-25.12.4-rockchip-armv8-apk-feed.tar.gz .
+
+          find release-artifacts -type f \( -name '*.apk' -o -name '*.ipk' \) \
+            -exec cp -a {} release-upload/ \;
+
+          test "$(find release-upload -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 2
+          test "$(find release-upload -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 2
+          test -f release-upload/i-love-luci-stable-24.10.7-rockchip-armv8-ipk-feed.tar.gz
+          test -f release-upload/i-love-luci-stable-25.12.4-rockchip-armv8-apk-feed.tar.gz
+
+          cat > release-notes.md <<'EOF'
+          Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4 on rockchip/armv8.
+
+          Install from the published package feed where possible. Manual installs must install both packages:
+
+          - `i-love-luci-console`
+          - `luci-app-i-love-luci`
+
+          The console helper provides the same-origin authenticated console tunnel used by the React shell.
+          EOF
+
+          find release-upload -maxdepth 1 -type f -print | sort
+
+      - name: Update GitHub Release
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md \
+              --latest
+          else
+            gh release create "${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md \
+              --latest
+          fi
+
+          gh release upload "${RELEASE_TAG}" release-upload/* --clobber
