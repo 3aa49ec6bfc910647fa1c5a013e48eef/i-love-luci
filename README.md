@@ -242,11 +242,18 @@ dist/openwrt/<version>/rockchip-armv8/
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts and publishes the GitHub Pages package feed.
+- `main` builds stable artifacts, publishes the GitHub Pages package feed, and updates the `v1.0.0-r4` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
 
-Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed updates.
+Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+
+The release job uploads:
+
+- signed or unsigned package-feed directories as `.tar.gz` archives for each supported OpenWrt release/format
+- direct `.apk` assets for OpenWrt 25.12/apk
+- direct `.ipk` assets for OpenWrt 24.10/opkg
+- both required packages: `i-love-luci-console` and `luci-app-i-love-luci`
 
 ## OpenWrt Source Integration
 
