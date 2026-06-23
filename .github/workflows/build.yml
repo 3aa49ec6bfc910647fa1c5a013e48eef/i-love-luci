@@ -37,7 +37,7 @@ jobs:
           esac
 
   build:
-    name: OpenWrt ${{ matrix.openwrt_version }} ${{ matrix.package_format }}
+    name: OpenWrt ${{ matrix.openwrt_version }} ${{ matrix.openwrt_target }} ${{ matrix.package_format }}
     runs-on: ubuntu-22.04
 
     strategy:
@@ -48,9 +48,49 @@ jobs:
             openwrt_target: rockchip/armv8
             target_slug: rockchip-armv8
             package_format: ipk
+          - openwrt_version: 24.10.7
+            openwrt_target: ramips/mt7621
+            target_slug: ramips-mt7621
+            package_format: ipk
+          - openwrt_version: 24.10.7
+            openwrt_target: mediatek/filogic
+            target_slug: mediatek-filogic
+            package_format: ipk
+          - openwrt_version: 24.10.7
+            openwrt_target: ipq40xx/generic
+            target_slug: ipq40xx-generic
+            package_format: ipk
+          - openwrt_version: 24.10.7
+            openwrt_target: ath79/generic
+            target_slug: ath79-generic
+            package_format: ipk
+          - openwrt_version: 24.10.7
+            openwrt_target: x86/64
+            target_slug: x86-64
+            package_format: ipk
           - openwrt_version: 25.12.4
             openwrt_target: rockchip/armv8
             target_slug: rockchip-armv8
+            package_format: apk
+          - openwrt_version: 25.12.4
+            openwrt_target: ramips/mt7621
+            target_slug: ramips-mt7621
+            package_format: apk
+          - openwrt_version: 25.12.4
+            openwrt_target: mediatek/filogic
+            target_slug: mediatek-filogic
+            package_format: apk
+          - openwrt_version: 25.12.4
+            openwrt_target: ipq40xx/generic
+            target_slug: ipq40xx-generic
+            package_format: apk
+          - openwrt_version: 25.12.4
+            openwrt_target: ath79/generic
+            target_slug: ath79-generic
+            package_format: apk
+          - openwrt_version: 25.12.4
+            openwrt_target: x86/64
+            target_slug: x86-64
             package_format: apk
 
     steps:
@@ -118,7 +158,7 @@ jobs:
       - name: Upload package feed artifact
         uses: actions/upload-artifact@v7
         with:
-          name: i-love-luci-${{ steps.package-channel.outputs.channel }}-${{ matrix.openwrt_version }}-${{ matrix.package_format }}
+          name: i-love-luci-${{ steps.package-channel.outputs.channel }}-${{ matrix.openwrt_version }}-${{ matrix.target_slug }}-${{ matrix.package_format }}
           path: dist/openwrt/${{ matrix.openwrt_version }}/${{ matrix.target_slug }}/
           if-no-files-found: error
 
@@ -133,6 +173,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
 
@@ -143,35 +186,7 @@ jobs:
           pattern: i-love-luci-stable-*
 
       - name: Prepare public feed site
-        run: |
-          set -euo pipefail
-
-          mkdir -p public/openwrt/24.10.7/rockchip-armv8
-          mkdir -p public/openwrt/25.12.4/rockchip-armv8
-
-          rsync -a page-artifacts/i-love-luci-stable-24.10.7-ipk/ public/openwrt/24.10.7/rockchip-armv8/
-          rsync -a page-artifacts/i-love-luci-stable-25.12.4-apk/ public/openwrt/25.12.4/rockchip-armv8/
-
-          touch public/.nojekyll
-          cat > public/index.html <<'EOF'
-          <!doctype html>
-          <html lang="en">
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>I Love LuCI package feed</title>
-          </head>
-          <body>
-            <h1>I Love LuCI package feed</h1>
-            <ul>
-              <li><a href="openwrt/24.10.7/rockchip-armv8/">OpenWrt 24.10.7 rockchip/armv8 opkg feed</a></li>
-              <li><a href="openwrt/25.12.4/rockchip-armv8/">OpenWrt 25.12.4 rockchip/armv8 apk feed</a></li>
-            </ul>
-          </body>
-          </html>
-          EOF
-
-          find public -type f -print | sort
+        run: python3 scripts/prepare-public-feed.py page-artifacts public
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
@@ -195,6 +210,9 @@ jobs:
       RELEASE_NAME: I Love LuCI 1.0.0-r4
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
       - name: Download package feed artifacts
         uses: actions/download-artifact@v8
         with:
@@ -205,23 +223,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p release-upload
-
-          tar -C release-artifacts/i-love-luci-stable-24.10.7-ipk \
-            -czf release-upload/i-love-luci-stable-24.10.7-rockchip-armv8-ipk-feed.tar.gz .
-          tar -C release-artifacts/i-love-luci-stable-25.12.4-apk \
-            -czf release-upload/i-love-luci-stable-25.12.4-rockchip-armv8-apk-feed.tar.gz .
-
-          find release-artifacts -type f \( -name '*.apk' -o -name '*.ipk' \) \
-            -exec cp -a {} release-upload/ \;
-
-          test "$(find release-upload -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 2
-          test "$(find release-upload -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 2
-          test -f release-upload/i-love-luci-stable-24.10.7-rockchip-armv8-ipk-feed.tar.gz
-          test -f release-upload/i-love-luci-stable-25.12.4-rockchip-armv8-apk-feed.tar.gz
+          python3 scripts/prepare-release-assets.py release-artifacts release-upload
+          test "$(find release-upload -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 12
+          test "$(find release-upload -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 12
+          test "$(find release-upload -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 12
 
           cat > release-notes.md <<'EOF'
-          Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4 on rockchip/armv8.
+          Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4.
+
+          Public package feeds are grouped by OpenWrt release and package architecture. Use the feed path that matches your router package architecture from `apk --print-arch` or `opkg print-architecture`.
 
           Install from the published package feed where possible. Manual installs must install both packages:
 
@@ -249,5 +259,12 @@ jobs:
               --notes-file release-notes.md \
               --latest
           fi
+
+          while IFS= read -r asset; do
+            gh release delete-asset "${RELEASE_TAG}" "${asset}" -y
+          done < <(
+            gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' |
+              grep -E '^(i-love-luci-console|luci-app-i-love-luci|i-love-luci-stable-)' || true
+          )
 
           gh release upload "${RELEASE_TAG}" release-upload/* --clobber

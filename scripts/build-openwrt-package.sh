@@ -218,6 +218,7 @@ cat > "${output_dir}/build-metadata.txt" <<EOF
 packages=$(IFS=,; echo "${package_names[*]}")
 openwrt_version=${OPENWRT_VERSION}
 openwrt_target=${OPENWRT_TARGET}
+target_slug=${target_slug}
 arch_packages=${arch_packages}
 sdk_url=${sdk_url}
 package_format=${PACKAGE_FORMAT}
