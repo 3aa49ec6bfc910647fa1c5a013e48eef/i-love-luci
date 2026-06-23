@@ -206,8 +206,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-r4
-      RELEASE_NAME: I Love LuCI 1.0.0-r4
+      RELEASE_TAG: v1.0.0-r5
+      RELEASE_NAME: I Love LuCI 1.0.0-r5
 
     steps:
       - name: Checkout

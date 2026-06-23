@@ -6,7 +6,7 @@ The current architecture is a wrapper, not a hard fork of LuCI. The package stil
 
 The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-Stable package version: `1.0.0-r4`.
+Stable package version: `1.0.0-r5`.
 
 ## Install Without Building
 
@@ -63,12 +63,12 @@ If you do not want to add the feed, install the matching GitHub Release assets m
 
 ```sh
 # OpenWrt 25.12/apk
-apk add --allow-untrusted ./i-love-luci-console-1.0.0-r4-25.12.4-<target>-<arch>.apk
-apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r4-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r5-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r5-25.12.4-<target>-<arch>.apk
 
 # OpenWrt 24.10/opkg
-opkg install ./i-love-luci-console_1.0.0-r4_<arch>-24.10.7-<target>-<arch>.ipk
-opkg install ./luci-app-i-love-luci_1.0.0-r4_all-24.10.7-<target>-<arch>.ipk
+opkg install ./i-love-luci-console_1.0.0-r5_<arch>-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r5_all-24.10.7-<target>-<arch>.ipk
 ```
 
 ## Screenshots
@@ -256,11 +256,11 @@ dist/openwrt/<version>/<target-slug>/
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts, publishes the GitHub Pages package feeds, and updates the `v1.0.0-r4` GitHub Release assets.
+- `main` builds stable artifacts, publishes the GitHub Pages package feeds, and updates the `v1.0.0-r5` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
 
-Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+Stable package version is `1.0.0-r5`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
 
 The release job uploads:
 
