@@ -6,11 +6,11 @@ The current architecture is a wrapper, not a hard fork of LuCI. The package stil
 
 The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-Stable package version: `1.0.0-r4`.
+Stable package version: `1.0.0-r5`.
 
 ## Install Without Building
 
-Use the published package feed that matches your OpenWrt release and target.
+Use the published package feed that matches your OpenWrt release and package architecture. The UI package is architecture-independent, but the `i-love-luci-console` helper is a compiled binary, so the feed must match the router package architecture.
 
 Public feed root:
 
@@ -19,9 +19,9 @@ Public feed root:
 OpenWrt 25.12/apk:
 
 ```sh
-cat >/etc/apk/repositories.d/i-love-luci.list <<'EOF'
-https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/rockchip-armv8/packages.adb
-EOF
+FEED_ARCH="$(apk --print-arch)"
+
+printf 'https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/%s/packages.adb\n' "$FEED_ARCH" >/etc/apk/repositories.d/i-love-luci.list
 
 apk update --allow-untrusted
 apk add --allow-untrusted luci-app-i-love-luci
@@ -30,9 +30,9 @@ apk add --allow-untrusted luci-app-i-love-luci
 OpenWrt 24.10/opkg:
 
 ```sh
-cat >/etc/opkg/customfeeds.d/i-love-luci.conf <<'EOF'
-src/gz i_love_luci https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/24.10.7/rockchip-armv8
-EOF
+FEED_ARCH="$(opkg print-architecture | awk '$2 != "all" && $2 != "noarch" { arch=$2 } END { print arch }')"
+
+printf 'src/gz i_love_luci https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/24.10.7/%s\n' "$FEED_ARCH" >/etc/opkg/customfeeds.d/i-love-luci.conf
 
 opkg update
 opkg install luci-app-i-love-luci
@@ -46,16 +46,29 @@ http://router-address/cgi-bin/luci/admin/i-love-luci
 
 Feed installs pull the `i-love-luci-console` helper through the `luci-app-i-love-luci` package dependency. Feed signing is not configured yet, so OpenWrt 25.12/apk requires `--allow-untrusted` for this feed.
 
+Current CI publishes feeds for common package architectures using reference SDK targets:
+
+| Package architecture | Reference SDK target | Example device family |
+| --- | --- | --- |
+| `aarch64_generic` | `rockchip/armv8` | Rockchip ARMv8 boards |
+| `aarch64_cortex-a53` | `mediatek/filogic` | MediaTek Filogic routers |
+| `arm_cortex-a7_neon-vfpv4` | `ipq40xx/generic` | Qualcomm IPQ40xx routers |
+| `mips_24kc` | `ath79/generic` | Many older Atheros routers |
+| `mipsel_24kc` | `ramips/mt7621` | MediaTek MT7621 routers |
+| `x86_64` | `x86/64` | x86 routers, VMs, and mini-PCs |
+
+Target aliases are also published for each reference SDK target, but architecture paths are preferred because they avoid choosing the wrong chipset feed.
+
 If you do not want to add the feed, install the matching GitHub Release assets manually. Install both `i-love-luci-console` and `luci-app-i-love-luci`:
 
 ```sh
 # OpenWrt 25.12/apk
-apk add --allow-untrusted ./i-love-luci-console-1.0.0-r4.apk
-apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r4.apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r5-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r5-25.12.4-<target>-<arch>.apk
 
 # OpenWrt 24.10/opkg
-opkg install ./i-love-luci-console_1.0.0-r4_*.ipk
-opkg install ./luci-app-i-love-luci_1.0.0-r4_all.ipk
+opkg install ./i-love-luci-console_1.0.0-r5_<arch>-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r5_all-24.10.7-<target>-<arch>.ipk
 ```
 
 ## Screenshots
@@ -229,30 +242,31 @@ scripts/build-openwrt-package.sh
 Output goes to:
 
 ```text
-dist/openwrt/<version>/rockchip-armv8/
+dist/openwrt/<version>/<target-slug>/
 ```
 
 ## CI Publishing
 
 `.github/workflows/build.yml` builds package feeds for:
 
-- OpenWrt `24.10.7` `rockchip/armv8` as opkg `.ipk`
-- OpenWrt `25.12.4` `rockchip/armv8` as apk `.apk`
+- OpenWrt `24.10.7` as opkg `.ipk`
+- OpenWrt `25.12.4` as apk `.apk`
+- reference SDK targets covering common package architectures: `rockchip/armv8`, `mediatek/filogic`, `ipq40xx/generic`, `ath79/generic`, `ramips/mt7621`, and `x86/64`
 
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts, publishes the GitHub Pages package feed, and updates the `v1.0.0-r4` GitHub Release assets.
+- `main` builds stable artifacts, publishes the GitHub Pages package feeds, and updates the `v1.0.0-r5` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
 
-Stable package version is `1.0.0-r4`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+Stable package version is `1.0.0-r5`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
 
 The release job uploads:
 
-- signed or unsigned package-feed directories as `.tar.gz` archives for each supported OpenWrt release/format
-- direct `.apk` assets for OpenWrt 25.12/apk
-- direct `.ipk` assets for OpenWrt 24.10/opkg
+- unsigned package-feed directories as `.tar.gz` archives for each supported OpenWrt release/package architecture
+- direct `.apk` assets for OpenWrt 25.12/apk with target and architecture suffixes
+- direct `.ipk` assets for OpenWrt 24.10/opkg with target and architecture suffixes
 - both required packages: `i-love-luci-console` and `luci-app-i-love-luci`
 
 ## OpenWrt Source Integration
