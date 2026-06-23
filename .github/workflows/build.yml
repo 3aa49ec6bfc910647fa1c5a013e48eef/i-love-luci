@@ -162,6 +162,34 @@ jobs:
           path: dist/openwrt/${{ matrix.openwrt_version }}/${{ matrix.target_slug }}/
           if-no-files-found: error
 
+  required-24-10:
+    name: OpenWrt 24.10.7 ipk
+    runs-on: ubuntu-22.04
+    needs: build
+    if: always()
+
+    steps:
+      - name: Require all 24.10.7 package builds
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "One or more OpenWrt package builds failed." >&2
+            exit 1
+          fi
+
+  required-25-12:
+    name: OpenWrt 25.12.4 apk
+    runs-on: ubuntu-22.04
+    needs: build
+    if: always()
+
+    steps:
+      - name: Require all 25.12.4 package builds
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "One or more OpenWrt package builds failed." >&2
+            exit 1
+          fi
+
   publish-pages:
     name: Publish package feed
     runs-on: ubuntu-22.04
