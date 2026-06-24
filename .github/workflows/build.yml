@@ -234,8 +234,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-r5
-      RELEASE_NAME: I Love LuCI 1.0.0-r5
+      RELEASE_TAG: v1.0.0-r6
+      RELEASE_NAME: I Love LuCI 1.0.0-r6
 
     steps:
       - name: Checkout
@@ -259,7 +259,7 @@ jobs:
           cat > release-notes.md <<'EOF'
           Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4.
 
-          Public package feeds are grouped by OpenWrt release and package architecture. Use the feed path that matches your router package architecture from `apk --print-arch` or `opkg print-architecture`.
+          Public package feeds are grouped by OpenWrt release and OpenWrt package architecture. Use the feed path that matches `DISTRIB_ARCH` from `/etc/openwrt_release`, or the architecture segment from the official OpenWrt package feed URL.
 
           Install from the published package feed where possible. Manual installs must install both packages:
 

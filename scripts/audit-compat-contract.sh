@@ -61,7 +61,6 @@ package_makefile = Path("applications/luci-app-i-love-luci/Makefile")
 uci_defaults_file = Path("applications/luci-app-i-love-luci/root/etc/uci-defaults/90_luci-app-i-love-luci")
 upgrade_keep_file = Path("applications/luci-app-i-love-luci/root/lib/upgrade/keep.d/luci-app-i-love-luci")
 sysauth_template_files = {
-	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/sysauth.ut"),
 	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
 }
 
