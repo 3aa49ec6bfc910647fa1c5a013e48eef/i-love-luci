@@ -32,7 +32,6 @@ router_expect_scp "${APP_DIR}/htdocs/luci-static/i-love-luci-app/assets/app.css"
 router_expect_scp "${APP_DIR}/htdocs/luci-static/i-love-luci-app/assets/app.js" "${remote_dir}/app.js"
 router_expect_scp "${APP_DIR}/root/usr/share/rpcd/ucode/i-love-luci.uc" "${remote_dir}/i-love-luci.uc"
 router_expect_scp "${APP_DIR}/root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json" "${remote_dir}/luci-app-i-love-luci.json"
-router_expect_scp "${APP_DIR}/root/usr/share/ucode/luci/template/sysauth.ut" "${remote_dir}/sysauth-default.ut"
 router_expect_scp "${APP_DIR}/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut" "${remote_dir}/sysauth-theme.ut"
 
 apply_script="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-deploy.XXXXXX")"
@@ -50,7 +49,6 @@ cp "\${DIR}/app.css" /www/luci-static/i-love-luci-app/assets/app.css
 cp "\${DIR}/app.js" /www/luci-static/i-love-luci-app/assets/app.js
 cp "\${DIR}/i-love-luci.uc" /usr/share/rpcd/ucode/i-love-luci.uc
 cp "\${DIR}/luci-app-i-love-luci.json" /usr/share/rpcd/acl.d/luci-app-i-love-luci.json
-cp "\${DIR}/sysauth-default.ut" /usr/share/ucode/luci/template/sysauth.ut
 cp "\${DIR}/sysauth-theme.ut" /usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut
 chmod 0644 \\
 	/www/luci-static/i-love-luci-app/index.html \\
@@ -58,7 +56,6 @@ chmod 0644 \\
 	/www/luci-static/i-love-luci-app/assets/app.js \\
 	/usr/share/rpcd/ucode/i-love-luci.uc \\
 	/usr/share/rpcd/acl.d/luci-app-i-love-luci.json \\
-	/usr/share/ucode/luci/template/sysauth.ut \\
 	/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut
 /etc/init.d/rpcd restart
 ubus wait_for luci.iloveluci

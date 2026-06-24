@@ -34,6 +34,9 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 declare -a package_names package_dirs package_subdirs
+readonly CONFLICT_PACKAGE_ROOT_FILES=(
+	"usr/share/ucode/luci/template/sysauth.ut"
+)
 
 luci_subdir_for_package() {
 	case "$1" in
@@ -79,6 +82,16 @@ for package_spec in ${PACKAGE_SPECS}; do
 	package_names+=("${package_name}")
 	package_dirs+=("${package_dir}")
 	package_subdirs+=("$(feed_subdir_for_package_spec "${package_name}" "${package_spec#*:}")")
+done
+
+for i in "${!package_names[@]}"; do
+	for conflict_file in "${CONFLICT_PACKAGE_ROOT_FILES[@]}"; do
+		if [ -e "${package_dirs[$i]}/root/${conflict_file}" ]; then
+			echo "${package_names[$i]} ships ${conflict_file}, which is owned by luci-base on apk systems." >&2
+			echo "Use a theme-scoped template or package-owned path instead." >&2
+			exit 1
+		fi
+	done
 done
 
 for i in "${!package_names[@]}"; do
