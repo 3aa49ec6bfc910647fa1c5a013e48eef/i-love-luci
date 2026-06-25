@@ -131,6 +131,7 @@ jobs:
             libncurses5-dev \
             libncursesw5-dev \
             libssl-dev \
+            openssl \
             python3 \
             python3-distutils \
             rsync \
@@ -152,6 +153,8 @@ jobs:
           PACKAGE_FORMAT: ${{ matrix.package_format }}
           PACKAGE_SPECS: luci-app-i-love-luci:applications/luci-app-i-love-luci i-love-luci-console:utils/i-love-luci-console
           PACKAGE_RELEASE: ${{ steps.package-channel.outputs.release }}
+          APK_SIGNING_KEY: ${{ secrets.ILOVE_LUCI_APK_SIGNING_KEY }}
+          REQUIRE_APK_SIGNING: ${{ github.ref_name == 'main' && matrix.package_format == 'apk' }}
           JOBS: 1
         run: scripts/build-openwrt-package.sh
 
@@ -234,8 +237,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-r6
-      RELEASE_NAME: I Love LuCI 1.0.0-r6
+      RELEASE_TAG: v1.0.0-r7
+      RELEASE_NAME: I Love LuCI 1.0.0-r7
 
     steps:
       - name: Checkout
@@ -259,7 +262,7 @@ jobs:
           cat > release-notes.md <<'EOF'
           Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4.
 
-          Public package feeds are grouped by OpenWrt release and OpenWrt package architecture. Use the feed path that matches `DISTRIB_ARCH` from `/etc/openwrt_release`, or the architecture segment from the official OpenWrt package feed URL.
+          Public package feeds are grouped by OpenWrt release and OpenWrt package architecture. OpenWrt 25.12 apk feeds are signed; install the published `i-love-luci-apk-public-key.pem` into `/etc/apk/keys/` before adding the feed.
 
           Install from the published package feed where possible. Manual installs must install both packages:
 

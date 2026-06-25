@@ -47,6 +47,7 @@ def main():
 
     package_count = 0
     feed_count = 0
+    key_count = 0
 
     for artifact_dir in sorted(p for p in artifact_root.iterdir() if p.is_dir()):
         metadata_path = artifact_dir / "build-metadata.txt"
@@ -67,6 +68,13 @@ def main():
         for package_file in sorted(list(artifact_dir.glob("*.apk")) + list(artifact_dir.glob("*.ipk"))):
             shutil.copy2(package_file, release_dir / suffix_package_name(package_file, suffix))
             package_count += 1
+
+        public_key = artifact_dir / "i-love-luci-apk-public-key.pem"
+        if public_key.is_file():
+            key_dest = release_dir / "i-love-luci-apk-public-key.pem"
+            if not key_dest.exists():
+                shutil.copy2(public_key, key_dest)
+                key_count += 1
 
     if feed_count == 0 or package_count == 0:
         print(f"No release assets prepared from {artifact_root}", file=sys.stderr)
