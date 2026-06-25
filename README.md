@@ -6,7 +6,7 @@ The current architecture is a wrapper, not a hard fork of LuCI. The package stil
 
 The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-Stable package version: `1.0.0-r7`.
+Stable package version: `1.0.0-r8`.
 
 ## Install Without Building
 
@@ -77,16 +77,18 @@ Current CI publishes feeds for common package architectures using reference SDK 
 
 Target aliases are also published for each reference SDK target, but architecture paths are preferred because they avoid choosing the wrong chipset feed.
 
-If you do not want to add the feed, install the matching GitHub Release assets manually. Install both `i-love-luci-console` and `luci-app-i-love-luci`:
+If you do not want to add the feed, install the matching GitHub Release assets manually. Install `i-love-luci-console`, `luci-theme-i-love-luci`, and `luci-app-i-love-luci`:
 
 ```sh
 # OpenWrt 25.12/apk
-apk add --allow-untrusted ./i-love-luci-console-1.0.0-r7-25.12.4-<target>-<arch>.apk
-apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r7-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r8-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-theme-i-love-luci-1.0.0-r8-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r8-25.12.4-<target>-<arch>.apk
 
 # OpenWrt 24.10/opkg
-opkg install ./i-love-luci-console_1.0.0-r7_<arch>-24.10.7-<target>-<arch>.ipk
-opkg install ./luci-app-i-love-luci_1.0.0-r7_all-24.10.7-<target>-<arch>.ipk
+opkg install ./i-love-luci-console_1.0.0-r8_<arch>-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-theme-i-love-luci_1.0.0-r8_all-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r8_all-24.10.7-<target>-<arch>.ipk
 ```
 
 ## Screenshots
@@ -204,7 +206,9 @@ applications/luci-app-i-love-luci/
   root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json
   root/usr/share/rpcd/ucode/i-love-luci.uc
   frontend/shell/
-  ucode/template/i-love-luci/app.ut
+themes/luci-theme-i-love-luci/
+  Makefile
+  root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut
 ```
 
 ## Build Frontend
@@ -274,12 +278,12 @@ dist/openwrt/<version>/<target-slug>/
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts, publishes signed GitHub Pages package feeds, and updates the `v1.0.0-r7` GitHub Release assets.
+- `main` builds stable artifacts, publishes signed GitHub Pages package feeds, and updates the `v1.0.0-r8` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
 - Main APK publishing requires the `ILOVE_LUCI_APK_SIGNING_KEY` repository secret. The corresponding public key is published as `i-love-luci-apk-public-key.pem` beside each OpenWrt 25.12 feed.
 
-Stable package version is `1.0.0-r7`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+Stable package version is `1.0.0-r8`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
 
 The release job uploads:
 
@@ -287,7 +291,7 @@ The release job uploads:
 - the APK feed public key for OpenWrt 25.12/apk
 - direct `.apk` assets for OpenWrt 25.12/apk with target and architecture suffixes
 - direct `.ipk` assets for OpenWrt 24.10/opkg with target and architecture suffixes
-- both required packages: `i-love-luci-console` and `luci-app-i-love-luci`
+- all required packages: `i-love-luci-console`, `luci-theme-i-love-luci`, and `luci-app-i-love-luci`
 
 ## OpenWrt Source Integration
 
@@ -295,14 +299,18 @@ To build inside an OpenWrt source tree, copy or overlay both packages into the L
 
 ```sh
 mkdir -p feeds/luci/applications/luci-app-i-love-luci
+mkdir -p feeds/luci/themes/luci-theme-i-love-luci
 mkdir -p feeds/luci/utils/i-love-luci-console
 rsync -a applications/luci-app-i-love-luci/ feeds/luci/applications/luci-app-i-love-luci/
+rsync -a themes/luci-theme-i-love-luci/ feeds/luci/themes/luci-theme-i-love-luci/
 rsync -a utils/i-love-luci-console/ feeds/luci/utils/i-love-luci-console/
 ./scripts/feeds update luci
 ./scripts/feeds install i-love-luci-console
+./scripts/feeds install luci-theme-i-love-luci
 ./scripts/feeds install luci-app-i-love-luci
 make menuconfig
 make package/feeds/luci/i-love-luci-console/compile V=s
+make package/feeds/luci/luci-theme-i-love-luci/compile V=s
 make package/feeds/luci/luci-app-i-love-luci/compile V=s
 ```
 
@@ -335,6 +343,7 @@ Full package install, useful when validating release artifacts:
 ```sh
 scripts/router-install-package.sh \
   dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk \
+  dist/openwrt/25.12.4/rockchip-armv8/luci-theme-i-love-luci-*.apk \
   dist/openwrt/25.12.4/rockchip-armv8/luci-app-i-love-luci-*.apk
 ```
 
@@ -401,7 +410,7 @@ uci commit uhttpd
 OpenWrt 25.12/apk:
 
 ```sh
-apk del luci-app-i-love-luci i-love-luci-console
+apk del luci-app-i-love-luci luci-theme-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart
@@ -410,7 +419,7 @@ rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 OpenWrt 24.10/opkg:
 
 ```sh
-opkg remove luci-app-i-love-luci i-love-luci-console
+opkg remove luci-app-i-love-luci luci-theme-i-love-luci i-love-luci-console
 rm -rf /tmp/luci-indexcache /tmp/luci-modulecache
 /etc/init.d/rpcd reload
 /etc/init.d/uhttpd restart

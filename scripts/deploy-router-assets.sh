@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "${ROOT_DIR}/scripts/lib/router-common.sh"
 
 APP_DIR="${ROOT_DIR}/applications/luci-app-i-love-luci"
+THEME_DIR="${ROOT_DIR}/themes/luci-theme-i-love-luci"
 BUILD=1
 
 for arg in "$@"; do
@@ -32,7 +33,7 @@ router_expect_scp "${APP_DIR}/htdocs/luci-static/i-love-luci-app/assets/app.css"
 router_expect_scp "${APP_DIR}/htdocs/luci-static/i-love-luci-app/assets/app.js" "${remote_dir}/app.js"
 router_expect_scp "${APP_DIR}/root/usr/share/rpcd/ucode/i-love-luci.uc" "${remote_dir}/i-love-luci.uc"
 router_expect_scp "${APP_DIR}/root/usr/share/rpcd/acl.d/luci-app-i-love-luci.json" "${remote_dir}/luci-app-i-love-luci.json"
-router_expect_scp "${APP_DIR}/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut" "${remote_dir}/sysauth-theme.ut"
+router_expect_scp "${THEME_DIR}/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut" "${remote_dir}/sysauth-theme.ut"
 
 apply_script="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-deploy.XXXXXX")"
 trap 'rm -f "${apply_script}"' EXIT
