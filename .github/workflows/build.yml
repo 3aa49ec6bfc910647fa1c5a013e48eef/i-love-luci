@@ -151,7 +151,7 @@ jobs:
           OPENWRT_VERSION: ${{ matrix.openwrt_version }}
           OPENWRT_TARGET: ${{ matrix.openwrt_target }}
           PACKAGE_FORMAT: ${{ matrix.package_format }}
-          PACKAGE_SPECS: luci-app-i-love-luci:applications/luci-app-i-love-luci i-love-luci-console:utils/i-love-luci-console
+          PACKAGE_SPECS: luci-theme-i-love-luci:themes/luci-theme-i-love-luci luci-app-i-love-luci:applications/luci-app-i-love-luci i-love-luci-console:utils/i-love-luci-console
           PACKAGE_RELEASE: ${{ steps.package-channel.outputs.release }}
           APK_SIGNING_KEY: ${{ secrets.ILOVE_LUCI_APK_SIGNING_KEY }}
           REQUIRE_APK_SIGNING: ${{ github.ref_name == 'main' && matrix.package_format == 'apk' }}
@@ -237,8 +237,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-r7
-      RELEASE_NAME: I Love LuCI 1.0.0-r7
+      RELEASE_TAG: v1.0.0-r8
+      RELEASE_NAME: I Love LuCI 1.0.0-r8
 
     steps:
       - name: Checkout
@@ -256,8 +256,8 @@ jobs:
 
           python3 scripts/prepare-release-assets.py release-artifacts release-upload
           test "$(find release-upload -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 12
-          test "$(find release-upload -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 12
-          test "$(find release-upload -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 12
+          test "$(find release-upload -maxdepth 1 -type f -name '*.apk' | wc -l)" -eq 18
+          test "$(find release-upload -maxdepth 1 -type f -name '*.ipk' | wc -l)" -eq 18
 
           cat > release-notes.md <<'EOF'
           Stable I Love LuCI package release for OpenWrt 24.10.7 and 25.12.4.
@@ -267,6 +267,7 @@ jobs:
           Install from the published package feed where possible. Manual installs must install both packages:
 
           - `i-love-luci-console`
+          - `luci-theme-i-love-luci`
           - `luci-app-i-love-luci`
 
           The console helper provides the same-origin authenticated console tunnel used by the React shell.
@@ -295,7 +296,7 @@ jobs:
             gh release delete-asset "${RELEASE_TAG}" "${asset}" -y
           done < <(
             gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' |
-              grep -E '^(i-love-luci-console|luci-app-i-love-luci|i-love-luci-stable-)' || true
+              grep -E '^(i-love-luci-console|luci-theme-i-love-luci|luci-app-i-love-luci|i-love-luci-apk-public-key|i-love-luci-stable-)' || true
           )
 
           gh release upload "${RELEASE_TAG}" release-upload/* --clobber

@@ -61,7 +61,7 @@ package_makefile = Path("applications/luci-app-i-love-luci/Makefile")
 uci_defaults_file = Path("applications/luci-app-i-love-luci/root/etc/uci-defaults/90_luci-app-i-love-luci")
 upgrade_keep_file = Path("applications/luci-app-i-love-luci/root/lib/upgrade/keep.d/luci-app-i-love-luci")
 sysauth_template_files = {
-	Path("applications/luci-app-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
+	Path("themes/luci-theme-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
 }
 
 allowed_archived = [
@@ -298,6 +298,8 @@ for base in scan_roots:
 		if relative_path == package_makefile:
 			if "+i-love-luci-console" not in text:
 				failures.append(f"{relative_path}: release package must depend on the console tunnel helper")
+			if "+luci-theme-i-love-luci" not in text:
+				failures.append(f"{relative_path}: release package must depend on the theme login package")
 			if "+ttyd" in text:
 				failures.append(f"{relative_path}: release package must not install direct ttyd by default")
 		if relative_path == uci_defaults_file:
@@ -324,10 +326,13 @@ for base in scan_roots:
 		if relative_path == readme_file:
 			for required_readme_term in (
 				"utils/i-love-luci-console/",
+				"themes/luci-theme-i-love-luci/",
 				"./scripts/feeds install i-love-luci-console",
+				"./scripts/feeds install luci-theme-i-love-luci",
 				"dist/openwrt/25.12.4/rockchip-armv8/i-love-luci-console-*.apk",
-				"apk del luci-app-i-love-luci i-love-luci-console",
-				"opkg remove luci-app-i-love-luci i-love-luci-console",
+				"dist/openwrt/25.12.4/rockchip-armv8/luci-theme-i-love-luci-*.apk",
+				"apk del luci-app-i-love-luci luci-theme-i-love-luci i-love-luci-console",
+				"opkg remove luci-app-i-love-luci luci-theme-i-love-luci i-love-luci-console",
 				"## Route Model",
 				"Unknown or newly installed `luci-app-*` routes",
 				"LuCI compat bridge",
