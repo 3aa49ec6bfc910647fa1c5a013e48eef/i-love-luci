@@ -9,6 +9,9 @@ OPENWRT_TARGET="${OPENWRT_TARGET:-rockchip/armv8}"
 PACKAGE_FORMAT="${PACKAGE_FORMAT:-auto}"
 PACKAGE_RELEASE="${PACKAGE_RELEASE:-}"
 BUILD_FRONTEND="${BUILD_FRONTEND:-auto}"
+APK_SIGNING_KEY="${APK_SIGNING_KEY:-}"
+APK_SIGNING_KEY_FILE="${APK_SIGNING_KEY_FILE:-}"
+REQUIRE_APK_SIGNING="${REQUIRE_APK_SIGNING:-false}"
 WORK_DIR="${WORK_DIR:-build/sdk-ci}"
 OUT_DIR="${OUT_DIR:-dist/openwrt}"
 JOBS="${JOBS:-1}"
@@ -24,6 +27,14 @@ absolute_path() {
 
 WORK_DIR="$(absolute_path "${WORK_DIR}")"
 OUT_DIR="$(absolute_path "${OUT_DIR}")"
+apk_signing_key_temp=""
+
+cleanup() {
+	if [ -n "${apk_signing_key_temp}" ]; then
+		rm -f "${apk_signing_key_temp}"
+	fi
+}
+trap cleanup EXIT
 
 case "$(uname -s)-$(uname -m)" in
 	Linux-x86_64) ;;
@@ -83,6 +94,20 @@ for package_spec in ${PACKAGE_SPECS}; do
 	package_dirs+=("${package_dir}")
 	package_subdirs+=("$(feed_subdir_for_package_spec "${package_name}" "${package_spec#*:}")")
 done
+
+apk_signing_key_path=""
+if [ -n "${APK_SIGNING_KEY_FILE}" ]; then
+	apk_signing_key_path="$(absolute_path "${APK_SIGNING_KEY_FILE}")"
+	if [ ! -f "${apk_signing_key_path}" ]; then
+		echo "APK_SIGNING_KEY_FILE not found: ${apk_signing_key_path}" >&2
+		exit 1
+	fi
+elif [ -n "${APK_SIGNING_KEY}" ]; then
+	apk_signing_key_temp="$(mktemp "${TMPDIR:-/tmp}/i-love-luci-apk-signing.XXXXXX")"
+	chmod 0600 "${apk_signing_key_temp}"
+	printf '%s\n' "${APK_SIGNING_KEY}" > "${apk_signing_key_temp}"
+	apk_signing_key_path="${apk_signing_key_temp}"
+fi
 
 for i in "${!package_names[@]}"; do
 	for conflict_file in "${CONFLICT_PACKAGE_ROOT_FILES[@]}"; do
@@ -253,12 +278,24 @@ fi
 if printf '%s\n' "${package_files[@]}" | grep -q '\.apk$'; then
 	(
 		cd "${output_dir}"
-		"${sdk_dir}/staging_dir/host/bin/apk" mkndx \
+		declare -a apk_mkndx_args=(
+			"${sdk_dir}/staging_dir/host/bin/apk"
+			mkndx
 			--root "${sdk_dir}" \
 			--keys-dir "${sdk_dir}" \
 			--allow-untrusted \
-			--output packages.adb \
-			*.apk
+			--output packages.adb
+		)
+		if [ -n "${apk_signing_key_path}" ]; then
+			openssl pkey -in "${apk_signing_key_path}" -pubout -out i-love-luci-apk-public-key.pem
+			apk_mkndx_args+=(--sign "${apk_signing_key_path}")
+		elif [ "${REQUIRE_APK_SIGNING}" = "1" ] || [ "${REQUIRE_APK_SIGNING}" = "true" ] || [ "${REQUIRE_APK_SIGNING}" = "yes" ]; then
+			echo "APK signing is required but no APK_SIGNING_KEY or APK_SIGNING_KEY_FILE was provided." >&2
+			exit 1
+		else
+			echo "WARNING: building unsigned apk package feed; do not publish this feed for normal router use." >&2
+		fi
+		"${apk_mkndx_args[@]}" *.apk
 		"${sdk_dir}/staging_dir/host/bin/apk" adbdump --format json packages.adb |
 			"${sdk_dir}/scripts/make-index-json.py" -f apk -a "${arch_packages}" - > index.json
 	)

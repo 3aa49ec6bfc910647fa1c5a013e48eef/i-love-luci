@@ -6,7 +6,7 @@ The current architecture is a wrapper, not a hard fork of LuCI. The package stil
 
 The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-Stable package version: `1.0.0-r6`.
+Stable package version: `1.0.0-r7`.
 
 ## Install Without Building
 
@@ -22,11 +22,14 @@ OpenWrt 25.12/apk:
 . /etc/openwrt_release
 FEED_ARCH="${DISTRIB_ARCH:-$(sed -n 's#.*/packages/\([^/]*\)/[^/]*/packages\.adb.*#\1#p' /etc/apk/repositories.d/distfeeds.list | head -n 1)}"
 test -n "$FEED_ARCH"
+FEED_BASE="https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/$FEED_ARCH"
 
-printf 'https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/%s/packages.adb\n' "$FEED_ARCH" >/etc/apk/repositories.d/i-love-luci.list
+mkdir -p /etc/apk/keys
+curl -fsSL "$FEED_BASE/i-love-luci-apk-public-key.pem" >/etc/apk/keys/i-love-luci-apk-public-key.pem
+printf '%s/packages.adb\n' "$FEED_BASE" >/etc/apk/repositories.d/i-love-luci.list
 
-apk update --allow-untrusted
-apk add --allow-untrusted luci-app-i-love-luci
+apk update
+apk add luci-app-i-love-luci
 ```
 
 OpenWrt 24.10/opkg:
@@ -46,7 +49,20 @@ Then open:
 http://router-address/cgi-bin/luci/admin/i-love-luci
 ```
 
-Feed installs pull the `i-love-luci-console` helper through the `luci-app-i-love-luci` package dependency. Feed signing is not configured yet, so OpenWrt 25.12/apk requires `--allow-untrusted` for this feed.
+Feed installs pull the `i-love-luci-console` helper through the `luci-app-i-love-luci` package dependency. OpenWrt 25.12/apk feeds are signed with the I Love LuCI APK feed key. Install the public key before adding the feed so normal LuCI package manager operations can run without `--allow-untrusted`.
+
+Existing users who added the unsigned `1.0.0-r6` feed should install the key and refresh the feed:
+
+```sh
+. /etc/openwrt_release
+FEED_ARCH="${DISTRIB_ARCH:-$(sed -n 's#.*/packages/\([^/]*\)/[^/]*/packages\.adb.*#\1#p' /etc/apk/repositories.d/distfeeds.list | head -n 1)}"
+FEED_BASE="https://3aa49ec6bfc910647fa1c5a013e48eef.github.io/i-love-luci/openwrt/25.12.4/$FEED_ARCH"
+
+mkdir -p /etc/apk/keys
+curl -fsSL "$FEED_BASE/i-love-luci-apk-public-key.pem" >/etc/apk/keys/i-love-luci-apk-public-key.pem
+printf '%s/packages.adb\n' "$FEED_BASE" >/etc/apk/repositories.d/i-love-luci.list
+apk update
+```
 
 Current CI publishes feeds for common package architectures using reference SDK targets:
 
@@ -65,12 +81,12 @@ If you do not want to add the feed, install the matching GitHub Release assets m
 
 ```sh
 # OpenWrt 25.12/apk
-apk add --allow-untrusted ./i-love-luci-console-1.0.0-r6-25.12.4-<target>-<arch>.apk
-apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r6-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r7-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r7-25.12.4-<target>-<arch>.apk
 
 # OpenWrt 24.10/opkg
-opkg install ./i-love-luci-console_1.0.0-r6_<arch>-24.10.7-<target>-<arch>.ipk
-opkg install ./luci-app-i-love-luci_1.0.0-r6_all-24.10.7-<target>-<arch>.ipk
+opkg install ./i-love-luci-console_1.0.0-r7_<arch>-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r7_all-24.10.7-<target>-<arch>.ipk
 ```
 
 ## Screenshots
@@ -258,15 +274,17 @@ dist/openwrt/<version>/<target-slug>/
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts, publishes the GitHub Pages package feeds, and updates the `v1.0.0-r6` GitHub Release assets.
+- `main` builds stable artifacts, publishes signed GitHub Pages package feeds, and updates the `v1.0.0-r7` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
+- Main APK publishing requires the `ILOVE_LUCI_APK_SIGNING_KEY` repository secret. The corresponding public key is published as `i-love-luci-apk-public-key.pem` beside each OpenWrt 25.12 feed.
 
-Stable package version is `1.0.0-r6`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+Stable package version is `1.0.0-r7`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
 
 The release job uploads:
 
-- unsigned package-feed directories as `.tar.gz` archives for each supported OpenWrt release/package architecture
+- package-feed directories as `.tar.gz` archives for each supported OpenWrt release/package architecture
+- the APK feed public key for OpenWrt 25.12/apk
 - direct `.apk` assets for OpenWrt 25.12/apk with target and architecture suffixes
 - direct `.ipk` assets for OpenWrt 24.10/opkg with target and architecture suffixes
 - both required packages: `i-love-luci-console` and `luci-app-i-love-luci`
