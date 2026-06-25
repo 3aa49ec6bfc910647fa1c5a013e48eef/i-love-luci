@@ -237,8 +237,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: v1.0.0-r8
-      RELEASE_NAME: I Love LuCI 1.0.0-r8
+      RELEASE_TAG: v1.0.0-r9
+      RELEASE_NAME: I Love LuCI 1.0.0-r9
 
     steps:
       - name: Checkout
@@ -264,7 +264,7 @@ jobs:
 
           Public package feeds are grouped by OpenWrt release and OpenWrt package architecture. OpenWrt 25.12 apk feeds are signed; install the published `i-love-luci-apk-public-key.pem` into `/etc/apk/keys/` before adding the feed.
 
-          Install from the published package feed where possible. Manual installs must install both packages:
+          Install from the published package feed where possible. Manual installs must install all required packages:
 
           - `i-love-luci-console`
           - `luci-theme-i-love-luci`

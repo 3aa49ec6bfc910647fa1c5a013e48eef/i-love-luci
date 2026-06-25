@@ -60,8 +60,13 @@ router_install_file = Path("scripts/router-install-package.sh")
 package_makefile = Path("applications/luci-app-i-love-luci/Makefile")
 uci_defaults_file = Path("applications/luci-app-i-love-luci/root/etc/uci-defaults/90_luci-app-i-love-luci")
 upgrade_keep_file = Path("applications/luci-app-i-love-luci/root/lib/upgrade/keep.d/luci-app-i-love-luci")
-sysauth_template_files = {
+theme_package_files = {
+	Path("themes/luci-theme-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/header.ut"),
+	Path("themes/luci-theme-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/footer.ut"),
 	Path("themes/luci-theme-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"),
+	Path("themes/luci-theme-i-love-luci/root/www/luci-static/i-love-luci/cascade.css"),
+	Path("themes/luci-theme-i-love-luci/root/www/luci-static/i-love-luci/logo.svg"),
+	Path("themes/luci-theme-i-love-luci/root/www/luci-static/resources/menu-i-love-luci.js"),
 }
 
 allowed_archived = [
@@ -70,6 +75,10 @@ allowed_archived = [
 ]
 
 failures = []
+
+for required_theme_file in theme_package_files:
+	if not (root / required_theme_file).exists():
+		failures.append(f"{required_theme_file}: theme package file missing")
 
 def iter_files(path: Path):
 	if path.is_file():
@@ -97,7 +106,7 @@ for base in scan_roots:
 			and relative_path not in {package_makefile, uci_defaults_file, upgrade_keep_file}
 		):
 			continue
-		if relative_path in sysauth_template_files:
+		if relative_path == Path("themes/luci-theme-i-love-luci/root/usr/share/ucode/luci/template/themes/i-love-luci/sysauth.ut"):
 			for required in (
 				'data-iloveluci-login="true"',
 				"/luci-static/i-love-luci-app/assets/app.css",
