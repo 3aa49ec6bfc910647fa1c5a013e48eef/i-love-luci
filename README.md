@@ -8,6 +8,12 @@ The router console uses the `i-love-luci-console` helper. The helper owns PTY se
 
 Stable package version: `1.0.0-r10`.
 
+## AI Disclosure
+
+This project was written almost entirely with AI assistance and without opening an IDE for most changes. The generated output was judged useful enough to publish in case others can benefit from it.
+
+The code has not been designed as a maintainable project for other people to take over. Do not use it for critical systems without first understanding what the code does, how it integrates with LuCI/OpenWrt, and what failure modes it may introduce.
+
 ## Install Without Building
 
 Use the published package feed that matches your OpenWrt release and package architecture. The UI package is architecture-independent, but the `i-love-luci-console` helper is a compiled binary, so the feed must match the router package architecture.
