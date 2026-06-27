@@ -1,12 +1,11 @@
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Navigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { legacyTarget } from "@/lib/service-compat";
 import {
 	getCoreSettings,
 	getDashboardStatus,
@@ -38,7 +37,6 @@ import {
 	saveNetworkRoutes,
 	saveSystemSettings,
 	saveUhttpdCertDefaults,
-	runNetworkInterfaceAction,
 	syncSystemTime,
 	type ConfigSection,
 	type CoreSettings,
@@ -65,7 +63,6 @@ import {
 	type FirewallZone,
 	type LuciUiSettingsInput,
 	type NetworkDeviceConfig,
-	type NetworkInterfaceActionResult,
 	type NetworkInterfaceConfig,
 	type NetworkInterfaceStatus,
 	type OdhcpdConfigInput,
@@ -117,14 +114,10 @@ export function CoreSettingsPage() {
 	const params = useParams();
 	const page = normalizePage(params.page);
 
-	if (page === "network") {
-		return <Navigate replace to={legacyTarget("/admin/network/network")} />;
-	}
-
 	return <CoreSettingsContent page={page} />;
 }
 
-function CoreSettingsContent({ page }: { page: Exclude<CorePage, "network"> }) {
+function CoreSettingsContent({ page }: { page: CorePage }) {
 	const meta = pageMeta[page];
 	const [settings, setSettings] = useState<CoreSettings | null>(null);
 	const [dashboard, setDashboard] = useState<DashboardStatus | null>(null);
@@ -163,6 +156,7 @@ function CoreSettingsContent({ page }: { page: Exclude<CorePage, "network"> }) {
 				</div>
 			</header>
 
+			{page === "network" && settings ? <NetworkInterfacesSummary dashboard={dashboard} settings={settings} /> : null}
 			{page === "network-routes" && settings ? <NetworkRoutesSummary onSettingsChange={setSettings} settings={settings} /> : null}
 			{page === "network-routes" && exposeNetworkAdapterEvidence && settings ? (
 				<NetworkSummary dashboard={dashboard} onSettingsChange={setSettings} settings={settings} />
@@ -6217,6 +6211,108 @@ function NetworkSummary({
 	);
 }
 
+function NetworkInterfacesSummary({ dashboard, settings }: { dashboard: DashboardStatus | null; settings: CoreSettings }) {
+	const interfaces = [...(dashboard?.interfaces ?? [])].sort(sortNetworkInterfaces);
+	const devices = dashboard?.devices ?? {};
+	const highlightedInterfaces = interfaces.filter(isPriorityNetworkInterface);
+	const summaryInterfaces = highlightedInterfaces.length ? highlightedInterfaces : interfaces.slice(0, 3);
+	const configInterfaces = settings.network.filter((section) => section.type === "interface");
+
+	return (
+		<div className="grid gap-5">
+			<section className="grid gap-3">
+				<div className="flex items-center justify-between gap-3">
+					<div>
+						<h2 className="text-base font-semibold">Active summary</h2>
+						<p className="text-sm text-muted-foreground">WAN-like, default-route, and currently up interfaces shown first.</p>
+					</div>
+					<span className="text-xs text-muted-foreground">{interfaces.length || configInterfaces.length} interfaces</span>
+				</div>
+				{summaryInterfaces.length ? (
+					<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+						{summaryInterfaces.map((iface) => (
+							<InterfaceSummaryCard devices={devices} iface={iface} key={interfaceKey(iface)} />
+						))}
+					</div>
+				) : (
+					<div className="rounded-md border bg-card p-4 text-sm text-muted-foreground">
+						No live interface status reported. UCI interface configuration is still listed below.
+					</div>
+				)}
+			</section>
+			{interfaces.length ? <InterfaceStatusTable devices={devices} interfaces={interfaces} /> : null}
+		</div>
+	);
+}
+
+function InterfaceSummaryCard({
+	devices,
+	iface,
+}: {
+	devices: DashboardStatus["devices"];
+	iface: NetworkInterfaceStatus;
+}) {
+	const name = interfaceName(iface);
+	const state = interfaceState(iface, devices);
+	const addresses = getInterfaceAddresses(iface);
+	const dnsServers = getInterfaceDnsServers(iface);
+	const device = interfaceDeviceName(iface);
+
+	return (
+		<div className="grid gap-3 rounded-md border bg-card p-4">
+			<div className="flex min-w-0 items-start justify-between gap-3">
+				<div className="min-w-0">
+					<div className="truncate text-sm font-semibold">{name}</div>
+					<div className="mt-1 text-xs text-muted-foreground">
+						{iface.proto ?? "unknown"} on {device ?? "none"}
+					</div>
+				</div>
+				<Badge className={state.active ? "text-primary" : ""}>{state.label}</Badge>
+			</div>
+			<div className="flex flex-wrap gap-2">
+				{hasDefaultRoute(iface) ? <Badge>default route</Badge> : null}
+				{isWanLikeInterface(iface) ? <Badge>WAN-like</Badge> : null}
+				{iface.dynamic ? <Badge>dynamic</Badge> : null}
+				{iface.available === false ? <Badge>unavailable</Badge> : null}
+			</div>
+			<div className="grid gap-2 text-xs">
+				<InterfaceSummaryLine label="Uptime" value={formatUptime(iface.uptime)} />
+				<InterfaceSummaryList label="Addresses" values={addresses} />
+				<InterfaceSummaryList label="DNS" values={dnsServers} />
+			</div>
+		</div>
+	);
+}
+
+function InterfaceSummaryLine({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+			<span className="font-medium text-muted-foreground">{label}</span>
+			<span className="min-w-0 break-words font-mono">{value}</span>
+		</div>
+	);
+}
+
+function InterfaceSummaryList({ label, values }: { label: string; values: string[] }) {
+	return (
+		<div className="grid gap-1 sm:grid-cols-[5rem_minmax(0,1fr)]">
+			<span className="font-medium text-muted-foreground">{label}</span>
+			{values.length ? (
+				<div className="grid min-w-0 gap-1 font-mono">
+					{values.slice(0, 4).map((value) => (
+						<span className="min-w-0 break-words" key={`${label}.${value}`}>
+							{value}
+						</span>
+					))}
+					{values.length > 4 ? <span className="text-muted-foreground">+{values.length - 4} more</span> : null}
+				</div>
+			) : (
+				<span className="text-muted-foreground">none</span>
+			)}
+		</div>
+	);
+}
+
 function NetworkRoutesSummary({
 	onSettingsChange,
 	settings,
@@ -7371,24 +7467,13 @@ function PolicyRuleEditor({
 	);
 }
 
-function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStatus[] }) {
-	const [actionBusy, setActionBusy] = useState<string | null>(null);
-	const [actionResult, setActionResult] = useState<NetworkInterfaceActionResult | null>(null);
-
-	async function runStatus(name: string) {
-		setActionBusy(name);
-		const result = await runNetworkInterfaceAction(name, "status");
-		setActionResult(result);
-		setActionBusy(null);
-
-		if (result.ok) {
-			toast.success(result.message);
-		}
-		else {
-			toast.error(result.message);
-		}
-	}
-
+function InterfaceStatusTable({
+	devices = {},
+	interfaces,
+}: {
+	devices?: DashboardStatus["devices"];
+	interfaces: NetworkInterfaceStatus[];
+}) {
 	return (
 		<section className="grid gap-3">
 			<div className="flex items-center justify-between gap-3">
@@ -7396,7 +7481,7 @@ function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStat
 				<span className="text-xs text-muted-foreground">{interfaces.length} interfaces</span>
 			</div>
 			<div className="overflow-x-auto rounded-md border bg-card">
-				<table className="w-full min-w-[58rem] text-left text-sm">
+				<table className="w-full min-w-[68rem] text-left text-sm">
 					<thead className="border-b text-xs uppercase text-muted-foreground">
 						<tr>
 							<th className="px-3 py-2 font-medium">Interface</th>
@@ -7404,21 +7489,31 @@ function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStat
 							<th className="px-3 py-2 font-medium">Protocol</th>
 							<th className="px-3 py-2 font-medium">Device</th>
 							<th className="px-3 py-2 font-medium">Addresses</th>
+							<th className="px-3 py-2 font-medium">DNS servers</th>
 							<th className="px-3 py-2 font-medium">Uptime</th>
-							<th className="px-3 py-2 font-medium">Actions</th>
 						</tr>
 					</thead>
 					<tbody>
 						{interfaces.map((iface) => {
 							const addresses = getInterfaceAddresses(iface);
-							const name = iface.interface ?? iface.device ?? "unknown";
+							const dnsServers = getInterfaceDnsServers(iface);
+							const name = interfaceName(iface);
+							const state = interfaceState(iface, devices);
 
 							return (
-								<tr className="border-b align-top last:border-0" key={name}>
-									<td className="px-3 py-3 font-medium">{name}</td>
+								<tr className="border-b align-top last:border-0" key={interfaceKey(iface)}>
+									<td className="px-3 py-3">
+										<div className="grid gap-1">
+											<span className="font-medium">{name}</span>
+											<div className="flex flex-wrap gap-2">
+												{hasDefaultRoute(iface) ? <Badge>default route</Badge> : null}
+												{isWanLikeInterface(iface) ? <Badge>WAN-like</Badge> : null}
+											</div>
+										</div>
+									</td>
 									<td className="px-3 py-3">
 										<div className="flex flex-wrap gap-2">
-											<Badge className={iface.up ? "text-primary" : ""}>{iface.up ? "up" : "down"}</Badge>
+											<Badge className={state.active ? "text-primary" : ""}>{state.label}</Badge>
 											{iface.pending ? <Badge>pending</Badge> : null}
 											{iface.dynamic ? <Badge>dynamic</Badge> : null}
 											{iface.available === false ? <Badge>unavailable</Badge> : null}
@@ -7444,40 +7539,24 @@ function InterfaceStatusTable({ interfaces }: { interfaces: NetworkInterfaceStat
 											<span className="text-muted-foreground">none</span>
 										)}
 									</td>
-									<td className="px-3 py-3 text-muted-foreground">{formatUptime(iface.uptime)}</td>
 									<td className="px-3 py-3">
-										<Button disabled={actionBusy === name} onClick={() => void runStatus(name)} size="sm" type="button" variant="outline">
-											Status
-										</Button>
+										{dnsServers.length ? (
+											<div className="grid gap-1 font-mono text-xs">
+												{dnsServers.map((server) => (
+													<span key={`${name}.dns.${server}`}>{server}</span>
+												))}
+											</div>
+										) : (
+											<span className="text-muted-foreground">none</span>
+										)}
 									</td>
+									<td className="px-3 py-3 text-muted-foreground">{formatUptime(iface.uptime)}</td>
 								</tr>
 							);
 						})}
 					</tbody>
 				</table>
 			</div>
-			{actionResult ? (
-				<div className="overflow-x-auto rounded-md border bg-card">
-					<table className="w-full min-w-[32rem] text-left text-sm">
-						<tbody>
-							{[
-								["Interface", actionResult.name],
-								["Action", actionResult.action],
-								["Result", actionResult.message],
-								["Up", actionResult.state?.up ? "yes" : "no"],
-								["Available", actionResult.state?.available === false ? "no" : "yes"],
-								["Device", actionResult.state?.l3_device ?? actionResult.state?.device ?? "none"],
-								["Uptime", formatUptime(actionResult.state?.uptime)],
-							].map(([field, value]) => (
-								<tr className="border-b last:border-0" key={field}>
-									<td className="px-3 py-2 font-medium">{field}</td>
-									<td className="px-3 py-2 font-mono text-xs">{value}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			) : null}
 		</section>
 	);
 }
@@ -7798,6 +7877,60 @@ function getInterfaceAddresses(iface: NetworkInterfaceStatus) {
 	return [...ipv4, ...ipv6, ...prefixes].filter((address): address is string => Boolean(address));
 }
 
+function getInterfaceDnsServers(iface: NetworkInterfaceStatus) {
+	return (iface["dns-server"] ?? []).filter((server) => Boolean(server));
+}
+
+function interfaceName(iface: NetworkInterfaceStatus) {
+	return iface.interface ?? iface.device ?? iface.l3_device ?? "unknown";
+}
+
+function interfaceKey(iface: NetworkInterfaceStatus) {
+	return [interfaceName(iface), iface.l3_device ?? "", iface.device ?? "", iface.proto ?? ""].join(".");
+}
+
+function interfaceDeviceName(iface: NetworkInterfaceStatus) {
+	return iface.l3_device || iface.device;
+}
+
+function interfaceState(iface: NetworkInterfaceStatus, devices: DashboardStatus["devices"]) {
+	const carrier = [iface.l3_device, iface.device].some((deviceName) => Boolean(deviceName && devices[deviceName]?.carrier));
+
+	if (iface.up && carrier) {
+		return { active: true, label: "connected" };
+	}
+
+	if (iface.up) {
+		return { active: true, label: "up" };
+	}
+
+	if (iface.available === false) {
+		return { active: false, label: "unavailable" };
+	}
+
+	return { active: false, label: "down" };
+}
+
+function hasDefaultRoute(iface: NetworkInterfaceStatus) {
+	return (iface.route ?? []).some((route) => {
+		if (route.mask !== 0) {
+			return false;
+		}
+
+		return !route.target || route.target === "0.0.0.0" || route.target === "::";
+	});
+}
+
+function isWanLikeInterface(iface: NetworkInterfaceStatus) {
+	const values = [iface.interface, iface.proto, iface.device, iface.l3_device].filter((value): value is string => Boolean(value));
+
+	return values.some((value) => /(^|[-_.])(wan|wwan|wg\d*|wireguard)([-_.0-9]|$)/i.test(value) || /^(pppoe|wireguard)$/i.test(value));
+}
+
+function isPriorityNetworkInterface(iface: NetworkInterfaceStatus) {
+	return Boolean(iface.up || hasDefaultRoute(iface) || isWanLikeInterface(iface));
+}
+
 function formatCidr(address?: string, mask?: number) {
 	if (!address) {
 		return null;
@@ -7849,14 +7982,39 @@ function formatLocalTime(value?: number) {
 function sortNetworkInterfaces(a: NetworkInterfaceStatus, b: NetworkInterfaceStatus) {
 	const aName = a.interface ?? "";
 	const bName = b.interface ?? "";
+	const scoreDelta = networkInterfaceSortScore(a) - networkInterfaceSortScore(b);
 
-	if (aName === "loopback") {
-		return 1;
-	}
-
-	if (bName === "loopback") {
-		return -1;
+	if (scoreDelta !== 0) {
+		return scoreDelta;
 	}
 
 	return aName.localeCompare(bName);
+}
+
+function networkInterfaceSortScore(iface: NetworkInterfaceStatus) {
+	const name = iface.interface ?? "";
+	let score = 10;
+
+	if (hasDefaultRoute(iface)) {
+		score = iface.up ? 0 : 1;
+	}
+	else if (iface.up && isWanLikeInterface(iface)) {
+		score = 2;
+	}
+	else if (iface.up) {
+		score = 3;
+	}
+	else if (isWanLikeInterface(iface)) {
+		score = 4;
+	}
+
+	if (iface.available === false) {
+		score += 10;
+	}
+
+	if (name === "loopback") {
+		score += 20;
+	}
+
+	return score;
 }
