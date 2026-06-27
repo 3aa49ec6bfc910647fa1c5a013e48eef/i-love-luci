@@ -185,12 +185,27 @@ export type NetworkInterfaceStatus = {
 	route?: NetworkInterfaceRoute[];
 };
 
+export type WirelessAssociation = {
+	mac: string;
+	interface: string;
+	radio?: string;
+	ssid?: string;
+	signal?: number | null;
+	noise?: number | null;
+	rxRate?: number | null;
+	txRate?: number | null;
+	connectedTime?: number;
+	inactive?: number;
+};
+
 export type DashboardStatus = {
 	collectedAt?: number;
 	board: BoardInfo;
 	system: SystemInfo;
 	interfaces?: NetworkInterfaceStatus[];
 	devices: Record<string, DeviceStatus>;
+	dhcpLeases?: DhcpLease[];
+	wirelessAssociations?: WirelessAssociation[];
 };
 
 export type ConfigValue = string | number | boolean | Array<string | number | boolean>;
@@ -1520,6 +1535,8 @@ const fallbackDashboard: DashboardStatus = {
 	board: {},
 	system: {},
 	devices: {},
+	dhcpLeases: [],
+	wirelessAssociations: [],
 };
 
 async function callBridge<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -1767,11 +1784,36 @@ export async function closeConsole(sessionId: string): Promise<ConsoleActionResu
 
 export async function getDashboardStatus(): Promise<DashboardStatus> {
 	try {
-		return await callBridge<DashboardStatus>("dashboard_status");
+		const data = await callBridge<Omit<DashboardStatus, "dhcpLeases"> & { dhcpLeases?: Array<DhcpLease | string> }>(
+			"dashboard_status",
+		);
+
+		return {
+			...data,
+			dhcpLeases: (data.dhcpLeases ?? []).map(normalizeDhcpLease),
+			wirelessAssociations: data.wirelessAssociations ?? [],
+		};
 	}
 	catch {
 		return fallbackDashboard;
 	}
+}
+
+function normalizeDhcpLease(lease: DhcpLease | string): DhcpLease {
+	if (typeof lease !== "string") {
+		return lease;
+	}
+
+	const [remaining = "0", mac = "", ip = "", hostname = "", clientId = ""] = lease.split("\t");
+
+	return {
+		expires: 0,
+		remaining: Number(remaining) || 0,
+		mac,
+		ip,
+		hostname,
+		clientId,
+	};
 }
 
 export async function getCoreSettings(page: string): Promise<CoreSettings> {
@@ -1783,22 +1825,7 @@ export async function getCoreSettings(page: string): Promise<CoreSettings> {
 
 		return {
 			...data,
-			dhcpLeases: (data.dhcpLeases ?? []).map((lease) => {
-				if (typeof lease !== "string") {
-					return lease;
-				}
-
-				const [remaining = "0", mac = "", ip = "", hostname = "", clientId = ""] = lease.split("\t");
-
-				return {
-					expires: 0,
-					remaining: Number(remaining) || 0,
-					mac,
-					ip,
-					hostname,
-					clientId,
-				};
-			}),
+			dhcpLeases: (data.dhcpLeases ?? []).map(normalizeDhcpLease),
 		};
 	}
 	catch {

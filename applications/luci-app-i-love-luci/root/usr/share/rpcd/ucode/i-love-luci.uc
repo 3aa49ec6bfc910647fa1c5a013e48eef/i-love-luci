@@ -799,6 +799,126 @@ function dhcp_status() {
 	};
 }
 
+function wireless_assoc_interfaces() {
+	let ifaces = [];
+	let seen = {};
+
+	try {
+		let wireless = ubus.call('network.wireless', 'status') || {};
+
+		for (let radio, state in wireless) {
+			for (let iface in state?.interfaces || []) {
+				let ifname = iface.ifname || iface.config?.ifname || '';
+
+				if (!ifname || seen[ifname])
+					continue;
+
+				seen[ifname] = true;
+				push(ifaces, {
+					ifname,
+					radio,
+					ssid: iface.config?.ssid || ''
+				});
+			}
+		}
+	}
+	catch (e) {
+	}
+
+	try {
+		uci.load('wireless');
+		uci.foreach('wireless', 'wifi-iface', function(section) {
+			let ifname = section.ifname || '';
+
+			if (section.disabled == '1' || !ifname || seen[ifname])
+				return;
+
+			seen[ifname] = true;
+			push(ifaces, {
+				ifname,
+				radio: section.device || '',
+				ssid: section.ssid || ''
+			});
+		});
+	}
+	catch (e) {
+	}
+
+	return ifaces;
+}
+
+function wireless_assoc_rate(entry, direction) {
+	let rate = entry?.[direction]?.rate ?? entry?.[direction + '_rate'] ?? entry?.[direction + '_bitrate'] ?? null;
+
+	if (rate == null)
+		return null;
+
+	if (type(rate) == 'string')
+		rate = replace(rate, /[^0-9.]/g, '');
+
+	rate = +rate;
+
+	if (rate != rate)
+		return null;
+
+	return rate;
+}
+
+function push_wireless_assoc(out, iface, mac, entry) {
+	if (type(entry) != 'object')
+		return;
+
+	let station_mac = entry.mac || entry.bssid || mac || '';
+
+	if (!station_mac)
+		return;
+
+	push(out, {
+		mac: station_mac,
+		interface: iface.ifname,
+		radio: iface.radio || '',
+		ssid: iface.ssid || entry.ssid || '',
+		signal: entry.signal ?? null,
+		noise: entry.noise ?? null,
+		rxRate: wireless_assoc_rate(entry, 'rx'),
+		txRate: wireless_assoc_rate(entry, 'tx'),
+		connectedTime: entry.connected_time ?? entry.connectedTime ?? 0,
+		inactive: entry.inactive ?? 0
+	});
+}
+
+function wireless_associations() {
+	let associations = [];
+
+	for (let iface in wireless_assoc_interfaces()) {
+		let data = null;
+
+		try {
+			data = ubus.call('iwinfo', 'assoclist', { device: iface.ifname }) || {};
+		}
+		catch (e) {
+			continue;
+		}
+
+		let results = data.results || data.assoclist || data;
+
+		if (type(results) == 'array') {
+			for (let entry in results)
+				push_wireless_assoc(associations, iface, '', entry);
+		}
+		else if (type(results) == 'object') {
+			for (let mac, entry in results)
+				push_wireless_assoc(associations, iface, mac, entry);
+		}
+	}
+
+	sort(associations, function(a, b) {
+		return (a.interface + a.mac) > (b.interface + b.mac) ? 1 : -1;
+	});
+
+	return associations;
+}
+
 function dhcp_static_hosts() {
 	let hosts = [];
 
@@ -10112,7 +10232,9 @@ const methods = {
 				board: ubus.call('system', 'board') || {},
 				system: ubus.call('system', 'info') || {},
 				interfaces: interfaces.interface || [],
-				devices: ubus.call('network.device', 'status') || {}
+				devices: ubus.call('network.device', 'status') || {},
+				dhcpLeases: dhcp_leases(),
+				wirelessAssociations: wireless_associations()
 			});
 		}
 	},
