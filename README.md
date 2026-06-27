@@ -6,7 +6,7 @@ The current architecture is a wrapper, not a hard fork of LuCI. The package stil
 
 The router console uses the `i-love-luci-console` helper. The helper owns PTY sessions behind a root-only UNIX socket; browser input/output is tunnelled through authenticated same-origin LuCI RPC calls. The browser does not receive helper credentials and does not connect directly to a second console port.
 
-Stable package version: `1.0.0-r9`.
+Stable package version: `1.0.0-r10`.
 
 ## Install Without Building
 
@@ -81,14 +81,14 @@ If you do not want to add the feed, install the matching GitHub Release assets m
 
 ```sh
 # OpenWrt 25.12/apk
-apk add --allow-untrusted ./i-love-luci-console-1.0.0-r9-25.12.4-<target>-<arch>.apk
-apk add --allow-untrusted ./luci-theme-i-love-luci-1.0.0-r9-25.12.4-<target>-<arch>.apk
-apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r9-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./i-love-luci-console-1.0.0-r10-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-theme-i-love-luci-1.0.0-r10-25.12.4-<target>-<arch>.apk
+apk add --allow-untrusted ./luci-app-i-love-luci-1.0.0-r10-25.12.4-<target>-<arch>.apk
 
 # OpenWrt 24.10/opkg
-opkg install ./i-love-luci-console_1.0.0-r9_<arch>-24.10.7-<target>-<arch>.ipk
-opkg install ./luci-theme-i-love-luci_1.0.0-r9_all-24.10.7-<target>-<arch>.ipk
-opkg install ./luci-app-i-love-luci_1.0.0-r9_all-24.10.7-<target>-<arch>.ipk
+opkg install ./i-love-luci-console_1.0.0-r10_<arch>-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-theme-i-love-luci_1.0.0-r10_all-24.10.7-<target>-<arch>.ipk
+opkg install ./luci-app-i-love-luci_1.0.0-r10_all-24.10.7-<target>-<arch>.ipk
 ```
 
 ## Screenshots
@@ -278,12 +278,12 @@ dist/openwrt/<version>/<target-slug>/
 Rules:
 
 - Pull requests build artifacts only.
-- `main` builds stable artifacts, publishes signed GitHub Pages package feeds, and updates the `v1.0.0-r9` GitHub Release assets.
+- `main` builds stable artifacts, publishes signed GitHub Pages package feeds, and updates the `v1.0.0-r10` GitHub Release assets.
 - Pull requests into `main` must come from `dev` or `uat`.
 - Node.js 22 LTS is used for the frontend build.
 - Main APK publishing requires the `ILOVE_LUCI_APK_SIGNING_KEY` repository secret. The corresponding public key is published as `i-love-luci-apk-public-key.pem` beside each OpenWrt 25.12 feed.
 
-Stable package version is `1.0.0-r9`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
+Stable package version is `1.0.0-r10`. Development and UAT work is validated through pull request builds; only `main` publishes package feed and GitHub Release updates.
 
 The release job uploads:
 

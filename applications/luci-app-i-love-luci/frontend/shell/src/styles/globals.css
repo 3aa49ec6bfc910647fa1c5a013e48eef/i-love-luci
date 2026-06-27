@@ -38,7 +38,9 @@
 	html,
 	body,
 	#i-love-luci-root {
+		height: 100%;
 		min-height: 100%;
+		overflow: hidden;
 	}
 
 	body {
@@ -61,6 +63,8 @@
 	.iloveluci-shell {
 		display: flex;
 		height: 100vh;
+		height: 100dvh;
+		min-height: 0;
 		overflow: hidden;
 		flex-direction: column;
 		background:

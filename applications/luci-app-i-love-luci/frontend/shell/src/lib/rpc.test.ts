@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { probeAuthSession } from "@/lib/rpc";
+import { getDashboardStatus, probeAuthSession } from "@/lib/rpc";
 
 function stubBrowser(sessionId: string | null) {
 	vi.stubGlobal("document", {
@@ -73,6 +73,49 @@ describe("probeAuthSession", () => {
 		await expect(probeAuthSession()).resolves.toEqual({
 			status: "unknown",
 			message: "network down",
+		});
+	});
+});
+
+describe("getDashboardStatus", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("normalizes dashboard DHCP leases and preserves wireless associations", async () => {
+		stubBrowser("session-123");
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				jsonResponse({
+					result: [
+						0,
+						{
+							ok: true,
+							data: {
+								board: {},
+								system: {},
+								devices: {},
+								dhcpLeases: ["3600\taa:bb:cc:dd:ee:ff\t192.168.1.20\tphone\tclient-1"],
+								wirelessAssociations: [{ mac: "aa:bb:cc:dd:ee:ff", interface: "wlan0", signal: -55 }],
+							},
+						},
+					],
+				}),
+			),
+		);
+
+		await expect(getDashboardStatus()).resolves.toMatchObject({
+			dhcpLeases: [
+				{
+					remaining: 3600,
+					mac: "aa:bb:cc:dd:ee:ff",
+					ip: "192.168.1.20",
+					hostname: "phone",
+					clientId: "client-1",
+				},
+			],
+			wirelessAssociations: [{ mac: "aa:bb:cc:dd:ee:ff", interface: "wlan0", signal: -55 }],
 		});
 	});
 });
