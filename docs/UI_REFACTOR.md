@@ -50,7 +50,7 @@ The compat layer should improve integration at the shell/frame boundary:
 - inject a small compatibility stylesheet for LuCI form maps, tabs, tables, buttons, alerts, and sticky page actions
 - preserve LuCI's own JavaScript lifecycle, RPC behavior, save/apply flow, query strings, tabs, child routes, and app side effects
 
-Native routes should be added only when they have proven full workflow parity with the LuCI route they replace. Until then, the route should remain full-route compat rather than a partial native approximation.
+Native routes should be added only when they have proven full workflow parity with the LuCI route they replace. Until then, the route should remain full-route compat rather than an incomplete native approximation.
 
 ## Proposed Package Layout
 

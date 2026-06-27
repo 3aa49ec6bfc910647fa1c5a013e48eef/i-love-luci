@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -73,6 +73,7 @@ import {
 	type SystemSettingsInput,
 	type UhttpdCertDefaultsInput,
 } from "@/lib/rpc";
+import { legacyTarget } from "@/lib/service-compat";
 
 type CorePage = "network" | "network-routes" | "dhcp" | "firewall" | "system";
 const exposeNetworkAdapterEvidence = false;
@@ -113,6 +114,10 @@ const pageMeta: Record<CorePage, { title: string; description: string; configKey
 export function CoreSettingsPage() {
 	const params = useParams();
 	const page = normalizePage(params.page);
+
+	if (page === "network") {
+		return <Navigate replace to={legacyTarget("/admin/network/network")} />;
+	}
 
 	return <CoreSettingsContent page={page} />;
 }
