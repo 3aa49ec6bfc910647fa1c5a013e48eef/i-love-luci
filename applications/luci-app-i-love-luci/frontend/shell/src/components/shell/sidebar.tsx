@@ -218,8 +218,8 @@ function NavItems({ onClose }: { onClose?: () => void }) {
 	}
 
 	return (
-		<nav className="flex min-h-0 flex-1 flex-col gap-3">
-			<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+		<nav className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+			<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
 				<div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
 					<div className="text-xs font-semibold uppercase text-muted-foreground">Navigation</div>
 					<Button
@@ -258,7 +258,7 @@ export function Sidebar({ desktopOpen, open, onClose }: SidebarProps) {
 			>
 				<div
 					className={cn(
-						"min-h-0 w-[16.5rem] flex-1 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+						"flex min-h-0 w-[16.5rem] flex-1 flex-col overflow-hidden transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
 						desktopOpen ? "translate-x-0" : "-translate-x-4",
 					)}
 				>
@@ -288,7 +288,7 @@ export function Sidebar({ desktopOpen, open, onClose }: SidebarProps) {
 							<X className="size-5" />
 						</Button>
 					</div>
-					<div className="min-h-0 flex-1">
+					<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 						<NavItems onClose={onClose} />
 					</div>
 				</aside>

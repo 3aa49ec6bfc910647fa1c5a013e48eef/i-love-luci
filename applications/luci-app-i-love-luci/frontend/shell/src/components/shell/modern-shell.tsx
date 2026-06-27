@@ -42,8 +42,8 @@ export function ModernShell() {
 			<Header navigationOpen={sidebarOpen || desktopSidebarOpen} onMenuClick={toggleSidebar} />
 			<div className="flex min-h-0 flex-1 overflow-hidden">
 				<Sidebar desktopOpen={desktopSidebarOpen} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-				<main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-6 lg:px-8">
-					<div className="min-w-0 flex-1">
+				<main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 lg:px-8">
+					<div className="flex min-w-0 flex-1 flex-col">
 						<Outlet />
 					</div>
 					<footer className="mt-8 flex flex-col gap-2 border-t pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">

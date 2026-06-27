@@ -38,6 +38,20 @@ Client views use LuCI's custom runtime:
 
 The modern app should reuse LuCI's backend contract, not emulate the old frontend internals as React.
 
+## Compatibility Strategy
+
+Do not duplicate every LuCI application as a separate React page. I Love LuCI should use full-route LuCI compatibility as the default path for pages such as Channel Analysis, Routing, Software, Attended SysUpgrade, Backup / Flash Firmware, Interfaces, Wireless, and third-party LuCI apps.
+
+The compat layer should improve integration at the shell/frame boundary:
+
+- keep the modern header, sidebar, search, profile, and route discovery outside the frame
+- hide duplicate LuCI chrome inside the frame
+- size the frame so main content and sidebar scroll independently
+- inject a small compatibility stylesheet for LuCI form maps, tabs, tables, buttons, alerts, and sticky page actions
+- preserve LuCI's own JavaScript lifecycle, RPC behavior, save/apply flow, query strings, tabs, child routes, and app side effects
+
+Native routes should be added only when they have proven full workflow parity with the LuCI route they replace. Until then, the route should remain full-route compat rather than a partial native approximation.
+
 ## Proposed Package Layout
 
 ```text
@@ -180,6 +194,8 @@ Expected behavior:
 - new shell owns header/sidebar/search/profile
 - compat iframe renders original LuCI page content
 - framed LuCI content hides duplicate header/sidebar
+- framed LuCI content receives compatibility styling so common LuCI forms, tables, tabs, buttons, and action rows match the modern shell better
+- sidebar categories and the compat/main content frame scroll independently; expanded navigation must not make the shell body scroll
 - same LuCI auth/session cookie is reused
 - non-native routes remain functional
 - app-specific LuCI JS, forms, apply flows, query strings, and child routes continue to run through LuCI itself
@@ -204,7 +220,7 @@ I Love LuCI uses compat as a full-route adapter, not as partial page rendering:
 
 - The compat target is the original LuCI route, loaded intact through the framed/proxied LuCI compatibility layer.
 - LuCI owns the compat route's JavaScript view, form lifecycle, RPC calls, save/apply behavior, child navigation, query-string behavior, and package-specific side effects.
-- I Love LuCI owns the surrounding shell only: header, sidebar, search, profile menu, session recovery, responsive frame wrapper, and route discovery.
+- I Love LuCI owns the surrounding shell and frame treatment only: header, sidebar, search, profile menu, session recovery, responsive frame wrapper, duplicate chrome hiding, compatibility stylesheet injection, iframe sizing, and route discovery.
 - Adapter evidence can be collected in parallel, but it is not a user-facing renderer. It cannot replace a LuCI route until the whole page/workflow reaches native parity.
 - There is no supported product state where part of a LuCI page is native and the rest of that page is missing, read-only, or approximated. The route is either supported native, LuCI compat, or hidden by LuCI/ACL metadata.
 

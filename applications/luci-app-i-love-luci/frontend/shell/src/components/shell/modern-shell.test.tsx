@@ -71,4 +71,12 @@ describe("ModernShell sidebar", () => {
 		expect(markup).toContain("transition-[transform,opacity]");
 		expect(markup).toContain("duration-500");
 	});
+
+	it("keeps sidebar and content scrolling isolated", () => {
+		const { markup } = renderShell(null);
+
+		expect(markup).toContain("overflow-y-auto overscroll-contain px-4");
+		expect(markup).toContain("overflow-y-auto overscroll-contain pr-1");
+		expect(markup).toContain("flex min-h-0 w-[16.5rem] flex-1 flex-col overflow-hidden");
+	});
 });
